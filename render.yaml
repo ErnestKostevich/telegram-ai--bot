@@ -1,8 +1,18 @@
 services:
-  - type: worker
-    name: telegram-ai-bot
-    env: python
-    plan: free
-    branch: main
-    buildCommand: pip install -r requirements.txt
-    startCommand: python telegram_bot_main.py
+
+- type: web
+  name: telegram-ai-bot
+  env: python
+  plan: free
+  branch: main
+  buildCommand: pip install -r requirements.txt
+  startCommand: python main.py
+  envVars:
+  - key: BOT_TOKEN
+    value: 8176339131:AAGVKJoK9Y9fdQcTqMCp0Vm95IMuQWnCNGo
+  - key: GEMINI_API_KEY
+    value: zaSyCo4ymvNmI2JkYEuocIv3w_HsUyNPd6oEg
+  - key: CURRENCY_API_KEY
+    value: fca_live_86O15Ga6b1M0bnm6FCiDfrBB7USGCEPiAUyjiuwL
+  - key: CREATOR_ID
+    value: 7108255346
