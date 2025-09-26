@@ -1,7 +1,7 @@
 services:
 
 - type: web
-  name: telegram-ai--bot-2
+  name: telegram-ai--bot
   env: python
   plan: free
   buildCommand: pip install –upgrade pip && pip install -r requirements.txt
