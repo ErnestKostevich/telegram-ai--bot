@@ -19,11 +19,16 @@ from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
 import pickle
 import os
+import sys
+import shutil
 from contextlib import asynccontextmanager
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.date import DateTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from newsapi import NewsApiClient
+import nest_asyncio  # Для фикса nested event loops
+
+nest_asyncio.apply()  # Применяем патч для разрешения конфликтов loops
 
 # Telegram Bot API
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -61,6 +66,12 @@ CREATOR_ID = 7108255346  # Ernest's Telegram ID
 genai.configure(api_key=GEMINI_API_KEY)
 
 MODEL = os.getenv("MODEL", "gemini-2.0-flash")
+
+# Maintenance mode flag
+MAINTENANCE_MODE = False
+
+# Backup path
+BACKUP_PATH = "bot_backup.db"
 
 # =============================================================================
 # КЛАССЫ ДАННЫХ
@@ -244,25 +255,65 @@ class DatabaseManager:
         conn.commit()
         conn.close()
     
-    def get_all_users(self):
+    def get_all_users(self) -> List[tuple]:
         """Получить всех пользователей"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
-        cursor.execute("SELECT user_id, first_name, level FROM users ORDER BY level DESC")
+        cursor.execute("SELECT user_id, first_name, level, last_activity FROM users ORDER BY level DESC")
         users = cursor.fetchall()
         conn.close()
         return users
     
-    def get_vip_users(self):
+    def get_vip_users(self) -> List[tuple]:
         """Получить VIP пользователей"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         cursor.execute("SELECT user_id, first_name, vip_expires FROM users WHERE is_vip = 1")
-        vips = cursor.fetchone()
+        vips = cursor.fetchall()
         conn.close()
         return vips
     
-    # Добавь другие методы для аналитики, если нужно
+    def get_popular_commands(self) -> List[tuple]:
+        """Получить популярные команды"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute("SELECT command, usage_count FROM statistics ORDER BY usage_count DESC LIMIT 10")
+        popular = cursor.fetchall()
+        conn.close()
+        return popular
+    
+    def get_logs(self, level: str = "all") -> List[tuple]:
+        """Получить логи"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        if level == "error":
+            cursor.execute("SELECT * FROM logs WHERE message LIKE '%error%' ORDER BY timestamp DESC LIMIT 50")
+        else:
+            cursor.execute("SELECT * FROM logs ORDER BY timestamp DESC LIMIT 50")
+        logs = cursor.fetchall()
+        conn.close()
+        return logs
+    
+    def cleanup_inactive(self):
+        """Очистка неактивных пользователей (старше 30 дней)"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        thirty_days_ago = (datetime.datetime.now() - datetime.timedelta(days=30)).isoformat()
+        cursor.execute("DELETE FROM users WHERE last_activity < ?", (thirty_days_ago,))
+        deleted = cursor.rowcount
+        conn.commit()
+        conn.close()
+        return deleted
+    
+    def get_growth_stats(self):
+        """Статистика роста"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM users")
+        total = cursor.fetchone()[0]
+        # Для простоты, вернём total; добавь больше аналитики если нужно
+        conn.close()
+        return total
 
 # =============================================================================
 # ОСНОВНОЙ КЛАСС БОТА
@@ -273,9 +324,9 @@ class TelegramBot:
         self.db = DatabaseManager()
         self.gemini_model = genai.GenerativeModel(MODEL)
         self.user_contexts = {}  # Контекст диалогов
-        self.scheduler = AsyncIOScheduler()
-        self.scheduler.start()
+        self.scheduler = AsyncIOScheduler()  # Не стартуем здесь
         self.news_api = NewsApiClient(api_key=NEWSAPI_KEY) if NEWSAPI_KEY else None
+        self.maintenance_mode = False
     
     async def get_user_data(self, update: Update) -> UserData:
         """Получить или создать данные пользователя"""
@@ -555,15 +606,23 @@ AI: Gemini 2.0 Flash
         user_data = await self.get_user_data(update)
         self.db.log_command(user_data.user_id, "/status")
         
-        status_text = """
+        conn = sqlite3.connect(self.db.db_path)
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM users")
+        total_users = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) FROM logs")
+        total_commands = cursor.fetchone()[0]
+        conn.close()
+        
+        status_text = f"""
 ⚡ СТАТУС БОТА
 
 Онлайн: ✅
 Версия: 2.0
-Пользователей: [кол-во из DB]
-Команд выполнено: [из stats]
+Пользователей: {total_users}
+Команд выполнено: {total_commands}
+Maintenance: {"Вкл" if self.maintenance_mode else "Выкл"}
         """
-        # Добавь реальные числа из DB
         await update.message.reply_text(status_text)
         await self.add_experience(user_data, 1)
 
@@ -591,6 +650,10 @@ AI: Gemini 2.0 Flash
 
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Автоответ на сообщения"""
+        if self.maintenance_mode and not self.is_creator(update.effective_user.id):
+            await update.message.reply_text("🛠 Бот на обслуживании. Попробуйте позже.")
+            return
+        
         user_data = await self.get_user_data(update)
         self.db.log_command(user_data.user_id, "message")
         
@@ -1488,8 +1551,8 @@ VIP: {"Да" if self.is_vip(user_data) else "Нет"}
             await update.message.reply_text("❌ Только для создателя!")
             return
         
-        vips = self.db.get_vip_users()  # Предполагая метод возвращает список
-        text = "\n".join(f"{vip[1]} (ID: {vip[0]})" for vip in vips) if vips else "Нет VIP"
+        vips = self.db.get_vip_users()
+        text = "\n".join(f"{vip[1]} (ID: {vip[0]}) expires {vip[2]}" for vip in vips) if vips else "Нет VIP"
         await update.message.reply_text(f"💎 VIP список:\n{text}")
 
     async def userinfo_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1505,7 +1568,7 @@ VIP: {"Да" if self.is_vip(user_data) else "Нет"}
         target_id = int(context.args[0])
         target_user = self.db.get_user(target_id)
         if target_user:
-            info = f"ID: {target_user.user_id}\nИмя: {target_user.first_name}\nVIP: {target_user.is_vip}"
+            info = f"ID: {target_user.user_id}\nИмя: {target_user.first_name}\nVIP: {target_user.is_vip}\nУровень: {target_user.level}"
             await update.message.reply_text(info)
         else:
             await update.message.reply_text("❌ Не найден!")
@@ -1522,34 +1585,226 @@ VIP: {"Да" if self.is_vip(user_data) else "Нет"}
         
         text = " ".join(context.args)
         users = self.db.get_all_users()
+        sent = 0
         for user in users:
             try:
                 await context.bot.send_message(user[0], text)
+                sent += 1
             except:
                 pass
-        await update.message.reply_text("✅ Рассылка отправлена!")
+        await update.message.reply_text(f"✅ Рассылка отправлена {sent} пользователям!")
 
     async def stats_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """ /stats """
-        user_data = await self.get_user_data(update)
-        if not self.is_creator(user_data.user_id):
+        user_id = update.effective_user.id
+        if not self.is_creator(user_id):
+            user_data = await self.get_user_data(update)
             # Личная статистика
-            stats = f"Уровень: {user_data.level}\nОпыт: {user_data.experience}\nVIP: {'Да' if self.is_vip(user_data) else 'Нет'}"
-            await update.message.reply_text(stats)
+            stats_text = f"""
+📊 ВАША СТАТИСТИКА
+
+👤 Пользователь: {user_data.first_name}
+🆙 Уровень: {user_data.level}
+⭐ Опыт: {user_data.experience}/{user_data.level * 100}
+💎 VIP: {"✅ Да" if self.is_vip(user_data) else "❌ Нет"}
+📝 Заметок: {len(user_data.notes)}
+🏆 Достижений: {len(user_data.achievements)}
+            """
+            await update.message.reply_text(stats_text)
             return
         
-        # Полная для создателя
+        self.db.log_command(user_id, "/stats")
+        
         conn = sqlite3.connect(self.db.db_path)
         cursor = conn.cursor()
+        
         cursor.execute("SELECT COUNT(*) FROM users")
         total_users = cursor.fetchone()[0]
-        # Добавь больше stats
-        await update.message.reply_text(f"Пользователей: {total_users}")
+        
+        cursor.execute("SELECT COUNT(*) FROM users WHERE is_vip = 1")
+        vip_users = cursor.fetchone()[0]
+        
+        cursor.execute("SELECT COUNT(*) FROM logs")
+        total_commands = cursor.fetchone()[0]
+        
+        cursor.execute("""
+        SELECT command, usage_count FROM statistics 
+        ORDER BY usage_count DESC LIMIT 5
+        """)
+        popular_commands = cursor.fetchall()
+        
         conn.close()
+        
+        stats_text = f"""
+📊 СТАТИСТИКА БОТА
 
-    # Добавь остальные команды создателя аналогично: /users, /activity, /popular, /growth, /memory, /backup и т.д.
-    # Для backup: pickle.dump или json.dump DB
-    # Для restart: os._exit(0) - но на Render лучше manual
+👥 Всего пользователей: {total_users}
+💎 VIP пользователей: {vip_users}
+📈 Выполнено команд: {total_commands}
+
+🔥 ПОПУЛЯРНЫЕ КОМАНДЫ:
+"""
+        
+        for cmd, count in popular_commands:
+            stats_text += f"• {cmd}: {count} раз\n"
+        
+        stats_text += f"""
+        
+⚡ Статус: Онлайн
+🤖 Версия: 2.0
+📅 Обновлено: {datetime.datetime.now().strftime('%d.%m.%Y %H:%M')}
+        """
+        
+        await update.message.reply_text(stats_text)
+
+    async def users_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /users """
+        if not self.is_creator(update.effective_user.id):
+            await update.message.reply_text("❌ Только для создателя!")
+            return
+        
+        users = self.db.get_all_users()
+        text = "\n".join(f"{user[1]} (ID: {user[0]}) lvl {user[2]}" for user in users[:20])  # Лимит 20
+        await update.message.reply_text(f"👥 Пользователи (первые 20):\n{text}")
+
+    async def activity_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /activity """
+        if not self.is_creator(update.effective_user.id):
+            await update.message.reply_text("❌ Только для создателя!")
+            return
+        
+        users = self.db.get_all_users()
+        active = [user for user in users if datetime.datetime.fromisoformat(user[3]) > datetime.datetime.now() - datetime.timedelta(days=7)]
+        text = f"Активных за неделю: {len(active)} из {len(users)}"
+        await update.message.reply_text(text)
+
+    async def popular_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /popular """
+        if not self.is_creator(update.effective_user.id):
+            await update.message.reply_text("❌ Только для создателя!")
+            return
+        
+        popular = self.db.get_popular_commands()
+        text = "\n".join(f"{cmd[0]}: {cmd[1]} раз" for cmd in popular)
+        await update.message.reply_text(f"🔥 Популярные команды:\n{text}")
+
+    async def growth_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /growth """
+        if not self.is_creator(update.effective_user.id):
+            await update.message.reply_text("❌ Только для создателя!")
+            return
+        
+        total = self.db.get_growth_stats()
+        await update.message.reply_text(f"📈 Рост: Всего пользователей {total}")
+
+    async def memory_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /memory """
+        if not self.is_creator(update.effective_user.id):
+            await update.message.reply_text("❌ Только для создателя!")
+            return
+        
+        # Пример просмотра памяти, адаптируй
+        await update.message.reply_text("🧠 Память: (placeholder)")
+
+    async def backup_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /backup """
+        if not self.is_creator(update.effective_user.id):
+            await update.message.reply_text("❌ Только для создателя!")
+            return
+        
+        shutil.copy(self.db.db_path, BACKUP_PATH)
+        await update.message.reply_text("💾 Бэкап создан!")
+
+    async def restore_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /restore """
+        if not self.is_creator(update.effective_user.id):
+            await update.message.reply_text("❌ Только для создателя!")
+            return
+        
+        if os.path.exists(BACKUP_PATH):
+            shutil.copy(BACKUP_PATH, self.db.db_path)
+            await update.message.reply_text("🔄 Восстановлено из бэкапа!")
+        else:
+            await update.message.reply_text("❌ Бэкап не найден!")
+
+    async def export_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /export """
+        if not self.is_creator(update.effective_user.id):
+            await update.message.reply_text("❌ Только для создателя!")
+            return
+        
+        if not context.args:
+            await update.message.reply_text("/export [user_id]")
+            return
+        
+        target_id = int(context.args[0])
+        target_user = self.db.get_user(target_id)
+        if target_user:
+            data = json.dumps(dataclasses.asdict(target_user), ensure_ascii=False)
+            await update.message.reply_text(f"📤 Экспорт: {data}")
+        else:
+            await update.message.reply_text("❌ Не найден!")
+
+    async def cleanup_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /cleanup """
+        if not self.is_creator(update.effective_user.id):
+            await update.message.reply_text("❌ Только для создателя!")
+            return
+        
+        deleted = self.db.cleanup_inactive()
+        await update.message.reply_text(f"🧹 Очищено {deleted} неактивных пользователей")
+
+    async def restart_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /restart """
+        if not self.is_creator(update.effective_user.id):
+            await update.message.reply_text("❌ Только для создателя!")
+            return
+        
+        await update.message.reply_text("🔄 Перезапуск...")
+        sys.exit(0)  # На Render перезапустит сервис
+
+    async def maintenance_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /maintenance """
+        if not self.is_creator(update.effective_user.id):
+            await update.message.reply_text("❌ Только для создателя!")
+            return
+        
+        if not context.args:
+            await update.message.reply_text("/maintenance [on/off]")
+            return
+        
+        mode = context.args[0].lower()
+        self.maintenance_mode = mode == "on"
+        await update.message.reply_text(f"🛠 Maintenance: {'Вкл' if self.maintenance_mode else 'Выкл'}")
+
+    async def log_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /log """
+        if not self.is_creator(update.effective_user.id):
+            await update.message.reply_text("❌ Только для создателя!")
+            return
+        
+        level = context.args[0] if context.args else "all"
+        logs = self.db.get_logs(level)
+        text = "\n".join(f"{log[4]} - User {log[1]}: {log[2]} {log[3]}" for log in logs)
+        await update.message.reply_text(f"📜 Логи ({level}):\n{text}")
+
+    async def config_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /config """
+        if not self.is_creator(update.effective_user.id):
+            await update.message.reply_text("❌ Только для создателя!")
+            return
+        
+        # Placeholder для конфига
+        await update.message.reply_text("⚙️ Конфиг: (placeholder)")
+
+    async def update_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /update """
+        if not self.is_creator(update.effective_user.id):
+            await update.message.reply_text("❌ Только для создателя!")
+            return
+        
+        # На Render: git pull или manual deploy
+        await update.message.reply_text("🔄 Обновление: Выполните manual deploy на Render")
 
     # =============================================================================
     # ИНТЕЛЛЕКТУАЛЬНЫЕ ФУНКЦИИ
@@ -1835,10 +2090,41 @@ VIP: {"Да" if self.is_vip(user_data) else "Нет"}
         application.add_handler(CommandHandler("userinfo", self.userinfo_command))
         application.add_handler(CommandHandler("broadcast", self.broadcast_command))
         application.add_handler(CommandHandler("stats", self.stats_command))
-        # Добавь handlers для остальных: /users, /activity и т.д.
+        application.add_handler(CommandHandler("users", self.users_command))
+        application.add_handler(CommandHandler("activity", self.activity_command))
+        application.add_handler(CommandHandler("popular", self.popular_command))
+        application.add_handler(CommandHandler("growth", self.growth_command))
+        application.add_handler(CommandHandler("memory", self.memory_command))
+        application.add_handler(CommandHandler("backup", self.backup_command))
+        application.add_handler(CommandHandler("restore", self.restore_command))
+        application.add_handler(CommandHandler("export", self.export_command))
+        application.add_handler(CommandHandler("cleanup", self.cleanup_command))
+        application.add_handler(CommandHandler("restart", self.restart_command))
+        application.add_handler(CommandHandler("maintenance", self.maintenance_command))
+        application.add_handler(CommandHandler("log", self.log_command))
+        application.add_handler(CommandHandler("config", self.config_command))
+        application.add_handler(CommandHandler("update", self.update_command))
+        application.add_handler(CommandHandler("memorysave", self.memorysave_command))
+        application.add_handler(CommandHandler("ask", self.ask_command))
+        application.add_handler(CommandHandler("memorylist", self.memorylist_command))
+        application.add_handler(CommandHandler("memorydel", self.memorydel_command))
+        application.add_handler(CommandHandler("setbirthday", self.setbirthday_command))
+        application.add_handler(CommandHandler("birthdays", self.birthdays_command))
+        application.add_handler(CommandHandler("rank", self.rank_command))
+        application.add_handler(CommandHandler("leaderboard", self.leaderboard_command))
+        application.add_handler(CommandHandler("language", self.language_command))
+        application.add_handler(CommandHandler("theme", self.theme_command))
+        application.add_handler(CommandHandler("color", self.color_command))
+        application.add_handler(CommandHandler("sound", self.sound_command))
+        application.add_handler(CommandHandler("notifications", self.notifications_command))
         
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
         application.add_handler(CallbackQueryHandler(self.button_callback))
+        
+        # Запуск scheduler в текущем asyncio loop
+        loop = asyncio.get_running_loop()
+        self.scheduler.configure(event_loop=loop)  # Интегрируем с текущим loop
+        self.scheduler.start()
         
         await application.run_polling()
 
