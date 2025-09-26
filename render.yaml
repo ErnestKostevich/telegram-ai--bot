@@ -1,18 +1,19 @@
 services:
 
 - type: web
-  name: telegram-ai-bot
+  name: telegram-ai--bot-2
   env: python
   plan: free
-  branch: main
-  buildCommand: pip install -r requirements.txt
+  buildCommand: pip install –upgrade pip && pip install -r requirements.txt
   startCommand: python main.py
   envVars:
-  - key: BOT_TOKEN
-    value: 8176339131:AAGVKJoK9Y9fdQcTqMCp0Vm95IMuQWnCNGo
-  - key: GEMINI_API_KEY
-    value: zaSyCo4ymvNmI2JkYEuocIv3w_HsUyNPd6oEg
-  - key: CURRENCY_API_KEY
-    value: fca_live_86O15Ga6b1M0bnm6FCiDfrBB7USGCEPiAUyjiuwL
-  - key: CREATOR_ID
-    value: 7108255346
+  - key: 8176339131:AAGVKJoK9Y9fdQcTqMCp0Vm95IMuQWnCNGo
+    sync: false
+  - key: AlzaSyCo4ymvNmI2JkYEuoclv3w_HsUyNPd6oEg
+    sync: false
+  - key: fca_live _86015Ga6b1M0bnm6FCiDfrBB7USGCEPiAUyjiuwL
+    sync: false
+  - key: MODEL
+    value: gemini-2.0-flash
+  - key: PYTHONPATH
+    value: /opt/render/project/src
