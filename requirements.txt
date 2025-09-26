@@ -5,3 +5,4 @@ requests==2.31.0
 pytz==2023.3
 apscheduler==3.10.4
 newsapi-python==0.2.7
+nest_asyncio==1.6.0  # Для фикса конфликта asyncio loops
