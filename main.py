@@ -28,6 +28,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from newsapi import NewsApiClient
 import nest_asyncio  # Для фикса nested event loops
 from flask import Flask  # Для dummy сервера
+import pytz  # Для временных зон
 
 nest_asyncio.apply()  # Применяем патч для разрешения конфликтов loops
 
@@ -502,7 +503,6 @@ class TelegramBot:
 /time - Текущее время
 /date - Текущая дата
 /timer [секунды] - Таймер
-/worldtime - Время в мире
 
 🎮 РАЗВЛЕЧЕНИЯ:
 /joke - Случайная шутка
@@ -524,7 +524,6 @@ class TelegramBot:
 🌤️ ПОГОДА:
 /weather [город] - Текущая погода
 /forecast [город] - Прогноз
-/weatheralert [город] - Предупреждения
 
 💰 ФИНАНСЫ:
 /currency [из] [в] - Конвертер
@@ -599,26 +598,11 @@ class TelegramBot:
 /memorylist - Список
 /memorydel [ключ] - Удалить
 
-🎉 ДНИ РОЖДЕНИЯ:
-/setbirthday [дата] - Установить
-/birthdays - Ближайшие
 /rank - Уровень
 /leaderboard - Лидеры
 
 🌐 ЯЗЫКИ:
 /language [код] - Смена языка
-
-👥 ГРУППЫ:
-/quiz group - Групповая викторина
-/wordchain - Слова
-/guessnumber - Угадай число
-/trivia - Тривья
-
-🎨 КАСТОМИЗАЦИЯ:
-/theme [тема] - Тема
-/color [цвет] - Цвет
-/sound [on/off] - Звуки
-/notifications [настройки] - Уведомления
         """
         
         await update.message.reply_text(help_text)
@@ -815,8 +799,18 @@ Maintenance: {"Вкл" if self.maintenance_mode else "Выкл"}
         user_data = await self.get_user_data(update)
         self.db.log_command(user_data.user_id, "/time")
         
-        now = datetime.datetime.now()
-        await update.message.reply_text(f"⏰ Текущее время: {now.strftime('%H:%M:%S')}")
+        now_utc = datetime.datetime.now(pytz.utc)
+        
+        times = {
+            "GMT (UTC)": now_utc.astimezone(pytz.utc).strftime('%H:%M:%S'),
+            "МСК (Moscow)": now_utc.astimezone(pytz.timezone('Europe/Moscow')).strftime('%H:%M:%S'),
+            "Washington (US/Eastern)": now_utc.astimezone(pytz.timezone('US/Eastern')).strftime('%H:%M:%S'),
+            "New York (US/Eastern)": now_utc.astimezone(pytz.timezone('US/Eastern')).strftime('%H:%M:%S'),
+            "CEST (Europe/Paris)": now_utc.astimezone(pytz.timezone('Europe/Paris')).strftime('%H:%M:%S')
+        }
+        
+        text = "\n".join(f"{zone}: {t}" for zone, t in times.items())
+        await update.message.reply_text(f"⏰ Время:\n{text}")
         await self.add_experience(user_data, 1)
 
     async def date_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -841,20 +835,6 @@ Maintenance: {"Вкл" if self.maintenance_mode else "Выкл"}
         await update.message.reply_text(f"⏰ Таймер на {seconds} с запущен!")
         await asyncio.sleep(seconds)
         await update.message.reply_text("🔔 Время вышло!")
-        await self.add_experience(user_data, 1)
-
-    async def worldtime_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """ /worldtime """
-        user_data = await self.get_user_data(update)
-        self.db.log_command(user_data.user_id, "/worldtime")
-        
-        times = {
-            "Москва": datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=3),
-            "Нью-Йорк": datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=4),
-            # Добавь больше
-        }
-        text = "\n".join(f"{city}: {t.strftime('%H:%M')}" for city, t in times.items())
-        await update.message.reply_text(f"🌍 Мировое время:\n{text}")
         await self.add_experience(user_data, 1)
 
     # =============================================================================
@@ -1073,15 +1053,6 @@ Maintenance: {"Вкл" if self.maintenance_mode else "Выкл"}
             await update.message.reply_text(f"📅 Прогноз для {city}:\n{forecast}")
         else:
             await update.message.reply_text("❌ Город не найден!")
-        await self.add_experience(user_data, 2)
-
-    async def weatheralert_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """ /weatheralert """
-        user_data = await self.get_user_data(update)
-        self.db.log_command(user_data.user_id, "/weatheralert")
-        
-        # Используй API для алертов, если доступно
-        await update.message.reply_text("⚠️ Предупреждения: Нет активных (проверьте API)")
         await self.add_experience(user_data, 2)
 
     # =============================================================================
@@ -1957,29 +1928,6 @@ VIP: {"Да" if self.is_vip(user_data) else "Нет"}
     # СПЕЦИАЛЬНЫЕ ВОЗМОЖНОСТИ
     # =============================================================================
 
-    async def setbirthday_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """ /setbirthday """
-        user_data = await self.get_user_data(update)
-        self.db.log_command(user_data.user_id, "/setbirthday")
-        
-        if not context.args:
-            await update.message.reply_text("/setbirthday [dd.mm]")
-            return
-        
-        user_data.birthday = context.args[0]
-        self.db.save_user(user_data)
-        await update.message.reply_text("🎂 Дата рождения установлена!")
-        await self.add_experience(user_data, 1)
-
-    async def birthdays_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """ /birthdays """
-        user_data = await self.get_user_data(update)
-        self.db.log_command(user_data.user_id, "/birthdays")
-        
-        # Логика для ближайших ДР из DB (добавь query)
-        await update.message.reply_text("🎂 Ближайшие ДР: [список]")
-        await self.add_experience(user_data, 1)
-
     async def rank_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """ /rank """
         user_data = await self.get_user_data(update)
@@ -2019,68 +1967,6 @@ VIP: {"Да" if self.is_vip(user_data) else "Нет"}
         await self.add_experience(user_data, 1)
 
     # =============================================================================
-    # РАБОТА В ГРУППАХ
-    # =============================================================================
-
-    # Для групповых игр - используй chat_id, храни состояние в dict
-    # Пример для /quiz group - аналогично quiz, но для группы
-
-    # =============================================================================
-    # КАСТОМИЗАЦИЯ
-    # =============================================================================
-
-    async def theme_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """ /theme """
-        user_data = await self.get_user_data(update)
-        self.db.log_command(user_data.user_id, "/theme")
-        
-        if not context.args:
-            await update.message.reply_text("/theme [тема]")
-            return
-        
-        user_data.theme = context.args[0]
-        self.db.save_user(user_data)
-        await update.message.reply_text("🎭 Тема изменена!")
-        await self.add_experience(user_data, 1)
-
-    async def color_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """ /color """
-        user_data = await self.get_user_data(update)
-        self.db.log_command(user_data.user_id, "/color")
-        
-        if not context.args:
-            await update.message.reply_text("/color [цвет]")
-            return
-        
-        user_data.color = context.args[0]
-        self.db.save_user(user_data)
-        await update.message.reply_text("🌈 Цвет изменён!")
-        await self.add_experience(user_data, 1)
-
-    async def sound_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """ /sound """
-        user_data = await self.get_user_data(update)
-        self.db.log_command(user_data.user_id, "/sound")
-        
-        if not context.args:
-            await update.message.reply_text("/sound [on/off]")
-            return
-        
-        user_data.sound_notifications = context.args[0].lower() == "on"
-        self.db.save_user(user_data)
-        await update.message.reply_text("🔊 Звуки изменены!")
-        await self.add_experience(user_data, 1)
-
-    async def notifications_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """ /notifications """
-        user_data = await self.get_user_data(update)
-        self.db.log_command(user_data.user_id, "/notifications")
-        
-        # Логика настройки
-        await update.message.reply_text("🔔 Настройки уведомлений (placeholder)")
-        await self.add_experience(user_data, 1)
-
-    # =============================================================================
     # CALLBACK ОБРАБОТЧИКИ
     # =============================================================================
 
@@ -2112,7 +1998,7 @@ VIP: {"Да" if self.is_vip(user_data) else "Нет"}
     async def run_bot(self):
         application = Application.builder().token(BOT_TOKEN).build()
         
-        # Добавь ВСЕ handlers
+        # Добавь handlers только для оставшихся команд
         application.add_handler(CommandHandler("start", self.start_command))
         application.add_handler(CommandHandler("help", self.help_command))
         application.add_handler(CommandHandler("info", self.info_command))
@@ -2126,7 +2012,6 @@ VIP: {"Да" if self.is_vip(user_data) else "Нет"}
         application.add_handler(CommandHandler("time", self.time_command))
         application.add_handler(CommandHandler("date", self.date_command))
         application.add_handler(CommandHandler("timer", self.timer_command))
-        application.add_handler(CommandHandler("worldtime", self.worldtime_command))
         application.add_handler(CommandHandler("joke", self.joke_command))
         application.add_handler(CommandHandler("fact", self.fact_command))
         application.add_handler(CommandHandler("quote", self.quote_command))
@@ -2144,7 +2029,6 @@ VIP: {"Да" if self.is_vip(user_data) else "Нет"}
         application.add_handler(CommandHandler("compliment", self.compliment_command))
         application.add_handler(CommandHandler("weather", self.weather_command))
         application.add_handler(CommandHandler("forecast", self.forecast_command))
-        application.add_handler(CommandHandler("weatheralert", self.weatheralert_command))
         application.add_handler(CommandHandler("currency", self.currency_command))
         application.add_handler(CommandHandler("crypto", self.crypto_command))
         application.add_handler(CommandHandler("stock", self.stock_command))
@@ -2196,15 +2080,9 @@ VIP: {"Да" if self.is_vip(user_data) else "Нет"}
         application.add_handler(CommandHandler("ask", self.ask_command))
         application.add_handler(CommandHandler("memorylist", self.memorylist_command))
         application.add_handler(CommandHandler("memorydel", self.memorydel_command))
-        application.add_handler(CommandHandler("setbirthday", self.setbirthday_command))
-        application.add_handler(CommandHandler("birthdays", self.birthdays_command))
         application.add_handler(CommandHandler("rank", self.rank_command))
         application.add_handler(CommandHandler("leaderboard", self.leaderboard_command))
         application.add_handler(CommandHandler("language", self.language_command))
-        application.add_handler(CommandHandler("theme", self.theme_command))
-        application.add_handler(CommandHandler("color", self.color_command))
-        application.add_handler(CommandHandler("sound", self.sound_command))
-        application.add_handler(CommandHandler("notifications", self.notifications_command))
         
         # Обработчик сообщений только с упоминанием бота
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.Entity("mention"), self.handle_message))
