@@ -38,6 +38,7 @@ from telegram.ext import (
     Application, CommandHandler, MessageHandler, 
     filters, ContextTypes, CallbackQueryHandler
 )
+from telegram.constants import ChatType  # Для ChatType
 
 # Google Gemini
 import google.generativeai as genai
@@ -1956,13 +1957,16 @@ VIP: {"Да" if self.is_vip(user_data) else "Нет"}
         self.db.log_command(user_data.user_id, "/language")
         
         if not context.args:
-            await update.message.reply_text("/language [ru/en/etc]")
+            await update.message.reply_text("/language [ru/en/es/de/it]")
             return
         
-        lang = context.args[0]
-        user_data.language = lang
-        self.db.save_user(user_data)
-        await update.message.reply_text("🈯 Язык изменён!")
+        lang = context.args[0].lower()
+        if lang in ['ru', 'en', 'es', 'de', 'it']:
+            user_data.language = lang
+            self.db.save_user(user_data)
+            await update.message.reply_text("🈯 Язык изменён!")
+        else:
+            await update.message.reply_text("❌ Неверный код языка! Доступны: ru, en, es, de, it")
         # В реальности адаптируй ответы на lang
         await self.add_experience(user_data, 1)
 
@@ -2084,8 +2088,11 @@ VIP: {"Да" if self.is_vip(user_data) else "Нет"}
         application.add_handler(CommandHandler("leaderboard", self.leaderboard_command))
         application.add_handler(CommandHandler("language", self.language_command))
         
-        # Обработчик сообщений только с упоминанием бота
-        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.Entity("mention"), self.handle_message))
+        # Обработчик для личных сообщений (любые тексты)
+        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE, self.handle_message))
+        
+        # Обработчик для групп (только с упоминанием)
+        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.GROUPS & filters.Entity("mention"), self.handle_message))
         
         application.add_handler(CallbackQueryHandler(self.button_callback))
         
