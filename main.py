@@ -61,6 +61,9 @@ ALPHAVANTAGE_API_KEY = os.getenv("ALPHAVANTAGE_API_KEY")  # Добавь в Rend
 
 # ID создателя бота
 CREATOR_ID = 7108255346  # Ernest's Telegram ID
+CREATOR_USERNAME = "@Ernest_Kostevich"
+DAD_USERNAME = "@mkostevich"
+BOT_USERNAME = "@AI_ERNEST_BOT"
 
 # Настройка Gemini
 genai.configure(api_key=GEMINI_API_KEY)
@@ -175,6 +178,36 @@ class DatabaseManager:
         cursor = conn.cursor()
         
         cursor.execute("SELECT * FROM users WHERE user_id = ?", (user_id,))
+        row = cursor.fetchone()
+        conn.close()
+        
+        if row:
+            return UserData(
+                user_id=row[0],
+                username=row[1],
+                first_name=row[2],
+                is_vip=bool(row[3]),
+                vip_expires=datetime.datetime.fromisoformat(row[4]) if row[4] else None,
+                language=row[5],
+                notes=json.loads(row[6]),
+                reminders=json.loads(row[7]),
+                birthday=row[8],
+                nickname=row[9],
+                level=row[10],
+                experience=row[11],
+                achievements=json.loads(row[12]),
+                memory_data=json.loads(row[13]),
+                theme=row[14],
+                color=row[15],
+                sound_notifications=bool(row[16])
+            )
+        return None
+    
+    def get_user_by_username(self, username: str) -> Optional[UserData]:
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT * FROM users WHERE username = ?", (username,))
         row = cursor.fetchone()
         conn.close()
         
@@ -509,6 +542,10 @@ class TelegramBot:
 /paraphrase [текст] - Перефраз
 /spellcheck [текст] - Орфография
 
+        """
+        
+        if self.is_vip(user_data):
+            help_text += """
 💎 VIP:
 /vip - Инфо
 /vipbenefits - Преимущества
@@ -527,7 +564,10 @@ class TelegramBot:
 /profile - Профиль
 /achievements - Достижения
 /stats personal - Статистика
-
+            """
+        
+        if self.is_creator(user_data.user_id):
+            help_text += """
 👑 СОЗДАТЕЛЬ:
 /grant_vip [user] [duration] - Выдать VIP
 /revoke_vip [user] - Забрать
@@ -549,7 +589,9 @@ class TelegramBot:
 /log [уровень] - Логи
 /config - Конфиг
 /update - Обновление
-
+            """
+        
+        help_text += """
 🧠 ПАМЯТЬ:
 /memorysave [ключ] [значение] - Сохранить
 /ask [вопрос] - Поиск
@@ -933,10 +975,19 @@ Maintenance: {"Вкл" if self.maintenance_mode else "Выкл"}
         user_data = await self.get_user_data(update)
         self.db.log_command(user_data.user_id, "/quiz")
         
-        # Простая викторина, используй Gemini для вопросов
-        prompt = "Задай вопрос для викторины с вариантами ответов"
+        # Генерация вопроса без ответа
+        prompt = "Задай вопрос для викторины с вариантами ответов. Не раскрывай ответ сразу!"
         response = self.gemini_model.generate_content(prompt)
         await update.message.reply_text(response.text)
+        
+        # Планируем отправку ответа через 30 секунд
+        async def send_answer():
+            prompt_answer = "Правильный ответ на предыдущий вопрос викторины"
+            response_answer = self.gemini_model.generate_content(prompt_answer)
+            await context.bot.send_message(chat_id=update.effective_chat.id, text=response_answer.text)
+        
+        self.scheduler.add_job(send_answer, 'date', run_date=datetime.datetime.now() + datetime.timedelta(seconds=30))
+        
         await self.add_experience(user_data, 1)
 
     async def poem_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1230,17 +1281,22 @@ Maintenance: {"Вкл" if self.maintenance_mode else "Выкл"}
         user_data = await self.get_user_data(update)
         self.db.log_command(user_data.user_id, "/vip")
         
-        if self.is_vip(user_data):
-            expires = user_data.vip_expires.strftime('%d.%m.%Y') if user_data.vip_expires else 'бессрочно'
-            await update.message.reply_text(f"💎 VIP активен до {expires}")
-        else:
-            await update.message.reply_text("💎 VIP не активен. Спросите у создателя!")
+        if not self.is_vip(user_data):
+            await update.message.reply_text("💎 Вы не VIP! Спросите у создателя.")
+            return
+        
+        expires = user_data.vip_expires.strftime('%d.%m.%Y') if user_data.vip_expires else 'бессрочно'
+        await update.message.reply_text(f"💎 VIP активен до {expires}")
         await self.add_experience(user_data, 1)
 
     async def vipbenefits_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """ /vipbenefits """
         user_data = await self.get_user_data(update)
         self.db.log_command(user_data.user_id, "/vipbenefits")
+        
+        if not self.is_vip(user_data):
+            await update.message.reply_text("💎 Вы не VIP!")
+            return
         
         benefits = """
 ⭐ VIP преимущества:
@@ -1258,14 +1314,15 @@ Maintenance: {"Вкл" if self.maintenance_mode else "Выкл"}
         user_data = await self.get_user_data(update)
         self.db.log_command(user_data.user_id, "/viptime")
         
-        if self.is_vip(user_data):
-            if user_data.vip_expires:
-                remaining = (user_data.vip_expires - datetime.datetime.now()).days
-                await update.message.reply_text(f"⏳ Осталось {remaining} дней VIP")
-            else:
-                await update.message.reply_text("⏳ VIP бессрочный")
+        if not self.is_vip(user_data):
+            await update.message.reply_text("💎 Вы не VIP!")
+            return
+        
+        if user_data.vip_expires:
+            remaining = (user_data.vip_expires - datetime.datetime.now()).days
+            await update.message.reply_text(f"⏳ Осталось {remaining} дней VIP")
         else:
-            await update.message.reply_text("❌ Нет VIP")
+            await update.message.reply_text("⏳ VIP бессрочный")
         await self.add_experience(user_data, 1)
 
     async def remind_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1494,12 +1551,17 @@ VIP: {"Да" if self.is_vip(user_data) else "Нет"}
             return
         
         if len(context.args) < 2:
-            await update.message.reply_text("/grant_vip [user_id] [duration: week/month/year/permanent]")
+            await update.message.reply_text("/grant_vip [user_id или @username] [duration: week/month/year/permanent]")
             return
         
-        target_id = int(context.args[0])
+        target = context.args[0]
         duration = context.args[1].lower()
-        target_user = self.db.get_user(target_id)
+        
+        if target.startswith('@'):
+            target_user = self.db.get_user_by_username(target[1:])
+        else:
+            target_user = self.db.get_user(int(target))
+        
         if not target_user:
             await update.message.reply_text("❌ Пользователь не найден!")
             return
@@ -1521,7 +1583,7 @@ VIP: {"Да" if self.is_vip(user_data) else "Нет"}
         self.db.save_user(target_user)
         await update.message.reply_text("✅ VIP выдан!")
         try:
-            await context.bot.send_message(target_id, "🎉 Вы получили VIP!")
+            await context.bot.send_message(target_user.user_id, "🎉 Вы получили VIP!")
         except:
             pass
 
@@ -1532,11 +1594,15 @@ VIP: {"Да" if self.is_vip(user_data) else "Нет"}
             return
         
         if not context.args:
-            await update.message.reply_text("/revoke_vip [user_id]")
+            await update.message.reply_text("/revoke_vip [user_id или @username]")
             return
         
-        target_id = int(context.args[0])
-        target_user = self.db.get_user(target_id)
+        target = context.args[0]
+        if target.startswith('@'):
+            target_user = self.db.get_user_by_username(target[1:])
+        else:
+            target_user = self.db.get_user(int(target))
+        
         if target_user:
             target_user.is_vip = False
             target_user.vip_expires = None
@@ -1562,11 +1628,15 @@ VIP: {"Да" if self.is_vip(user_data) else "Нет"}
             return
         
         if not context.args:
-            await update.message.reply_text("/userinfo [user_id]")
+            await update.message.reply_text("/userinfo [user_id или @username]")
             return
         
-        target_id = int(context.args[0])
-        target_user = self.db.get_user(target_id)
+        target = context.args[0]
+        if target.startswith('@'):
+            target_user = self.db.get_user_by_username(target[1:])
+        else:
+            target_user = self.db.get_user(int(target))
+        
         if target_user:
             info = f"ID: {target_user.user_id}\nИмя: {target_user.first_name}\nVIP: {target_user.is_vip}\nУровень: {target_user.level}"
             await update.message.reply_text(info)
@@ -1734,11 +1804,15 @@ VIP: {"Да" if self.is_vip(user_data) else "Нет"}
             return
         
         if not context.args:
-            await update.message.reply_text("/export [user_id]")
+            await update.message.reply_text("/export [user_id или @username]")
             return
         
-        target_id = int(context.args[0])
-        target_user = self.db.get_user(target_id)
+        target = context.args[0]
+        if target.startswith('@'):
+            target_user = self.db.get_user_by_username(target[1:])
+        else:
+            target_user = self.db.get_user(int(target))
+        
         if target_user:
             data = json.dumps(dataclasses.asdict(target_user), ensure_ascii=False)
             await update.message.reply_text(f"📤 Экспорт: {data}")
@@ -2015,7 +2089,20 @@ VIP: {"Да" if self.is_vip(user_data) else "Нет"}
         
         if query.data == "help":
             await self.help_command(update, context)
-        # Добавь другие
+        elif query.data == "vip_info":
+            await self.vip_command(update, context)
+        elif query.data == "ai_demo":
+            await query.edit_message_text(
+                "🤖 AI-чат готов к работе!\n\n"
+                "Просто напишите мне любой вопрос или используйте команду /ai\n\n"
+                "Примеры:\n"
+                "• Расскажи о космосе\n"
+                "• Помоги с математикой\n"
+                "• Придумай идею для проекта\n"
+                "• Объясни квантовую физику просто"
+            )
+        elif query.data == "my_stats":
+            await self.stats_command(update, context)
 
     # =============================================================================
     # ГЛАВНАЯ ФУНКЦИЯ ЗАПУСКА
@@ -2118,13 +2205,27 @@ VIP: {"Да" if self.is_vip(user_data) else "Нет"}
         application.add_handler(CommandHandler("sound", self.sound_command))
         application.add_handler(CommandHandler("notifications", self.notifications_command))
         
-        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
+        # Обработчик сообщений только с упоминанием бота
+        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.MENTION, self.handle_message))
+        
         application.add_handler(CallbackQueryHandler(self.button_callback))
         
         # Запуск scheduler в текущем asyncio loop
         loop = asyncio.get_running_loop()
         self.scheduler.configure(event_loop=loop)  # Интегрируем с текущим loop
         self.scheduler.start()
+        
+        # Авто-поздравление папе 3 октября 2025
+        dad_birthday = datetime.datetime(2025, 10, 3, 0, 0, 0)  # 3.10.2025 00:00
+        async def dad_surprise():
+            dad_user = self.db.get_user_by_username("mkostevich")
+            if dad_user:
+                dad_user.is_vip = True
+                dad_user.vip_expires = None  # Permanent
+                self.db.save_user(dad_user)
+                await application.bot.send_message(dad_user.user_id, "🎉 С днём рождения! Подарок: вечный VIP от сына!")
+        
+        self.scheduler.add_job(dad_surprise, 'date', run_date=dad_birthday)
         
         await application.run_polling()
 
