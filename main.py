@@ -27,6 +27,7 @@ from apscheduler.triggers.date import DateTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from newsapi import NewsApiClient
 import nest_asyncio  # Для фикса nested event loops
+from flask import Flask  # Для dummy сервера
 
 nest_asyncio.apply()  # Применяем патч для разрешения конфликтов loops
 
@@ -2206,7 +2207,7 @@ VIP: {"Да" if self.is_vip(user_data) else "Нет"}
         application.add_handler(CommandHandler("notifications", self.notifications_command))
         
         # Обработчик сообщений только с упоминанием бота
-        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.MENTION, self.handle_message))
+        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.Entity("mention"), self.handle_message))
         
         application.add_handler(CallbackQueryHandler(self.button_callback))
         
@@ -2233,5 +2234,13 @@ async def main():
     bot = TelegramBot()
     await bot.run_bot()
 
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Bot is running"
+
 if __name__ == "__main__":
+    from threading import Thread
+    Thread(target=app.run, kwargs={'host': '0.0.0.0', 'port': int(os.getenv("PORT", 8080))}).start()
     asyncio.run(main())
