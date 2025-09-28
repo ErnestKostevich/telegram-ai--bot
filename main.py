@@ -355,6 +355,13 @@ class TelegramBot:
                 username=user.username or "",
                 first_name=user.first_name or ""
             )
+            
+            # Автоматически выдаём VIP создателю
+            if self.is_creator(user.id):
+                user_data.is_vip = True
+                user_data.vip_expires = None  # Бессрочный VIP
+                logger.info(f"Создатель получил автоматический VIP: {user.id}")
+            
             self.db.save_user(user_data)
             logger.info(f"Создан новый пользователь: {user.id} ({user.first_name})")
         
@@ -489,6 +496,7 @@ class TelegramBot:
 /help - Эта справка
 /info - О боте
 /status - Статус системы
+/uptime - Время работы системы
 
 💬 AI-ЧАТ:
 /ai [вопрос] - Задать вопрос AI
@@ -509,17 +517,22 @@ class TelegramBot:
 /joke - Случайная шутка
 /fact - Интересный факт
 /quote - Вдохновляющая цитата
+/quiz - Викторина
 /coin - Монетка
 /dice - Кубик
 /8ball [вопрос] - Магический шар
 
-🌤️ ПОГОДА:
+🔢 МАТЕМАТИКА:
+/math [выражение] - Простые вычисления
+/calculate [выражение] - Продвинутый калькулятор
+
+🛠️ УТИЛИТЫ:
+/password [длина] - Генератор паролей
+/qr [текст] - QR-код
+/shorturl [ссылка] - Сокращение URL
+/ip - Информация об IP
 /weather [город] - Текущая погода
-
-💰 ФИНАНСЫ:
 /currency [из] [в] - Конвертер валют
-
-🔤 ТЕКСТ:
 /translate [язык] [текст] - Перевод
 
 🧠 ПАМЯТЬ:
@@ -547,12 +560,13 @@ class TelegramBot:
         if self.is_creator(user_data.user_id):
             help_text += """
 👑 КОМАНДЫ СОЗДАТЕЛЯ:
-/grant_vip [user_id] [duration] - Выдать VIP
-/revoke_vip [user_id] - Отозвать VIP
+/grant_vip [user_id/@username] [duration] - Выдать VIP
+/revoke_vip [user_id/@username] - Отозвать VIP
 /broadcast [текст] - Рассылка всем
-/stats - Статистика бота
 /users - Список пользователей
+/stats - Статистика бота
 /maintenance [on/off] - Режим обслуживания
+/backup - Создать резервную копию
             """
         
         await update.message.reply_text(help_text)
@@ -628,7 +642,338 @@ Maintenance: {"Вкл" if self.maintenance_mode else "Выкл"}
             await update.message.reply_text(f"❌ Ошибка AI: {str(e)}")
             logger.error(f"Ошибка Gemini: {e}")
         
+    async def revoke_vip_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Команда /revoke_vip"""
+        if not self.is_creator(update.effective_user.id):
+            await update.message.reply_text("❌ Доступно только создателю!")
+            return
+        
+        if not context.args:
+            await update.message.reply_text("💎 /revoke_vip [user_id или @username]")
+            return
+        
+        try:
+            target = context.args[0]
+            
+            if target.startswith('@'):
+                username = target[1:]
+                target_user = self.db.get_user_by_username(username)
+                if not target_user:
+                    await update.message.reply_text(f"❌ Пользователь @{username} не найден!")
+                    return
+            else:
+                target_id = int(target)
+                target_user = self.db.get_user(target_id)
+                if not target_user:
+                    await update.message.reply_text("❌ Пользователь с таким ID не найден!")
+                    return
+            
+            if not target_user.is_vip:
+                await update.message.reply_text(f"❌ Пользователь {target_user.first_name} не является VIP!")
+                return
+            
+            target_user.is_vip = False
+            target_user.vip_expires = None
+            self.db.save_user(target_user)
+            
+            await update.message.reply_text(f"✅ VIP статус отозван у {target_user.first_name} (ID: {target_user.user_id})")
+            
+            try:
+                await context.bot.send_message(
+                    target_user.user_id,
+                    "💎 Ваш VIP статус был отозван администратором."
+                )
+            except:
+                pass
+                
+        except ValueError:
+            await update.message.reply_text("❌ Неверный ID пользователя!")
+        except Exception as e:
+            await update.message.reply_text(f"❌ Ошибка: {str(e)}")
+
+    async def maintenance_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Команда /maintenance"""
+        if not self.is_creator(update.effective_user.id):
+            await update.message.reply_text("❌ Доступно только создателю!")
+            return
+        
+        if not context.args:
+            status = "включен" if self.maintenance_mode else "выключен"
+            await update.message.reply_text(f"🛠 Режим обслуживания сейчас {status}\n\nИспользование: /maintenance [on/off]")
+            return
+        
+        mode = context.args[0].lower()
+        if mode in ['on', 'вкл', 'включить']:
+            self.maintenance_mode = True
+            await update.message.reply_text("🛠 Режим обслуживания ВКЛЮЧЕН - бот недоступен для обычных пользователей")
+        elif mode in ['off', 'выкл', 'выключить']:
+            self.maintenance_mode = False
+            await update.message.reply_text("✅ Режим обслуживания ВЫКЛЮЧЕН - бот работает нормально")
+        else:
+            await update.message.reply_text("❌ Используйте: /maintenance [on/off]")
+
+    async def backup_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Команда /backup"""
+        if not self.is_creator(update.effective_user.id):
+            await update.message.reply_text("❌ Доступно только создателя!")
+            return
+        
+        try:
+            backup_data = {
+                'users': self.db.users,
+                'logs': self.db.logs[-100:],  # Последние 100 записей
+                'statistics': self.db.statistics,
+                'backup_time': datetime.datetime.now().isoformat()
+            }
+            
+            success = self.db.save_data(BACKUP_PATH, backup_data)
+            if success:
+                await update.message.reply_text(f"✅ Резервная копия создана!\nПользователей: {len(self.db.users)}\nВремя: {datetime.datetime.now().strftime('%d.%m.%Y %H:%M')}")
+            else:
+                await update.message.reply_text("❌ Ошибка создания резервной копии!")
+        except Exception as e:
+            await update.message.reply_text(f"❌ Ошибка: {str(e)}")
+
+    async def quiz_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Команда /quiz"""
+        user_data = await self.get_user_data(update)
+        self.db.log_command(user_data.user_id, "/quiz")
+        
+        if not self.gemini_model:
+            # Простая викторина без AI
+            questions = [
+                {"q": "Сколько дней в високосном году?", "a": "366", "options": ["365", "366", "367", "364"]},
+                {"q": "Столица Австралии?", "a": "Канберра", "options": ["Сидней", "Мельбурн", "Канберра", "Перт"]},
+                {"q": "Самый большой океан?", "a": "Тихий", "options": ["Атлантический", "Тихий", "Индийский", "Северный Ледовитый"]}
+            ]
+            
+            question = random.choice(questions)
+            random.shuffle(question["options"])
+            
+            quiz_text = f"❓ {question['q']}\n\n"
+            for i, option in enumerate(question["options"], 1):
+                quiz_text += f"{i}. {option}\n"
+            
+            await update.message.reply_text(quiz_text + f"\n💡 Ответ через 30 секунд...")
+            
+            # Отправим ответ через 30 секунд
+            async def send_answer():
+                await asyncio.sleep(30)
+                await context.bot.send_message(
+                    update.effective_chat.id,
+                    f"✅ Правильный ответ: {question['a']}"
+                )
+            
+            asyncio.create_task(send_answer())
+            
+        else:
+            try:
+                response = self.gemini_model.generate_content("Задай интересный вопрос для викторины с 4 вариантами ответов на русском языке. Не показывай сразу правильный ответ.")
+                await update.message.reply_text(f"❓ {response.text}")
+                
+                # AI ответ через 30 секунд
+                async def send_ai_answer():
+                    await asyncio.sleep(30)
+                    try:
+                        answer = self.gemini_model.generate_content("Дай правильный ответ на предыдущий вопрос викторины")
+                        await context.bot.send_message(update.effective_chat.id, f"✅ {answer.text}")
+                    except:
+                        pass
+                
+                asyncio.create_task(send_ai_answer())
+                
+            except Exception as e:
+                await update.message.reply_text("❌ Ошибка генерации викторины")
+        
         await self.add_experience(user_data, 2)
+
+    async def math_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Команда /math"""
+        user_data = await self.get_user_data(update)
+        self.db.log_command(user_data.user_id, "/math")
+        
+        if not context.args:
+            await update.message.reply_text("🔢 Введите математическое выражение!\nПример: /math 15 + 25 * 2")
+            return
+        
+        expression = " ".join(context.args)
+        try:
+            # Безопасное вычисление только основных операций
+            allowed_chars = set('0123456789+-*/().,= ')
+            if not all(c in allowed_chars for c in expression):
+                await update.message.reply_text("❌ Разрешены только числа и операции: +, -, *, /, ()")
+                return
+            
+            result = eval(expression)
+            await update.message.reply_text(f"🔢 {expression} = {result}")
+            
+        except Exception as e:
+            await update.message.reply_text(f"❌ Ошибка вычисления: {str(e)}")
+        
+        await self.add_experience(user_data, 1)
+
+    async def password_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Команда /password"""
+        user_data = await self.get_user_data(update)
+        self.db.log_command(user_data.user_id, "/password")
+        
+        length = 12
+        if context.args and context.args[0].isdigit():
+            length = min(int(context.args[0]), 50)  # Максимум 50 символов
+        
+        import string
+        chars = string.ascii_letters + string.digits + "!@#$%^&*"
+        password = ''.join(random.choice(chars) for _ in range(length))
+        
+        await update.message.reply_text(f"🔐 Сгенерированный пароль ({length} символов):\n`{password}`\n\n⚠️ Сохраните пароль в безопасном месте!", parse_mode='Markdown')
+        await self.add_experience(user_data, 1)
+
+    async def qr_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Команда /qr"""
+        user_data = await self.get_user_data(update)
+        self.db.log_command(user_data.user_id, "/qr")
+        
+        if not context.args:
+            await update.message.reply_text("📱 Введите текст для создания QR-кода!\nПример: /qr https://google.com")
+            return
+        
+        text = " ".join(context.args)
+        qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=300x300&data={text}"
+        
+        await update.message.reply_text(f"📱 QR-код для: {text}")
+        await context.bot.send_photo(update.effective_chat.id, qr_url)
+        await self.add_experience(user_data, 1)
+
+    async def shorturl_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Команда /shorturl"""
+        user_data = await self.get_user_data(update)
+        self.db.log_command(user_data.user_id, "/shorturl")
+        
+        if not context.args:
+            await update.message.reply_text("🔗 Введите URL для сокращения!\nПример: /shorturl https://very-long-url.com")
+            return
+        
+        url = context.args[0]
+        if not url.startswith('http'):
+            url = 'https://' + url
+        
+        try:
+            # Используем is.gd API для сокращения URL
+            response = requests.get(f"https://is.gd/create.php?format=simple&url={url}", timeout=10)
+            if response.status_code == 200:
+                short_url = response.text.strip()
+                await update.message.reply_text(f"🔗 Сокращённый URL:\n{short_url}")
+            else:
+                await update.message.reply_text("❌ Ошибка сокращения URL")
+        except:
+            await update.message.reply_text("❌ Ошибка подключения к сервису сокращения URL")
+        
+        await self.add_experience(user_data, 1)
+
+    async def uptime_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Команда /uptime"""
+        user_data = await self.get_user_data(update)
+        self.db.log_command(user_data.user_id, "/uptime")
+        
+        # Простая имитация uptime
+        import psutil
+        try:
+            boot_time = psutil.boot_time()
+            uptime_seconds = time.time() - boot_time
+            uptime_str = str(datetime.timedelta(seconds=int(uptime_seconds)))
+            
+            uptime_text = f"""
+⏱️ UPTIME СИСТЕМЫ
+
+🔄 Время работы: {uptime_str}
+💾 Использование памяти: {psutil.virtual_memory().percent}%
+🖥️ Загрузка CPU: {psutil.cpu_percent()}%
+👥 Пользователей бота: {len(self.db.users)}
+📊 Команд выполнено: {len(self.db.logs)}
+            """
+            await update.message.reply_text(uptime_text)
+        except:
+            await update.message.reply_text("⏱️ Бот работает стабильно!\n👥 Пользователей: {}\n📊 Команд: {}".format(len(self.db.users), len(self.db.logs)))
+        
+        await self.add_experience(user_data, 1)
+
+    async def ip_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Команда /ip"""
+        user_data = await self.get_user_data(update)
+        self.db.log_command(user_data.user_id, "/ip")
+        
+        try:
+            response = requests.get('https://httpbin.org/ip', timeout=5)
+            ip_data = response.json()
+            ip = ip_data.get('origin', 'Неизвестно')
+            
+            # Получаем геолокацию
+            geo_response = requests.get(f'http://ip-api.com/json/{ip}', timeout=5)
+            geo_data = geo_response.json()
+            
+            if geo_data.get('status') == 'success':
+                location_text = f"""
+🌍 ИНФОРМАЦИЯ О IP
+
+📍 IP адрес: {ip}
+🏙️ Город: {geo_data.get('city', 'Неизвестно')}
+🏳️ Страна: {geo_data.get('country', 'Неизвестно')}
+🌐 Провайдер: {geo_data.get('isp', 'Неизвестно')}
+                """
+            else:
+                location_text = f"🌍 Ваш IP: {ip}"
+                
+            await update.message.reply_text(location_text)
+        except:
+            await update.message.reply_text("❌ Не удалось получить информацию об IP")
+        
+        await self.add_experience(user_data, 1)
+
+    async def calculate_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Команда /calculate - продвинутый калькулятор"""
+        user_data = await self.get_user_data(update)
+        self.db.log_command(user_data.user_id, "/calculate")
+        
+        if not context.args:
+            await update.message.reply_text("""
+🧮 КАЛЬКУЛЯТОР
+
+Примеры использования:
+• /calculate 2+2
+• /calculate sqrt(16) 
+• /calculate sin(30)
+• /calculate log(100)
+• /calculate 2**10
+
+Доступные функции: sqrt, sin, cos, tan, log, log10, abs, round
+            """)
+            return
+        
+        expression = " ".join(context.args)
+        
+        try:
+            import math
+            # Безопасные математические функции
+            safe_dict = {
+                "sqrt": math.sqrt, "sin": math.sin, "cos": math.cos, "tan": math.tan,
+                "log": math.log, "log10": math.log10, "abs": abs, "round": round,
+                "pi": math.pi, "e": math.e, "pow": pow
+            }
+            
+            # Заменяем ** на pow для безопасности
+            expression = expression.replace("**", ",").replace("^", ",")
+            if "," in expression and not expression.startswith("pow"):
+                parts = expression.split(",")
+                if len(parts) == 2 and parts[0].strip().replace(".", "").replace("-", "").isdigit() and parts[1].strip().replace(".", "").replace("-", "").isdigit():
+                    expression = f"pow({parts[0].strip()}, {parts[1].strip()})"
+            
+            result = eval(expression, {"__builtins__": {}}, safe_dict)
+            await update.message.reply_text(f"🧮 {expression} = {result}")
+            
+        except Exception as e:
+            await update.message.reply_text(f"❌ Ошибка вычисления: {str(e)}")
+        
+        await self.add_experience(user_data, 1)
 
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Автоответ на сообщения"""
@@ -756,24 +1101,236 @@ Maintenance: {"Вкл" if self.maintenance_mode else "Выкл"}
         await update.message.reply_text(f"🧠 Ваша память:\n{memory_text}")
         await self.add_experience(user_data, 1)
 
-    async def memorydel_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /memorydel"""
+    async def delnote_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Команда /delnote"""
         user_data = await self.get_user_data(update)
-        self.db.log_command(user_data.user_id, "/memorydel")
+        self.db.log_command(user_data.user_id, "/delnote")
         
-        if not context.args:
-            await update.message.reply_text("🧠 /memorydel [ключ]")
+        if not context.args or not context.args[0].isdigit():
+            await update.message.reply_text("❌ Укажите номер заметки для удаления!\nПример: /delnote 1")
             return
         
-        key = context.args[0]
-        if key in user_data.memory_data:
-            del user_data.memory_data[key]
+        index = int(context.args[0]) - 1
+        if 0 <= index < len(user_data.notes):
+            deleted_note = user_data.notes.pop(index)
             self.db.save_user(user_data)
-            await update.message.reply_text(f"🧠 Удалено: {key}")
+            await update.message.reply_text(f"✅ Заметка удалена: {deleted_note[:50]}...")
         else:
-            await update.message.reply_text(f"❌ Ключ '{key}' не найден!")
+            await update.message.reply_text("❌ Неверный номер заметки!")
         
         await self.add_experience(user_data, 1)
+
+    async def findnote_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Команда /findnote"""
+        user_data = await self.get_user_data(update)
+        self.db.log_command(user_data.user_id, "/findnote")
+        
+        if not context.args:
+            await update.message.reply_text("🔍 Укажите ключевое слово для поиска!\nПример: /findnote работа")
+            return
+        
+        keyword = " ".join(context.args).lower()
+        found = [(i+1, note) for i, note in enumerate(user_data.notes) if keyword in note.lower()]
+        
+        if found:
+            notes_text = "\n".join(f"{i}. {note}" for i, note in found)
+            await update.message.reply_text(f"🔍 Найдено заметок ({len(found)}):\n{notes_text}")
+        else:
+            await update.message.reply_text("❌ Ничего не найдено!")
+        
+        await self.add_experience(user_data, 1)
+
+    async def clearnotes_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Команда /clearnotes"""
+        user_data = await self.get_user_data(update)
+        self.db.log_command(user_data.user_id, "/clearnotes")
+        
+        notes_count = len(user_data.notes)
+        user_data.notes = []
+        self.db.save_user(user_data)
+        await update.message.reply_text(f"✅ Очищено {notes_count} заметок!")
+        await self.add_experience(user_data, 1)
+
+    async def fact_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Команда /fact"""
+        user_data = await self.get_user_data(update)
+        self.db.log_command(user_data.user_id, "/fact")
+        
+        if not self.gemini_model:
+            facts = [
+                "🧠 Человеческий мозг содержит около 86 миллиардов нейронов!",
+                "🌊 В океане больше исторических артефактов, чем во всех музеях мира!",
+                "🐙 У осьминогов три сердца и голубая кровь!",
+                "🌍 За секунду Земля проходит около 30 километров по орбите!"
+            ]
+            await update.message.reply_text(random.choice(facts))
+        else:
+            try:
+                response = self.gemini_model.generate_content("Расскажи интересный научный факт на русском языке")
+                await update.message.reply_text(f"🧠 {response.text}")
+            except:
+                await update.message.reply_text("🧠 Интересный факт: Python был назван в честь британской комедийной группы Monty Python!")
+        
+        await self.add_experience(user_data, 1)
+
+    async def quote_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Команда /quote"""
+        user_data = await self.get_user_data(update)
+        self.db.log_command(user_data.user_id, "/quote")
+        
+        if not self.gemini_model:
+            quotes = [
+                "💫 'Будь собой. Остальные роли уже заняты.' - Оскар Уайльд",
+                "🚀 'Единственный способ сделать великую работу - любить то, что делаешь.' - Стив Джобс",
+                "⭐ 'Успех - это способность идти от неудачи к неудаче, не теряя энтузиазма.' - Черчилль"
+            ]
+            await update.message.reply_text(random.choice(quotes))
+        else:
+            try:
+                response = self.gemini_model.generate_content("Дай вдохновляющую цитату на русском языке с указанием автора")
+                await update.message.reply_text(f"💫 {response.text}")
+            except:
+                await update.message.reply_text("💫 'Программирование - это искусство говорить человеку, что сказать компьютеру.' - Дональд Кнут")
+        
+        await self.add_experience(user_data, 1)
+
+    async def coin_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Команда /coin"""
+        user_data = await self.get_user_data(update)
+        self.db.log_command(user_data.user_id, "/coin")
+        
+        result = random.choice(["🪙 Орёл!", "🪙 Решка!"])
+        await update.message.reply_text(result)
+        await self.add_experience(user_data, 1)
+
+    async def dice_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Команда /dice"""
+        user_data = await self.get_user_data(update)
+        self.db.log_command(user_data.user_id, "/dice")
+        
+        result = random.randint(1, 6)
+        dice_faces = ["⚀", "⚁", "⚂", "⚃", "⚄", "⚅"]
+        await update.message.reply_text(f"🎲 {dice_faces[result-1]} Выпало: {result}")
+        await self.add_experience(user_data, 1)
+
+    async def eightball_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Команда /8ball"""
+        user_data = await self.get_user_data(update)
+        self.db.log_command(user_data.user_id, "/8ball")
+        
+        if not context.args:
+            await update.message.reply_text("🔮 Задайте вопрос магическому шару!\nПример: /8ball Стоит ли мне изучать Python?")
+            return
+        
+        answers = [
+            "✅ Да, определённо!",
+            "❌ Нет, не стоит",
+            "🤔 Возможно",
+            "⏳ Спроси позже",
+            "🎯 Без сомнений!",
+            "💭 Весьма вероятно",
+            "🚫 Мой ответ - нет",
+            "🌟 Знаки говорят да"
+        ]
+        
+        result = random.choice(answers)
+        await update.message.reply_text(f"🔮 {result}")
+        await self.add_experience(user_data, 1)
+
+    async def weather_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Команда /weather"""
+        user_data = await self.get_user_data(update)
+        self.db.log_command(user_data.user_id, "/weather")
+        
+        if not context.args:
+            await update.message.reply_text("🌤️ Укажите город!\nПример: /weather Москва")
+            return
+            
+        if not OPENWEATHER_API_KEY:
+            await update.message.reply_text("❌ Функция погоды недоступна - не настроен API ключ OpenWeather.")
+            return
+        
+        city = " ".join(context.args)
+        try:
+            url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={OPENWEATHER_API_KEY}&units=metric&lang=ru"
+            response = requests.get(url, timeout=10).json()
+            
+            if response.get("cod") == 200:
+                weather = response["weather"][0]["description"]
+                temp = round(response["main"]["temp"])
+                feels_like = round(response["main"]["feels_like"])
+                humidity = response["main"]["humidity"]
+                
+                weather_text = f"""
+🌤️ Погода в {city}:
+🌡️ Температура: {temp}°C (ощущается как {feels_like}°C)
+☁️ Описание: {weather.capitalize()}
+💧 Влажность: {humidity}%
+                """
+                await update.message.reply_text(weather_text)
+            else:
+                await update.message.reply_text("❌ Город не найден! Проверьте название.")
+        except Exception as e:
+            await update.message.reply_text("❌ Ошибка получения погоды. Попробуйте позже.")
+            logger.error(f"Ошибка weather API: {e}")
+        
+        await self.add_experience(user_data, 2)
+
+    async def currency_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Команда /currency"""
+        user_data = await self.get_user_data(update)
+        self.db.log_command(user_data.user_id, "/currency")
+        
+        if len(context.args) < 2:
+            await update.message.reply_text("💰 Укажите валюты для конвертации!\nПример: /currency USD RUB")
+            return
+            
+        if not CURRENCY_API_KEY:
+            await update.message.reply_text("❌ Функция конвертации недоступна - не настроен API ключ.")
+            return
+        
+        from_cur, to_cur = context.args[0].upper(), context.args[1].upper()
+        
+        try:
+            url = f"https://api.freecurrencyapi.com/v1/latest?apikey={CURRENCY_API_KEY}&currencies={to_cur}&base_currency={from_cur}"
+            response = requests.get(url, timeout=10).json()
+            rate = response.get("data", {}).get(to_cur)
+            
+            if rate:
+                await update.message.reply_text(f"💰 1 {from_cur} = {rate:.4f} {to_cur}")
+            else:
+                await update.message.reply_text("❌ Не удалось получить курс валют!")
+        except Exception as e:
+            await update.message.reply_text("❌ Ошибка конвертации валют.")
+            logger.error(f"Ошибка currency API: {e}")
+        
+        await self.add_experience(user_data, 2)
+
+    async def translate_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Команда /translate"""
+        user_data = await self.get_user_data(update)
+        self.db.log_command(user_data.user_id, "/translate")
+        
+        if len(context.args) < 2:
+            await update.message.reply_text("🌐 Укажите язык и текст для перевода!\nПример: /translate en Привет мир")
+            return
+        
+        if not self.gemini_model:
+            await update.message.reply_text("❌ Функция перевода недоступна - AI не настроен.")
+            return
+        
+        target_lang = context.args[0]
+        text = " ".join(context.args[1:])
+        
+        try:
+            prompt = f"Переведи следующий текст на {target_lang}: {text}"
+            response = self.gemini_model.generate_content(prompt)
+            await update.message.reply_text(f"🌐 Перевод:\n{response.text}")
+        except Exception as e:
+            await update.message.reply_text("❌ Ошибка перевода.")
+            logger.error(f"Ошибка перевода: {e}")
+        
+        await self.add_experience(user_data, 2)
 
     # =============================================================================
     # VIP КОМАНДЫ
@@ -884,17 +1441,27 @@ Maintenance: {"Вкл" if self.maintenance_mode else "Выкл"}
             return
         
         if len(context.args) < 2:
-            await update.message.reply_text("💎 /grant_vip [user_id] [week/month/year/permanent]")
+            await update.message.reply_text("💎 /grant_vip [user_id или @username] [week/month/year/permanent]")
             return
         
         try:
-            target_id = int(context.args[0])
+            target = context.args[0]
             duration = context.args[1].lower()
             
-            target_user = self.db.get_user(target_id)
-            if not target_user:
-                await update.message.reply_text("❌ Пользователь не найден!")
-                return
+            # Поддержка username с @
+            if target.startswith('@'):
+                username = target[1:]  # Убираем @
+                target_user = self.db.get_user_by_username(username)
+                if not target_user:
+                    await update.message.reply_text(f"❌ Пользователь @{username} не найден или не использовал бота!")
+                    return
+            else:
+                # Поддержка user_id
+                target_id = int(target)
+                target_user = self.db.get_user(target_id)
+                if not target_user:
+                    await update.message.reply_text("❌ Пользователь с таким ID не найден!")
+                    return
             
             target_user.is_vip = True
             
@@ -911,21 +1478,42 @@ Maintenance: {"Вкл" if self.maintenance_mode else "Выкл"}
                 return
             
             self.db.save_user(target_user)
-            await update.message.reply_text(f"✅ VIP выдан пользователю {target_user.first_name} ({target_id})")
+            await update.message.reply_text(f"✅ VIP выдан пользователю {target_user.first_name} (ID: {target_user.user_id})")
             
             # Уведомляем пользователя
             try:
                 await context.bot.send_message(
-                    target_id, 
+                    target_user.user_id, 
                     f"🎉 Поздравляем! Вы получили VIP статус!\nДлительность: {duration}"
                 )
             except:
                 pass
                 
         except ValueError:
-            await update.message.reply_text("❌ Неверный ID пользователя!")
+            await update.message.reply_text("❌ Неверный ID пользователя! Используйте число или @username")
         except Exception as e:
             await update.message.reply_text(f"❌ Ошибка: {str(e)}")
+
+    async def users_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Команда /users"""
+        if not self.is_creator(update.effective_user.id):
+            await update.message.reply_text("❌ Доступно только создателю!")
+            return
+        
+        users = self.db.get_all_users()
+        if not users:
+            await update.message.reply_text("👥 Пользователей пока нет!")
+            return
+            
+        users_text = "👥 СПИСОК ПОЛЬЗОВАТЕЛЕЙ:\n\n"
+        for user_id, first_name, level, last_activity in users[:20]:  # Показываем первых 20
+            vip_status = "💎" if any(u.get('user_id') == user_id and u.get('is_vip') for u in self.db.users) else "👤"
+            users_text += f"{vip_status} {first_name} (ID: {user_id}) - Уровень {level}\n"
+        
+        if len(users) > 20:
+            users_text += f"\n... и ещё {len(users) - 20} пользователей"
+            
+        await update.message.reply_text(users_text)
 
     async def broadcast_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Команда /broadcast"""
@@ -1172,20 +1760,45 @@ Maintenance: {"Вкл" if self.maintenance_mode else "Выкл"}
         application.add_handler(CommandHandler("ai", self.ai_command))
         application.add_handler(CommandHandler("note", self.note_command))
         application.add_handler(CommandHandler("notes", self.notes_command))
+        application.add_handler(CommandHandler("delnote", self.delnote_command))
+        application.add_handler(CommandHandler("findnote", self.findnote_command))
+        application.add_handler(CommandHandler("clearnotes", self.clearnotes_command))
         application.add_handler(CommandHandler("memorysave", self.memorysave_command))
         application.add_handler(CommandHandler("memoryget", self.memoryget_command))
         application.add_handler(CommandHandler("memorylist", self.memorylist_command))
         application.add_handler(CommandHandler("memorydel", self.memorydel_command))
+        application.add_handler(CommandHandler("time", self.time_command))
+        application.add_handler(CommandHandler("date", self.date_command))
+        application.add_handler(CommandHandler("joke", self.joke_command))
+        application.add_handler(CommandHandler("fact", self.fact_command))
+        application.add_handler(CommandHandler("quote", self.quote_command))
+        application.add_handler(CommandHandler("coin", self.coin_command))
+        application.add_handler(CommandHandler("dice", self.dice_command))
+        application.add_handler(CommandHandler("8ball", self.eightball_command))
+        application.add_handler(CommandHandler("weather", self.weather_command))
+        application.add_handler(CommandHandler("currency", self.currency_command))
+        application.add_handler(CommandHandler("translate", self.translate_command))
+        application.add_handler(CommandHandler("rank", self.rank_command))
         application.add_handler(CommandHandler("vip", self.vip_command))
         application.add_handler(CommandHandler("remind", self.remind_command))
         application.add_handler(CommandHandler("reminders", self.reminders_command))
         application.add_handler(CommandHandler("grant_vip", self.grant_vip_command))
+        application.add_handler(CommandHandler("revoke_vip", self.revoke_vip_command))
+        application.add_handler(CommandHandler("users", self.users_command))
         application.add_handler(CommandHandler("broadcast", self.broadcast_command))
+        application.add_handler(CommandHandler("maintenance", self.maintenance_command))
+        application.add_handler(CommandHandler("backup", self.backup_command))
         application.add_handler(CommandHandler("stats", self.stats_command))
-        application.add_handler(CommandHandler("time", self.time_command))
-        application.add_handler(CommandHandler("date", self.date_command))
-        application.add_handler(CommandHandler("joke", self.joke_command))
-        application.add_handler(CommandHandler("rank", self.rank_command))
+        
+        # Дополнительные команды
+        application.add_handler(CommandHandler("quiz", self.quiz_command))
+        application.add_handler(CommandHandler("math", self.math_command))
+        application.add_handler(CommandHandler("calculate", self.calculate_command))
+        application.add_handler(CommandHandler("password", self.password_command))
+        application.add_handler(CommandHandler("qr", self.qr_command))
+        application.add_handler(CommandHandler("shorturl", self.shorturl_command))
+        application.add_handler(CommandHandler("uptime", self.uptime_command))
+        application.add_handler(CommandHandler("ip", self.ip_command))
         
         # Обработчик текстовых сообщений только для приватных чатов
         application.add_handler(
