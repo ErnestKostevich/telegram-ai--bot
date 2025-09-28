@@ -496,7 +496,6 @@ class TelegramBot:
 /help - Эта справка
 /info - О боте
 /status - Статус системы
-/uptime - Время работы системы
 
 💬 AI-ЧАТ:
 /ai [вопрос] - Задать вопрос AI
@@ -517,22 +516,17 @@ class TelegramBot:
 /joke - Случайная шутка
 /fact - Интересный факт
 /quote - Вдохновляющая цитата
-/quiz - Викторина
 /coin - Монетка
 /dice - Кубик
 /8ball [вопрос] - Магический шар
 
-🔢 МАТЕМАТИКА:
-/math [выражение] - Простые вычисления
-/calculate [выражение] - Продвинутый калькулятор
-
-🛠️ УТИЛИТЫ:
-/password [длина] - Генератор паролей
-/qr [текст] - QR-код
-/shorturl [ссылка] - Сокращение URL
-/ip - Информация об IP
+🌤️ ПОГОДА:
 /weather [город] - Текущая погода
+
+💰 ФИНАНСЫ:
 /currency [из] [в] - Конвертер валют
+
+🔤 ТЕКСТ:
 /translate [язык] [текст] - Перевод
 
 🧠 ПАМЯТЬ:
@@ -560,13 +554,12 @@ class TelegramBot:
         if self.is_creator(user_data.user_id):
             help_text += """
 👑 КОМАНДЫ СОЗДАТЕЛЯ:
-/grant_vip [user_id/@username] [duration] - Выдать VIP
-/revoke_vip [user_id/@username] - Отозвать VIP
+/grant_vip [user_id] [duration] - Выдать VIP
+/revoke_vip [user_id] - Отозвать VIP
 /broadcast [текст] - Рассылка всем
-/users - Список пользователей
 /stats - Статистика бота
+/users - Список пользователей
 /maintenance [on/off] - Режим обслуживания
-/backup - Создать резервную копию
             """
         
         await update.message.reply_text(help_text)
@@ -642,338 +635,7 @@ Maintenance: {"Вкл" if self.maintenance_mode else "Выкл"}
             await update.message.reply_text(f"❌ Ошибка AI: {str(e)}")
             logger.error(f"Ошибка Gemini: {e}")
         
-    async def revoke_vip_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /revoke_vip"""
-        if not self.is_creator(update.effective_user.id):
-            await update.message.reply_text("❌ Доступно только создателю!")
-            return
-        
-        if not context.args:
-            await update.message.reply_text("💎 /revoke_vip [user_id или @username]")
-            return
-        
-        try:
-            target = context.args[0]
-            
-            if target.startswith('@'):
-                username = target[1:]
-                target_user = self.db.get_user_by_username(username)
-                if not target_user:
-                    await update.message.reply_text(f"❌ Пользователь @{username} не найден!")
-                    return
-            else:
-                target_id = int(target)
-                target_user = self.db.get_user(target_id)
-                if not target_user:
-                    await update.message.reply_text("❌ Пользователь с таким ID не найден!")
-                    return
-            
-            if not target_user.is_vip:
-                await update.message.reply_text(f"❌ Пользователь {target_user.first_name} не является VIP!")
-                return
-            
-            target_user.is_vip = False
-            target_user.vip_expires = None
-            self.db.save_user(target_user)
-            
-            await update.message.reply_text(f"✅ VIP статус отозван у {target_user.first_name} (ID: {target_user.user_id})")
-            
-            try:
-                await context.bot.send_message(
-                    target_user.user_id,
-                    "💎 Ваш VIP статус был отозван администратором."
-                )
-            except:
-                pass
-                
-        except ValueError:
-            await update.message.reply_text("❌ Неверный ID пользователя!")
-        except Exception as e:
-            await update.message.reply_text(f"❌ Ошибка: {str(e)}")
-
-    async def maintenance_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /maintenance"""
-        if not self.is_creator(update.effective_user.id):
-            await update.message.reply_text("❌ Доступно только создателю!")
-            return
-        
-        if not context.args:
-            status = "включен" if self.maintenance_mode else "выключен"
-            await update.message.reply_text(f"🛠 Режим обслуживания сейчас {status}\n\nИспользование: /maintenance [on/off]")
-            return
-        
-        mode = context.args[0].lower()
-        if mode in ['on', 'вкл', 'включить']:
-            self.maintenance_mode = True
-            await update.message.reply_text("🛠 Режим обслуживания ВКЛЮЧЕН - бот недоступен для обычных пользователей")
-        elif mode in ['off', 'выкл', 'выключить']:
-            self.maintenance_mode = False
-            await update.message.reply_text("✅ Режим обслуживания ВЫКЛЮЧЕН - бот работает нормально")
-        else:
-            await update.message.reply_text("❌ Используйте: /maintenance [on/off]")
-
-    async def backup_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /backup"""
-        if not self.is_creator(update.effective_user.id):
-            await update.message.reply_text("❌ Доступно только создателя!")
-            return
-        
-        try:
-            backup_data = {
-                'users': self.db.users,
-                'logs': self.db.logs[-100:],  # Последние 100 записей
-                'statistics': self.db.statistics,
-                'backup_time': datetime.datetime.now().isoformat()
-            }
-            
-            success = self.db.save_data(BACKUP_PATH, backup_data)
-            if success:
-                await update.message.reply_text(f"✅ Резервная копия создана!\nПользователей: {len(self.db.users)}\nВремя: {datetime.datetime.now().strftime('%d.%m.%Y %H:%M')}")
-            else:
-                await update.message.reply_text("❌ Ошибка создания резервной копии!")
-        except Exception as e:
-            await update.message.reply_text(f"❌ Ошибка: {str(e)}")
-
-    async def quiz_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /quiz"""
-        user_data = await self.get_user_data(update)
-        self.db.log_command(user_data.user_id, "/quiz")
-        
-        if not self.gemini_model:
-            # Простая викторина без AI
-            questions = [
-                {"q": "Сколько дней в високосном году?", "a": "366", "options": ["365", "366", "367", "364"]},
-                {"q": "Столица Австралии?", "a": "Канберра", "options": ["Сидней", "Мельбурн", "Канберра", "Перт"]},
-                {"q": "Самый большой океан?", "a": "Тихий", "options": ["Атлантический", "Тихий", "Индийский", "Северный Ледовитый"]}
-            ]
-            
-            question = random.choice(questions)
-            random.shuffle(question["options"])
-            
-            quiz_text = f"❓ {question['q']}\n\n"
-            for i, option in enumerate(question["options"], 1):
-                quiz_text += f"{i}. {option}\n"
-            
-            await update.message.reply_text(quiz_text + f"\n💡 Ответ через 30 секунд...")
-            
-            # Отправим ответ через 30 секунд
-            async def send_answer():
-                await asyncio.sleep(30)
-                await context.bot.send_message(
-                    update.effective_chat.id,
-                    f"✅ Правильный ответ: {question['a']}"
-                )
-            
-            asyncio.create_task(send_answer())
-            
-        else:
-            try:
-                response = self.gemini_model.generate_content("Задай интересный вопрос для викторины с 4 вариантами ответов на русском языке. Не показывай сразу правильный ответ.")
-                await update.message.reply_text(f"❓ {response.text}")
-                
-                # AI ответ через 30 секунд
-                async def send_ai_answer():
-                    await asyncio.sleep(30)
-                    try:
-                        answer = self.gemini_model.generate_content("Дай правильный ответ на предыдущий вопрос викторины")
-                        await context.bot.send_message(update.effective_chat.id, f"✅ {answer.text}")
-                    except:
-                        pass
-                
-                asyncio.create_task(send_ai_answer())
-                
-            except Exception as e:
-                await update.message.reply_text("❌ Ошибка генерации викторины")
-        
         await self.add_experience(user_data, 2)
-
-    async def math_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /math"""
-        user_data = await self.get_user_data(update)
-        self.db.log_command(user_data.user_id, "/math")
-        
-        if not context.args:
-            await update.message.reply_text("🔢 Введите математическое выражение!\nПример: /math 15 + 25 * 2")
-            return
-        
-        expression = " ".join(context.args)
-        try:
-            # Безопасное вычисление только основных операций
-            allowed_chars = set('0123456789+-*/().,= ')
-            if not all(c in allowed_chars for c in expression):
-                await update.message.reply_text("❌ Разрешены только числа и операции: +, -, *, /, ()")
-                return
-            
-            result = eval(expression)
-            await update.message.reply_text(f"🔢 {expression} = {result}")
-            
-        except Exception as e:
-            await update.message.reply_text(f"❌ Ошибка вычисления: {str(e)}")
-        
-        await self.add_experience(user_data, 1)
-
-    async def password_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /password"""
-        user_data = await self.get_user_data(update)
-        self.db.log_command(user_data.user_id, "/password")
-        
-        length = 12
-        if context.args and context.args[0].isdigit():
-            length = min(int(context.args[0]), 50)  # Максимум 50 символов
-        
-        import string
-        chars = string.ascii_letters + string.digits + "!@#$%^&*"
-        password = ''.join(random.choice(chars) for _ in range(length))
-        
-        await update.message.reply_text(f"🔐 Сгенерированный пароль ({length} символов):\n`{password}`\n\n⚠️ Сохраните пароль в безопасном месте!", parse_mode='Markdown')
-        await self.add_experience(user_data, 1)
-
-    async def qr_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /qr"""
-        user_data = await self.get_user_data(update)
-        self.db.log_command(user_data.user_id, "/qr")
-        
-        if not context.args:
-            await update.message.reply_text("📱 Введите текст для создания QR-кода!\nПример: /qr https://google.com")
-            return
-        
-        text = " ".join(context.args)
-        qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=300x300&data={text}"
-        
-        await update.message.reply_text(f"📱 QR-код для: {text}")
-        await context.bot.send_photo(update.effective_chat.id, qr_url)
-        await self.add_experience(user_data, 1)
-
-    async def shorturl_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /shorturl"""
-        user_data = await self.get_user_data(update)
-        self.db.log_command(user_data.user_id, "/shorturl")
-        
-        if not context.args:
-            await update.message.reply_text("🔗 Введите URL для сокращения!\nПример: /shorturl https://very-long-url.com")
-            return
-        
-        url = context.args[0]
-        if not url.startswith('http'):
-            url = 'https://' + url
-        
-        try:
-            # Используем is.gd API для сокращения URL
-            response = requests.get(f"https://is.gd/create.php?format=simple&url={url}", timeout=10)
-            if response.status_code == 200:
-                short_url = response.text.strip()
-                await update.message.reply_text(f"🔗 Сокращённый URL:\n{short_url}")
-            else:
-                await update.message.reply_text("❌ Ошибка сокращения URL")
-        except:
-            await update.message.reply_text("❌ Ошибка подключения к сервису сокращения URL")
-        
-        await self.add_experience(user_data, 1)
-
-    async def uptime_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /uptime"""
-        user_data = await self.get_user_data(update)
-        self.db.log_command(user_data.user_id, "/uptime")
-        
-        # Простая имитация uptime
-        import psutil
-        try:
-            boot_time = psutil.boot_time()
-            uptime_seconds = time.time() - boot_time
-            uptime_str = str(datetime.timedelta(seconds=int(uptime_seconds)))
-            
-            uptime_text = f"""
-⏱️ UPTIME СИСТЕМЫ
-
-🔄 Время работы: {uptime_str}
-💾 Использование памяти: {psutil.virtual_memory().percent}%
-🖥️ Загрузка CPU: {psutil.cpu_percent()}%
-👥 Пользователей бота: {len(self.db.users)}
-📊 Команд выполнено: {len(self.db.logs)}
-            """
-            await update.message.reply_text(uptime_text)
-        except:
-            await update.message.reply_text("⏱️ Бот работает стабильно!\n👥 Пользователей: {}\n📊 Команд: {}".format(len(self.db.users), len(self.db.logs)))
-        
-        await self.add_experience(user_data, 1)
-
-    async def ip_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /ip"""
-        user_data = await self.get_user_data(update)
-        self.db.log_command(user_data.user_id, "/ip")
-        
-        try:
-            response = requests.get('https://httpbin.org/ip', timeout=5)
-            ip_data = response.json()
-            ip = ip_data.get('origin', 'Неизвестно')
-            
-            # Получаем геолокацию
-            geo_response = requests.get(f'http://ip-api.com/json/{ip}', timeout=5)
-            geo_data = geo_response.json()
-            
-            if geo_data.get('status') == 'success':
-                location_text = f"""
-🌍 ИНФОРМАЦИЯ О IP
-
-📍 IP адрес: {ip}
-🏙️ Город: {geo_data.get('city', 'Неизвестно')}
-🏳️ Страна: {geo_data.get('country', 'Неизвестно')}
-🌐 Провайдер: {geo_data.get('isp', 'Неизвестно')}
-                """
-            else:
-                location_text = f"🌍 Ваш IP: {ip}"
-                
-            await update.message.reply_text(location_text)
-        except:
-            await update.message.reply_text("❌ Не удалось получить информацию об IP")
-        
-        await self.add_experience(user_data, 1)
-
-    async def calculate_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /calculate - продвинутый калькулятор"""
-        user_data = await self.get_user_data(update)
-        self.db.log_command(user_data.user_id, "/calculate")
-        
-        if not context.args:
-            await update.message.reply_text("""
-🧮 КАЛЬКУЛЯТОР
-
-Примеры использования:
-• /calculate 2+2
-• /calculate sqrt(16) 
-• /calculate sin(30)
-• /calculate log(100)
-• /calculate 2**10
-
-Доступные функции: sqrt, sin, cos, tan, log, log10, abs, round
-            """)
-            return
-        
-        expression = " ".join(context.args)
-        
-        try:
-            import math
-            # Безопасные математические функции
-            safe_dict = {
-                "sqrt": math.sqrt, "sin": math.sin, "cos": math.cos, "tan": math.tan,
-                "log": math.log, "log10": math.log10, "abs": abs, "round": round,
-                "pi": math.pi, "e": math.e, "pow": pow
-            }
-            
-            # Заменяем ** на pow для безопасности
-            expression = expression.replace("**", ",").replace("^", ",")
-            if "," in expression and not expression.startswith("pow"):
-                parts = expression.split(",")
-                if len(parts) == 2 and parts[0].strip().replace(".", "").replace("-", "").isdigit() and parts[1].strip().replace(".", "").replace("-", "").isdigit():
-                    expression = f"pow({parts[0].strip()}, {parts[1].strip()})"
-            
-            result = eval(expression, {"__builtins__": {}}, safe_dict)
-            await update.message.reply_text(f"🧮 {expression} = {result}")
-            
-        except Exception as e:
-            await update.message.reply_text(f"❌ Ошибка вычисления: {str(e)}")
-        
-        await self.add_experience(user_data, 1)
 
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Автоответ на сообщения"""
@@ -1783,22 +1445,9 @@ Maintenance: {"Вкл" if self.maintenance_mode else "Выкл"}
         application.add_handler(CommandHandler("remind", self.remind_command))
         application.add_handler(CommandHandler("reminders", self.reminders_command))
         application.add_handler(CommandHandler("grant_vip", self.grant_vip_command))
-        application.add_handler(CommandHandler("revoke_vip", self.revoke_vip_command))
         application.add_handler(CommandHandler("users", self.users_command))
         application.add_handler(CommandHandler("broadcast", self.broadcast_command))
-        application.add_handler(CommandHandler("maintenance", self.maintenance_command))
-        application.add_handler(CommandHandler("backup", self.backup_command))
         application.add_handler(CommandHandler("stats", self.stats_command))
-        
-        # Дополнительные команды
-        application.add_handler(CommandHandler("quiz", self.quiz_command))
-        application.add_handler(CommandHandler("math", self.math_command))
-        application.add_handler(CommandHandler("calculate", self.calculate_command))
-        application.add_handler(CommandHandler("password", self.password_command))
-        application.add_handler(CommandHandler("qr", self.qr_command))
-        application.add_handler(CommandHandler("shorturl", self.shorturl_command))
-        application.add_handler(CommandHandler("uptime", self.uptime_command))
-        application.add_handler(CommandHandler("ip", self.ip_command))
         
         # Обработчик текстовых сообщений только для приватных чатов
         application.add_handler(
