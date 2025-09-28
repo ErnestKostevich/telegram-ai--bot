@@ -1,19 +1,47 @@
-services:
+databases:
+  - name: bot_db
+    databaseName: botdb
+    user: botuser
 
-- type: web
-  name: telegram-ai--bot
-  env: python
-  plan: free
-  buildCommand: pip install –upgrade pip && pip install -r requirements.txt
-  startCommand: python main.py
-  envVars:
-  - key: 8176339131:AAGVKJoK9Y9fdQcTqMCp0Vm95IMuQWnCNGo
-    sync: false
-  - key: AlzaSyCo4ymvNmI2JkYEuoclv3w_HsUyNPd6oEg
-    sync: false
-  - key: fca_live _86015Ga6b1M0bnm6FCiDfrBB7USGCEPiAUyjiuwL
-    sync: false
-  - key: MODEL
-    value: gemini-2.0-flash
-  - key: PYTHONPATH
-    value: /opt/render/project/src
+services:
+  - type: web
+    name: telegram-ai-bot
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python main.py
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.7
+      - key: PG_HOST
+        fromDatabase:
+          name: bot_db
+          property: host
+      - key: PG_PORT
+        fromDatabase:
+          name: bot_db
+          property: port
+      - key: PG_DATABASE
+        fromDatabase:
+          name: bot_db
+          property: database
+      - key: PG_USER
+        fromDatabase:
+          name: bot_db
+          property: user
+      - key: PG_PASSWORD
+        fromDatabase:
+          name: bot_db
+          property: password
+      - key: BOT_TOKEN
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: CURRENCY_API_KEY
+        sync: false
+      - key: OPENWEATHER_API_KEY
+        sync: false
+      - key: NEWSAPI_KEY
+        sync: false
+      - key: ALPHAVANTAGE_API_KEY
+        sync: false
