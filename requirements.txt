@@ -7,4 +7,4 @@ apscheduler==3.10.4
 newsapi-python==0.2.7
 nest_asyncio==1.6.0  # Для фикса конфликта asyncio loops
 flask==3.0.3  # Для dummy HTTP сервера в Web Service
-psycopg2-binary==2.9.9  # Для PostgreSQL
+pygithub==2.4.0  # Для GitHub API
