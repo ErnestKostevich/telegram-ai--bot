@@ -62,7 +62,7 @@
 ## 👤 Создатель
 
 **Ernest Kostevich** (@Ernest_Kostevich)  
-Telegram: @AI_ERNEST_BOT
+Telegram: @AI_DISCO_BOT
 
 ---
 *Бот работает на Render с автоматическим деплоем из GitHub*
