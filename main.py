@@ -70,7 +70,7 @@ STATISTICS_FILE = "statistics.json"
 CREATOR_ID = 7108255346
 CREATOR_USERNAME = "@Ernest_Kostevich"
 DAD_USERNAME = "@mkostevich"
-BOT_USERNAME = "@AI_ERNEST_BOT"
+BOT_USERNAME = "@AI_DISCO_BOT"
 
 # Настройка Gemini
 if GEMINI_API_KEY:
@@ -194,6 +194,15 @@ class DatabaseManager:
             file = self.repo.get_contents(path)
             content = file.decoded_content.decode('utf-8')
             data = json.loads(content)
+            
+            # Исправляем тип данных если нужно
+            if path == USERS_FILE and isinstance(data, dict) and not data:
+                data = []  # Пустой словарь превращаем в пустой список
+            elif path == STATISTICS_FILE and isinstance(data, list):
+                data = {}  # Пустой список превращаем в пустой словарь
+            elif path == LOGS_FILE and isinstance(data, dict) and not data:
+                data = []  # Пустой словарь превращаем в пустой список
+                
             logger.info(f"Успешно загружено {len(data) if isinstance(data, (list, dict)) else 'данные'} из {path}")
             return data
         except Exception as e:
@@ -238,6 +247,10 @@ class DatabaseManager:
     def save_user(self, user_data: UserData):
         """Сохранение пользователя с обновлением активности"""
         user_data.last_activity = datetime.datetime.now().isoformat()
+        
+        # Убеждаемся что self.users это список
+        if not isinstance(self.users, list):
+            self.users = []
         
         # Обновление или добавление пользователя
         for i, user_dict in enumerate(self.users):
@@ -1128,7 +1141,28 @@ Maintenance: {"Вкл" if self.maintenance_mode else "Выкл"}
             logger.error("BOT_TOKEN не найден в переменных окружения!")
             return
 
-        application = Application.builder().token(BOT_TOKEN).build()
+        # Создаем приложение с обработкой ошибок
+        application = (
+            Application.builder()
+            .token(BOT_TOKEN)
+            .read_timeout(30)
+            .write_timeout(30)
+            .connect_timeout(30)
+            .pool_timeout(30)
+            .build()
+        )
+        
+        # Добавляем обработчик ошибок
+        async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+            """Обработчик ошибок"""
+            logger.error(f"Exception while handling an update: {context.error}")
+            
+            if isinstance(context.error, telegram.error.Conflict):
+                logger.error("Конфликт: возможно запущено несколько экземпляров бота")
+                # Попытка переподключения через 30 секунд
+                await asyncio.sleep(30)
+            
+        application.add_error_handler(error_handler)
         
         # Регистрация команд
         application.add_handler(CommandHandler("start", self.start_command))
@@ -1179,8 +1213,16 @@ Maintenance: {"Вкл" if self.maintenance_mode else "Выкл"}
         
         logger.info("🤖 Бот запущен и готов к работе!")
         
-        # Запуск бота
-        await application.run_polling()
+        # Запуск бота с обработкой ошибок
+        try:
+            await application.run_polling(
+                drop_pending_updates=True,  # Пропускает старые сообщения
+                timeout=30,
+                bootstrap_retries=3
+            )
+        except Exception as e:
+            logger.error(f"Критическая ошибка при запуске бота: {e}")
+            raise
 
 # =============================================================================
 # ОСНОВНАЯ ФУНКЦИЯ
