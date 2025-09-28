@@ -1279,7 +1279,7 @@ Maintenance: {"Вкл" if self.maintenance_mode else "Выкл"}
         prompt = f"Проверь орфографию и исправь: {text}"
         response = self.gemini_model.generate_content(prompt)
         await update.message.reply_text(response.text)
-        await self.add_experience(user_data, 1)
+        await self.add_experience(user_data, 2)
 
     # =============================================================================
     # VIP ФУНКЦИИ
