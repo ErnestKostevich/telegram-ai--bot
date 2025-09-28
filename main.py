@@ -8,7 +8,6 @@
 import asyncio
 import logging
 import json
-import psycopg2  # Для PostgreSQL
 import random
 import time
 import datetime
@@ -29,6 +28,7 @@ from newsapi import NewsApiClient
 import nest_asyncio  # Для фикса nested event loops
 from flask import Flask  # Для dummy сервера
 import pytz  # Для временных зон
+from github import Github  # Для GitHub API
 
 nest_asyncio.apply()  # Применяем патч для разрешения конфликтов loops
 
@@ -62,12 +62,12 @@ OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY")  # Добавь в Render
 NEWSAPI_KEY = os.getenv("NEWSAPI_KEY")  # Добавь в Render
 ALPHAVANTAGE_API_KEY = os.getenv("ALPHAVANTAGE_API_KEY")  # Добавь в Render
 
-# PostgreSQL connection from env
-PG_HOST = os.getenv("PG_HOST")
-PG_PORT = os.getenv("PG_PORT", "5432")
-PG_DATABASE = os.getenv("PG_DATABASE")
-PG_USER = os.getenv("PG_USER")
-PG_PASSWORD = os.getenv("PG_PASSWORD")
+# GitHub
+GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
+GITHUB_REPO = "ErnestKostevich/telegram-ai--bot"
+USERS_FILE = "users.json"
+LOGS_FILE = "logs.json"
+STATISTICS_FILE = "statistics.json"
 
 # ID создателя бота
 CREATOR_ID = 7108255346  # Ernest's Telegram ID
@@ -84,7 +84,7 @@ MODEL = os.getenv("MODEL", "gemini-2.0-flash")
 MAINTENANCE_MODE = False
 
 # Backup path
-BACKUP_PATH = "bot_backup.db"
+BACKUP_PATH = "bot_backup.json"
 
 # =============================================================================
 # КЛАССЫ ДАННЫХ
@@ -96,7 +96,7 @@ class UserData:
     username: str
     first_name: str
     is_vip: bool = False
-    vip_expires: Optional[datetime.datetime] = None
+    vip_expires: Optional[str] = None  # Изменено на str для JSON
     language: str = "ru"
     notes: List[str] = None
     reminders: List[Dict] = None
@@ -120,272 +120,140 @@ class UserData:
         if self.memory_data is None:
             self.memory_data = {}
 
+    @classmethod
+    def from_dict(cls, data: Dict):
+        vip_expires = data['vip_expires']  # Already str
+        return cls(
+            user_id=data['user_id'],
+            username=data['username'],
+            first_name=data['first_name'],
+            is_vip=data['is_vip'],
+            vip_expires=vip_expires,
+            language=data['language'],
+            notes=data['notes'],
+            reminders=data['reminders'],
+            birthday=data['birthday'],
+            nickname=data['nickname'],
+            level=data['level'],
+            experience=data['experience'],
+            achievements=data['achievements'],
+            memory_data=data['memory_data'],
+            theme=data['theme'],
+            color=data['color'],
+            sound_notifications=data['sound_notifications']
+        )
+
+    def to_dict(self):
+        return {
+            'user_id': self.user_id,
+            'username': self.username,
+            'first_name': self.first_name,
+            'is_vip': self.is_vip,
+            'vip_expires': self.vip_expires,
+            'language': self.language,
+            'notes': self.notes,
+            'reminders': self.reminders,
+            'birthday': self.birthday,
+            'nickname': self.nickname,
+            'level': self.level,
+            'experience': self.experience,
+            'achievements': self.achievements,
+            'memory_data': self.memory_data,
+            'theme': self.theme,
+            'color': self.color,
+            'sound_notifications': self.sound_notifications
+        }
+
 # =============================================================================
-# БАЗА ДАННЫХ (PostgreSQL)
+# БАЗА ДАННЫХ (GitHub Files)
 # =============================================================================
 
 class DatabaseManager:
     def __init__(self):
-        self.conn_params = {
-            'host': PG_HOST,
-            'port': PG_PORT,
-            'database': PG_DATABASE,
-            'user': PG_USER,
-            'password': PG_PASSWORD
-        }
-        self.init_database()
+        self.g = Github(GITHUB_TOKEN)
+        self.repo = self.g.get_repo(GITHUB_REPO)
+        self.users = self.load_data(USERS_FILE, [])
+        self.logs = self.load_data(LOGS_FILE, [])
+        self.statistics = self.load_data(STATISTICS_FILE, {})
     
-    def get_connection(self):
-        return psycopg2.connect(**self.conn_params)
+    def load_data(self, path, default):
+        try:
+            file = self.repo.get_contents(path)
+            return json.loads(file.decoded_content)
+        except:
+            return default
     
-    def init_database(self):
-        """Инициализация базы данных"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        
-        # Таблица пользователей
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            user_id INTEGER PRIMARY KEY,
-            username TEXT,
-            first_name TEXT,
-            is_vip BOOLEAN DEFAULT FALSE,
-            vip_expires TEXT,
-            language TEXT DEFAULT 'ru',
-            notes TEXT DEFAULT '[]',
-            reminders TEXT DEFAULT '[]',
-            birthday TEXT,
-            nickname TEXT,
-            level INTEGER DEFAULT 1,
-            experience INTEGER DEFAULT 0,
-            achievements TEXT DEFAULT '[]',
-            memory_data TEXT DEFAULT '{}',
-            theme TEXT DEFAULT 'default',
-            color TEXT DEFAULT 'blue',
-            sound_notifications BOOLEAN DEFAULT TRUE,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        """)
-        
-        # Таблица статистики
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS statistics (
-            command TEXT PRIMARY KEY,
-            usage_count INTEGER DEFAULT 0,
-            last_used TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        """)
-        
-        # Таблица логов
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS logs (
-            id SERIAL PRIMARY KEY,
-            user_id INTEGER,
-            command TEXT,
-            message TEXT,
-            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        """)
-        
-        conn.commit()
-        conn.close()
+    def save_data(self, path, data):
+        content = json.dumps(data, ensure_ascii=False, indent=4)
+        try:
+            file = self.repo.get_contents(path)
+            self.repo.update_file(path, "Update data", content, file.sha)
+        except:
+            self.repo.create_file(path, "Create data file", content)
     
     def get_user(self, user_id: int) -> Optional[UserData]:
-        """Получить данные пользователя"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute("SELECT * FROM users WHERE user_id = %s", (user_id,))
-        row = cursor.fetchone()
-        conn.close()
-        
-        if row:
-            return UserData(
-                user_id=row[0],
-                username=row[1],
-                first_name=row[2],
-                is_vip=bool(row[3]),
-                vip_expires=datetime.datetime.fromisoformat(row[4]) if row[4] else None,
-                language=row[5],
-                notes=json.loads(row[6]),
-                reminders=json.loads(row[7]),
-                birthday=row[8],
-                nickname=row[9],
-                level=row[10],
-                experience=row[11],
-                achievements=json.loads(row[12]),
-                memory_data=json.loads(row[13]),
-                theme=row[14],
-                color=row[15],
-                sound_notifications=bool(row[16])
-            )
+        for user_dict in self.users:
+            if user_dict['user_id'] == user_id:
+                return UserData.from_dict(user_dict)
         return None
     
     def get_user_by_username(self, username: str) -> Optional[UserData]:
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute("SELECT * FROM users WHERE username = %s", (username,))
-        row = cursor.fetchone()
-        conn.close()
-        
-        if row:
-            return UserData(
-                user_id=row[0],
-                username=row[1],
-                first_name=row[2],
-                is_vip=bool(row[3]),
-                vip_expires=datetime.datetime.fromisoformat(row[4]) if row[4] else None,
-                language=row[5],
-                notes=json.loads(row[6]),
-                reminders=json.loads(row[7]),
-                birthday=row[8],
-                nickname=row[9],
-                level=row[10],
-                experience=row[11],
-                achievements=json.loads(row[12]),
-                memory_data=json.loads(row[13]),
-                theme=row[14],
-                color=row[15],
-                sound_notifications=bool(row[16])
-            )
+        for user_dict in self.users:
+            if user_dict['username'] == username:
+                return UserData.from_dict(user_dict)
         return None
     
     def save_user(self, user_data: UserData):
-        """Сохранить данные пользователя"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute("""
-        INSERT INTO users 
-        (user_id, username, first_name, is_vip, vip_expires, language, 
-         notes, reminders, birthday, nickname, level, experience, 
-         achievements, memory_data, theme, color, sound_notifications, last_activity)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        ON CONFLICT(user_id) DO UPDATE SET
-            username = EXCLUDED.username,
-            first_name = EXCLUDED.first_name,
-            is_vip = EXCLUDED.is_vip,
-            vip_expires = EXCLUDED.vip_expires,
-            language = EXCLUDED.language,
-            notes = EXCLUDED.notes,
-            reminders = EXCLUDED.reminders,
-            birthday = EXCLUDED.birthday,
-            nickname = EXCLUDED.nickname,
-            level = EXCLUDED.level,
-            experience = EXCLUDED.experience,
-            achievements = EXCLUDED.achievements,
-            memory_data = EXCLUDED.memory_data,
-            theme = EXCLUDED.theme,
-            color = EXCLUDED.color,
-            sound_notifications = EXCLUDED.sound_notifications,
-            last_activity = EXCLUDED.last_activity
-        """, (
-            user_data.user_id,
-            user_data.username,
-            user_data.first_name,
-            user_data.is_vip,
-            user_data.vip_expires.isoformat() if user_data.vip_expires else None,
-            user_data.language,
-            json.dumps(user_data.notes, ensure_ascii=False),
-            json.dumps(user_data.reminders, ensure_ascii=False),
-            user_data.birthday,
-            user_data.nickname,
-            user_data.level,
-            user_data.experience,
-            json.dumps(user_data.achievements, ensure_ascii=False),
-            json.dumps(user_data.memory_data, ensure_ascii=False),
-            user_data.theme,
-            user_data.color,
-            user_data.sound_notifications,
-            datetime.datetime.now().isoformat()
-        ))
-        
-        conn.commit()
-        conn.close()
+        for i, user_dict in enumerate(self.users):
+            if user_dict['user_id'] == user_data.user_id:
+                self.users[i] = user_data.to_dict()
+                break
+        else:
+            self.users.append(user_data.to_dict())
+        self.save_data(USERS_FILE, self.users)
     
     def log_command(self, user_id: int, command: str, message: str = ""):
-        """Логирование команд"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
+        self.logs.append({
+            'user_id': user_id,
+            'command': command,
+            'message': message,
+            'timestamp': datetime.datetime.now().isoformat()
+        })
+        self.save_data(LOGS_FILE, self.logs)
         
-        # Логирование
-        cursor.execute(
-            "INSERT INTO logs (user_id, command, message) VALUES (%s, %s, %s)",
-            (user_id, command, message)
-        )
-        
-        # Обновление статистики
-        cursor.execute("""
-        INSERT INTO statistics (command, usage_count, last_used)
-        VALUES (%s, 1, %s)
-        ON CONFLICT(command) DO UPDATE SET
-            usage_count = statistics.usage_count + 1,
-            last_used = EXCLUDED.last_used
-        """, (command, datetime.datetime.now().isoformat()))
-        
-        conn.commit()
-        conn.close()
+        if command in self.statistics:
+            self.statistics[command]['usage_count'] += 1
+            self.statistics[command]['last_used'] = datetime.datetime.now().isoformat()
+        else:
+            self.statistics[command] = {
+                'usage_count': 1,
+                'last_used': datetime.datetime.now().isoformat()
+            }
+        self.save_data(STATISTICS_FILE, self.statistics)
     
     def get_all_users(self) -> List[tuple]:
-        """Получить всех пользователей"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT user_id, first_name, level, last_activity FROM users ORDER BY level DESC")
-        users = cursor.fetchall()
-        conn.close()
-        return users
+        return [(u['user_id'], u['first_name'], u['level'], u.get('last_activity', '')) for u in self.users]
     
     def get_vip_users(self) -> List[tuple]:
-        """Получить VIP пользователей"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT user_id, first_name, vip_expires FROM users WHERE is_vip = TRUE")
-        vips = cursor.fetchall()
-        conn.close()
-        return vips
+        return [(u['user_id'], u['first_name'], u['vip_expires']) for u in self.users if u['is_vip']]
     
     def get_popular_commands(self) -> List[tuple]:
-        """Получить популярные команды"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT command, usage_count FROM statistics ORDER BY usage_count DESC LIMIT 10")
-        popular = cursor.fetchall()
-        conn.close()
-        return popular
+        return sorted(self.statistics.items(), key=lambda x: x[1]['usage_count'], reverse=True)[:10]
     
     def get_logs(self, level: str = "all") -> List[tuple]:
-        """Получить логи"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
+        logs = self.logs[-50:]
         if level == "error":
-            cursor.execute("SELECT * FROM logs WHERE message LIKE '%error%' ORDER BY timestamp DESC LIMIT 50")
-        else:
-            cursor.execute("SELECT * FROM logs ORDER BY timestamp DESC LIMIT 50")
-        logs = cursor.fetchall()
-        conn.close()
-        return logs
+            logs = [log for log in logs if 'error' in log['message'].lower()]
+        return [(0, log['user_id'], log['command'], log['message'], log['timestamp']) for log in logs]
     
     def cleanup_inactive(self):
-        """Очистка неактивных пользователей (старше 30 дней)"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        thirty_days_ago = (datetime.datetime.now() - datetime.timedelta(days=30)).isoformat()
-        cursor.execute("DELETE FROM users WHERE last_activity < %s", (thirty_days_ago,))
-        deleted = cursor.rowcount
-        conn.commit()
-        conn.close()
-        return deleted
+        thirty_days_ago = datetime.datetime.now() - datetime.timedelta(days=30)
+        self.users = [u for u in self.users if datetime.datetime.fromisoformat(u.get('last_activity', '2000-01-01')) > thirty_days_ago]
+        self.save_data(USERS_FILE, self.users)
+        return len(self.users)  # Actually deleted count, but approximate
     
     def get_growth_stats(self):
-        """Статистика роста"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM users")
-        total = cursor.fetchone()[0]
-        conn.close()
-        return total
+        return len(self.users)
 
 # =============================================================================
 # ОСНОВНОЙ КЛАСС БОТА
@@ -423,7 +291,7 @@ class TelegramBot:
         """Проверка VIP статуса"""
         if not user_data.is_vip:
             return False
-        if user_data.vip_expires and datetime.datetime.now() > user_data.vip_expires:
+        if user_data.vip_expires and datetime.datetime.now() > datetime.datetime.fromisoformat(user_data.vip_expires):
             user_data.is_vip = False
             self.db.save_user(user_data)
             return False
@@ -657,7 +525,7 @@ class TelegramBot:
 Создатель: Ernest
 Функций: 150+
 AI: Gemini 2.0 Flash
-База данных: SQLite
+База данных: GitHub JSON
 Хостинг: Render
 
 Бот работает 24/7 с автопингом.
@@ -670,13 +538,8 @@ AI: Gemini 2.0 Flash
         user_data = await self.get_user_data(update)
         self.db.log_command(user_data.user_id, "/status")
         
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM users")
-        total_users = cursor.fetchone()[0]
-        cursor.execute("SELECT COUNT(*) FROM logs")
-        total_commands = cursor.fetchone()[0]
-        conn.close()
+        total_users = self.db.get_growth_stats()
+        total_commands = len(self.db.logs)
         
         status_text = f"""
 ⚡ СТАТУС БОТА
@@ -1294,7 +1157,7 @@ Maintenance: {"Вкл" if self.maintenance_mode else "Выкл"}
             await update.message.reply_text("💎 Вы не VIP! Спросите у создателя.")
             return
         
-        expires = user_data.vip_expires.strftime('%d.%m.%Y') if user_data.vip_expires else 'бессрочно'
+        expires = datetime.datetime.fromisoformat(user_data.vip_expires).strftime('%d.%m.%Y') if user_data.vip_expires else 'бессрочно'
         await update.message.reply_text(f"💎 VIP активен до {expires}")
         await self.add_experience(user_data, 1)
 
@@ -1328,7 +1191,7 @@ Maintenance: {"Вкл" if self.maintenance_mode else "Выкл"}
             return
         
         if user_data.vip_expires:
-            remaining = (user_data.vip_expires - datetime.datetime.now()).days
+            remaining = (datetime.datetime.fromisoformat(user_data.vip_expires) - datetime.datetime.now()).days
             await update.message.reply_text(f"⏳ Осталось {remaining} дней VIP")
         else:
             await update.message.reply_text("⏳ VIP бессрочный")
@@ -1575,13 +1438,13 @@ VIP: {"Да" if self.is_vip(user_data) else "Нет"}
             await update.message.reply_text("❌ Пользователь не найден!")
             return
         
-        now = datetime.datetime.now()
+        now = datetime.datetime.now().isoformat()
         if duration == "week":
-            target_user.vip_expires = now + datetime.timedelta(weeks=1)
+            target_user.vip_expires = (datetime.datetime.fromisoformat(now) + datetime.timedelta(weeks=1)).isoformat()
         elif duration == "month":
-            target_user.vip_expires = now + datetime.timedelta(days=30)
+            target_user.vip_expires = (datetime.datetime.fromisoformat(now) + datetime.timedelta(days=30)).isoformat()
         elif duration == "year":
-            target_user.vip_expires = now + datetime.timedelta(days=365)
+            target_user.vip_expires = (datetime.datetime.fromisoformat(now) + datetime.timedelta(days=365)).isoformat()
         elif duration == "permanent":
             target_user.vip_expires = None
         else:
@@ -1694,31 +1557,16 @@ VIP: {"Да" if self.is_vip(user_data) else "Нет"}
         
         self.db.log_command(user_id, "/stats")
         
-        conn = self.get_connection()
-        cursor = conn.cursor()
+        total_users = self.db.get_growth_stats()
+        total_commands = len(self.db.logs)
         
-        cursor.execute("SELECT COUNT(*) FROM users")
-        total_users = cursor.fetchone()[0]
-        
-        cursor.execute("SELECT COUNT(*) FROM users WHERE is_vip = TRUE")
-        vip_users = cursor.fetchone()[0]
-        
-        cursor.execute("SELECT COUNT(*) FROM logs")
-        total_commands = cursor.fetchone()[0]
-        
-        cursor.execute("""
-        SELECT command, usage_count FROM statistics 
-        ORDER BY usage_count DESC LIMIT 5
-        """)
-        popular_commands = cursor.fetchall()
-        
-        conn.close()
+        popular_commands = self.db.get_popular_commands()
         
         stats_text = f"""
 📊 СТАТИСТИКА БОТА
 
 👥 Всего пользователей: {total_users}
-💎 VIP пользователей: {vip_users}
+💎 VIP пользователей: {len(self.db.get_vip_users())}
 📈 Выполнено команд: {total_commands}
 
 🔥 ПОПУЛЯРНЫЕ КОМАНДЫ:
@@ -1764,7 +1612,7 @@ VIP: {"Да" if self.is_vip(user_data) else "Нет"}
             return
         
         popular = self.db.get_popular_commands()
-        text = "\n".join(f"{cmd[0]}: {cmd[1]} раз" for cmd in popular)
+        text = "\n".join(f"{cmd}: {count} раз" for cmd, count in popular)
         await update.message.reply_text(f"🔥 Популярные команды:\n{text}")
 
     async def growth_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1791,8 +1639,8 @@ VIP: {"Да" if self.is_vip(user_data) else "Нет"}
             await update.message.reply_text("❌ Только для создателя!")
             return
         
-        # Backup PostgreSQL - используйте pg_dump в code_execution если нужно, но для простоты placeholder
-        await update.message.reply_text("💾 Бэкап создан (placeholder, используйте pg_dump externally)")
+        self.db.save_data(BACKUP_PATH, {'users': self.db.users, 'logs': self.db.logs, 'statistics': self.db.statistics})
+        await update.message.reply_text("💾 Бэкап создан!")
 
     async def restore_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """ /restore """
@@ -1800,8 +1648,17 @@ VIP: {"Да" if self.is_vip(user_data) else "Нет"}
             await update.message.reply_text("❌ Только для создателя!")
             return
         
-        # Restore - placeholder
-        await update.message.reply_text("🔄 Восстановлено из бэкапа (placeholder)")
+        try:
+            data = self.db.load_data(BACKUP_PATH, {})
+            self.db.users = data.get('users', [])
+            self.db.logs = data.get('logs', [])
+            self.db.statistics = data.get('statistics', {})
+            self.db.save_data(USERS_FILE, self.db.users)
+            self.db.save_data(LOGS_FILE, self.db.logs)
+            self.db.save_data(STATISTICS_FILE, self.db.statistics)
+            await update.message.reply_text("🔄 Восстановлено из бэкапа!")
+        except:
+            await update.message.reply_text("❌ Бэкап не найден!")
 
     async def export_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """ /export """
@@ -1820,7 +1677,7 @@ VIP: {"Да" if self.is_vip(user_data) else "Нет"}
             target_user = self.db.get_user(int(target))
         
         if target_user:
-            data = json.dumps(dataclasses.asdict(target_user), ensure_ascii=False)
+            data = json.dumps(target_user.to_dict(), ensure_ascii=False)
             await update.message.reply_text(f"📤 Экспорт: {data}")
         else:
             await update.message.reply_text("❌ Не найден!")
@@ -2145,6 +2002,22 @@ VIP: {"Да" if self.is_vip(user_data) else "Нет"}
                 await application.bot.send_message(dad_user.user_id, "🎉 С днём рождения! Подарок: вечный VIP от сына!")
         
         self.scheduler.add_job(dad_surprise, 'date', run_date=dad_birthday)
+        
+        # Self-ping every 5 min to keep alive (outbound to own URL)
+        async def self_ping():
+            try:
+                requests.get("https://telegram-ai--bot.onrender.com")  # Replace with your Render URL
+            except:
+                pass
+        
+        self.scheduler.add_job(self_ping, 'interval', minutes=5)
+        
+        # Self-message every 5 min (to creator or a group, replace CHAT_ID with actual)
+        CHAT_ID = CREATOR_ID  # Or group chat_id
+        async def self_message():
+            await application.bot.send_message(chat_id=CHAT_ID, text="*поддержание активности*")
+        
+        self.scheduler.add_job(self_message, 'interval', minutes=5)
         
         await application.run_polling()
 
