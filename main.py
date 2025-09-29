@@ -340,6 +340,13 @@ class TelegramBot:
             self.db.save_user(user_data)
             logger.info(f"Создан новый пользователь: {user.id} ({user.first_name})")
         
+        # Обновление VIP для создателя, если он не VIP
+        if self.is_creator(user.id) and not self.is_vip(user_data):
+            user_data.is_vip = True
+            user_data.vip_expires = None
+            self.db.save_user(user_data)
+            logger.info(f"Обновлен VIP для создателя: {user.id}")
+        
         return user_data
     
     def is_creator(self, user_id: int) -> bool:
@@ -487,7 +494,6 @@ class TelegramBot:
 /help - Эта справка
 /info - О боте
 /status - Статус системы
-/uptime - Время работы
 
 💬 AI-ЧАТ:
 /ai [вопрос] - Задать вопрос AI
@@ -500,64 +506,111 @@ class TelegramBot:
 /findnote [слово] - Поиск в заметках
 /clearnotes - Очистить все заметки
 
-⏰ ВРЕМЯ И ДАТА:
+⏰ ВРЕМЯ:
 /time - Текущее время
 /date - Текущая дата
+/timer [секунды] - Таймер
 
 🎮 РАЗВЛЕЧЕНИЯ:
 /joke - Случайная шутка
 /fact - Интересный факт
 /quote - Вдохновляющая цитата
-/quiz - Викторина
+/story - Короткая история
+/riddle - Загадка
+/motivate - Мотивация
 /coin - Монетка
 /dice - Кубик
+/random [число] - Случайное число
 /8ball [вопрос] - Магический шар
+/quiz - Викторина
+/poem - Стихотворение
+/storygen [тема] - История
+/idea - Идея
+/compliment - Комплимент
 
-🔢 МАТЕМАТИКА:
-/math [выражение] - Простые вычисления
-/calculate [выражение] - Продвинутый калькулятор
-
-🛠️ УТИЛИТЫ:
-/password [длина] - Генератор паролей
-/qr [текст] - QR-код
-/shorturl [ссылка] - Сокращение URL
-/ip - Информация об IP
+🌤️ ПОГОДА:
 /weather [город] - Текущая погода
-/currency [из] [в] - Конвертер валют
+/forecast [город] - Прогноз
+
+💰 ФИНАНСЫ:
+/currency [из] [в] - Конвертер
+/crypto [монета] - Крипта
+/stock [тикер] - Акции
+
+🌐 ПОИСК:
+/search [запрос] - Поиск
+/wiki [запрос] - Wikipedia
+/news [тема] - Новости
+/youtube [запрос] - YouTube
+
+🔤 ТЕКСТ:
 /translate [язык] [текст] - Перевод
+/summarize [текст] - Суммаризация
+/paraphrase [текст] - Перефраз
+/spellcheck [текст] - Орфография
 
-🧠 ПАМЯТЬ:
-/memorysave [ключ] [значение] - Сохранить
-/memoryget [ключ] - Получить
-/memorylist - Список
-/memorydel [ключ] - Удалить
-
-📊 ПРОГРЕСС:
-/rank - Ваш уровень
         """
         
         if self.is_vip(user_data):
             help_text += """
-💎 VIP КОМАНДЫ:
-/vip - VIP информация
-/remind [минуты] [текст] - Напоминание
-/reminders - Список напоминаний
-/delreminder [номер] - Удалить напоминание
-/nickname [имя] - Установить никнейм
-/profile - Ваш профиль
+💎 VIP:
+/vip - Инфо
+/vipbenefits - Преимущества
+/viptime - Время
+/remind [время] [текст] - Напоминание
+/reminders - Список
+/delreminder [номер] - Удалить
+/recurring [интервал] [текст] - Повторяющееся
+/secret - Секрет
+/lottery - Лотерея
+/exquote - Эксклюзивная цитата
+/exfact - Уникальный факт
+/gift - Подарок
+/priority - Приоритет
+/nickname [имя] - Никнейм
+/profile - Профиль
+/achievements - Достижения
+/stats personal - Статистика
             """
         
-        if self.is_creator(user_data.user_id):
+        if self.is_creator(update.effective_user.id):
             help_text += """
-👑 КОМАНДЫ СОЗДАТЕЛЯ:
-/grant_vip [user_id/@username] [duration] - Выдать VIP
-/revoke_vip [user_id/@username] - Отозвать VIP
-/broadcast [текст] - Рассылка всем
-/users - Список пользователей
-/stats - Статистика бота
-/maintenance [on/off] - Режим обслуживания
-/backup - Создать резервную копию
+👑 СОЗДАТЕЛЬ:
+/grant_vip [user] [duration] - Выдать VIP
+/revoke_vip [user] - Забрать
+/vip_list - Список VIP
+/userinfo [user] - Инфо пользователя
+/broadcast [текст] - Рассылка
+/stats - Статистика
+/users - Пользователи
+/activity - Активность
+/popular - Популярные команды
+/growth - Рост
+/memory - Память
+/backup - Бэкап
+/restore - Восстановление
+/export [user] - Экспорт
+/cleanup - Очистка
+/restart - Перезапуск
+/maintenance [on/off] - Обслуживание
+/log [уровень] - Логи
+/config - Конфиг
+/update - Обновление
             """
+        
+        help_text += """
+🧠 ПАМЯТЬ:
+/memorysave [ключ] [значение] - Сохранить
+/ask [вопрос] - Поиск
+/memorylist - Список
+/memorydel [ключ] - Удалить
+
+/rank - Уровень
+/leaderboard - Лидеры
+
+🌐 ЯЗЫКИ:
+/language [код] - Смена языка
+        """
         
         await update.message.reply_text(help_text)
         await self.add_experience(user_data, 1)
@@ -566,14 +619,14 @@ class TelegramBot:
         user_data = await self.get_user_data(update)
         self.db.log_command(user_data.user_id, "/info")
         
-        info_text = f"""
+        info_text = """
 🤖 О БОТЕ
 
 Версия: 2.0
-Создатель: Ernest (@Ernest_Kostevich)
-Функций: 50+
-AI: {"Gemini 2.0" if self.gemini_model else "Недоступен"}
-База данных: {"GitHub" if self.db.repo else "Локальная"}
+Создатель: Ernest
+Функций: 150+
+AI: Gemini 2.0 Flash
+База данных: GitHub
 Хостинг: Render
 
 Бот работает 24/7 с автопингом.
@@ -585,8 +638,13 @@ AI: {"Gemini 2.0" if self.gemini_model else "Недоступен"}
         user_data = await self.get_user_data(update)
         self.db.log_command(user_data.user_id, "/status")
         
-        total_users = self.db.get_growth_stats()
-        total_commands = len(self.db.logs)
+        conn = sqlite3.connect(self.db.db_path)
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM users")
+        total_users = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) FROM logs")
+        total_commands = cursor.fetchone()[0]
+        conn.close()
         
         status_text = f"""
 ⚡ СТАТУС БОТА
@@ -595,16 +653,17 @@ AI: {"Gemini 2.0" if self.gemini_model else "Недоступен"}
 Версия: 2.0
 Пользователей: {total_users}
 Команд выполнено: {total_commands}
-Gemini: {"✅" if self.gemini_model else "❌"}
-GitHub: {"✅" if self.db.repo else "❌"}
 Maintenance: {"Вкл" if self.maintenance_mode else "Выкл"}
         """
         await update.message.reply_text(status_text)
         await self.add_experience(user_data, 1)
 
-    # Продолжение в следующем сообщении из-за ограничения размера...
-    
+    # =============================================================================
+    # AI-ЧАТ КОМАНДЫ
+    # =============================================================================
+
     async def ai_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Команда /ai"""
         user_data = await self.get_user_data(update)
         self.db.log_command(user_data.user_id, "/ai")
         
@@ -612,23 +671,17 @@ Maintenance: {"Вкл" if self.maintenance_mode else "Выкл"}
             await update.message.reply_text("🤖 Задайте вопрос после /ai!")
             return
         
-        if not self.gemini_model:
-            await update.message.reply_text("❌ AI недоступен. Gemini API не настроен.")
-            return
-        
         query = " ".join(context.args)
         try:
-            await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
-            
             response = self.gemini_model.generate_content(query)
             await update.message.reply_text(response.text)
         except Exception as e:
             await update.message.reply_text(f"❌ Ошибка AI: {str(e)}")
-            logger.error(f"Ошибка Gemini: {e}")
         
         await self.add_experience(user_data, 2)
 
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Автоответ на сообщения"""
         if self.maintenance_mode and not self.is_creator(update.effective_user.id):
             await update.message.reply_text("🛠 Бот на обслуживании. Попробуйте позже.")
             return
@@ -636,152 +689,38 @@ Maintenance: {"Вкл" if self.maintenance_mode else "Выкл"}
         user_data = await self.get_user_data(update)
         self.db.log_command(user_data.user_id, "message")
         
-        if not self.gemini_model:
-            await update.message.reply_text("❌ AI-чат недоступен. Gemini API не настроен.")
-            return
-        
         message = update.message.text
-        user_id = user_data.user_id
+        # Анализ настроения (простой пример)
+        sentiment = "положительное" if "хорошо" in message else "нейтральное"
         
+        # Контекст диалога
+        user_id = user_data.user_id
         if user_id not in self.user_contexts:
             self.user_contexts[user_id] = []
         
-        self.user_contexts[user_id].append(f"Пользователь: {message}")
+        self.user_contexts[user_id].append(message)
         if len(self.user_contexts[user_id]) > 10:
             self.user_contexts[user_id] = self.user_contexts[user_id][-10:]
         
-        context_str = "\n".join(self.user_contexts[user_id][-5:])
-        prompt = f"""
-Ты полезный AI-ассистент в Telegram боте. 
-Контекст диалога:
-{context_str}
-
-Ответь на последнее сообщение пользователя дружелюбно и полезно.
-"""
+        context_str = "\n".join(self.user_contexts[user_id])
+        
+        prompt = f"Контекст: {context_str}\nНастроение: {sentiment}\nОтветь на: {message}"
         
         try:
-            await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
-            
             response = self.gemini_model.generate_content(prompt)
             await update.message.reply_text(response.text)
-            
-            self.user_contexts[user_id].append(f"Бот: {response.text}")
-        except Exception as e:
-            await update.message.reply_text("❌ Произошла ошибка при обработке сообщения.")
-            logger.error(f"Ошибка обработки сообщения: {e}")
+            self.user_contexts[user_id].append(response.text)
+        except:
+            await update.message.reply_text("❌ Ошибка обработки.")
         
         await self.add_experience(user_data, 1)
 
-    # Добавьте остальные методы команд аналогично...
-    # (note, memorysave, weather, currency, translate, grant_vip, revoke_vip, и т.д.)
+    # =============================================================================
+    # СИСТЕМА ЗАМЕТОК
+    # =============================================================================
 
-    async def grant_vip_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        if not self.is_creator(update.effective_user.id):
-            await update.message.reply_text("❌ Доступно только создателю!")
-            return
-        
-        if len(context.args) < 2:
-            await update.message.reply_text("💎 /grant_vip [user_id или @username] [week/month/year/permanent]")
-            return
-        
-        try:
-            target = context.args[0]
-            duration = context.args[1].lower()
-            
-            if target.startswith('@'):
-                username = target[1:]
-                target_user = self.db.get_user_by_username(username)
-                if not target_user:
-                    await update.message.reply_text(f"❌ Пользователь @{username} не найден!")
-                    return
-            else:
-                target_id = int(target)
-                target_user = self.db.get_user(target_id)
-                if not target_user:
-                    await update.message.reply_text("❌ Пользователь с таким ID не найден!")
-                    return
-            
-            target_user.is_vip = True
-            
-            if duration == "week":
-                target_user.vip_expires = (datetime.datetime.now() + datetime.timedelta(weeks=1)).isoformat()
-            elif duration == "month":
-                target_user.vip_expires = (datetime.datetime.now() + datetime.timedelta(days=30)).isoformat()
-            elif duration == "year":
-                target_user.vip_expires = (datetime.datetime.now() + datetime.timedelta(days=365)).isoformat()
-            elif duration == "permanent":
-                target_user.vip_expires = None
-            else:
-                await update.message.reply_text("❌ Неверная длительность! Используйте: week/month/year/permanent")
-                return
-            
-            self.db.save_user(target_user)
-            await update.message.reply_text(f"✅ VIP выдан пользователю {target_user.first_name} (ID: {target_user.user_id})")
-            
-            try:
-                await context.bot.send_message(
-                    target_user.user_id,
-                    f"🎉 Поздравляем! Вы получили VIP статус!\nДлительность: {duration}"
-                )
-            except:
-                pass
-                
-        except ValueError:
-            await update.message.reply_text("❌ Неверный ID пользователя! Используйте число или @username")
-        except Exception as e:
-            await update.message.reply_text(f"❌ Ошибка: {str(e)}")
-
-    async def revoke_vip_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        if not self.is_creator(update.effective_user.id):
-            await update.message.reply_text("❌ Доступно только создателю!")
-            return
-        
-        if not context.args:
-            await update.message.reply_text("💎 /revoke_vip [user_id или @username]")
-            return
-        
-        try:
-            target = context.args[0]
-            
-            if target.startswith('@'):
-                username = target[1:]
-                target_user = self.db.get_user_by_username(username)
-                if not target_user:
-                    await update.message.reply_text(f"❌ Пользователь @{username} не найден!")
-                    return
-            else:
-                target_id = int(target)
-                target_user = self.db.get_user(target_id)
-                if not target_user:
-                    await update.message.reply_text("❌ Пользователь с таким ID не найден!")
-                    return
-            
-            if not target_user.is_vip:
-                await update.message.reply_text(f"❌ Пользователь {target_user.first_name} не является VIP!")
-                return
-            
-            target_user.is_vip = False
-            target_user.vip_expires = None
-            self.db.save_user(target_user)
-            
-            await update.message.reply_text(f"✅ VIP статус отозван у {target_user.first_name} (ID: {target_user.user_id})")
-            
-            try:
-                await context.bot.send_message(
-                    target_user.user_id,
-                    "💎 Ваш VIP статус был отозван администратором."
-                )
-            except:
-                pass
-                
-        except ValueError:
-            await update.message.reply_text("❌ Неверный ID пользователя!")
-        except Exception as e:
-            await update.message.reply_text(f"❌ Ошибка: {str(e)}")
-
-    # Остальные команды (добавляю ключевые)
-    
     async def note_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /note """
         user_data = await self.get_user_data(update)
         self.db.log_command(user_data.user_id, "/note")
         
@@ -796,6 +735,7 @@ Maintenance: {"Вкл" if self.maintenance_mode else "Выкл"}
         await self.add_experience(user_data, 1)
 
     async def notes_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /notes """
         user_data = await self.get_user_data(update)
         self.db.log_command(user_data.user_id, "/notes")
         
@@ -808,518 +748,594 @@ Maintenance: {"Вкл" if self.maintenance_mode else "Выкл"}
         await self.add_experience(user_data, 1)
 
     async def delnote_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /delnote """
         user_data = await self.get_user_data(update)
         self.db.log_command(user_data.user_id, "/delnote")
         
         if not context.args or not context.args[0].isdigit():
-            await update.message.reply_text("❌ Укажите номер заметки!\nПример: /delnote 1")
+            await update.message.reply_text("❌ Укажите номер заметки!")
             return
         
         index = int(context.args[0]) - 1
         if 0 <= index < len(user_data.notes):
-            deleted = user_data.notes.pop(index)
+            del user_data.notes[index]
             self.db.save_user(user_data)
-            await update.message.reply_text(f"✅ Заметка удалена: {deleted[:50]}...")
+            await update.message.reply_text("✅ Заметка удалена!")
         else:
-            await update.message.reply_text("❌ Неверный номер заметки!")
+            await update.message.reply_text("❌ Неверный номер!")
         
         await self.add_experience(user_data, 1)
 
+    async def clearnotes_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /clearnotes """
+        user_data = await self.get_user_data(update)
+        self.db.log_command(user_data.user_id, "/clearnotes")
+        
+        user_data.notes = []
+        self.db.save_user(user_data)
+        await update.message.reply_text("✅ Все заметки очищены!")
+        await self.add_experience(user_data, 1)
+
     async def findnote_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /findnote """
         user_data = await self.get_user_data(update)
         self.db.log_command(user_data.user_id, "/findnote")
         
         if not context.args:
-            await update.message.reply_text("🔍 Укажите ключевое слово!\nПример: /findnote работа")
+            await update.message.reply_text("❌ Укажите ключевое слово!")
             return
         
         keyword = " ".join(context.args).lower()
-        found = [(i+1, note) for i, note in enumerate(user_data.notes) if keyword in note.lower()]
-        
+        found = [note for note in user_data.notes if keyword in note.lower()]
         if found:
-            notes_text = "\n".join(f"{i}. {note}" for i, note in found)
-            await update.message.reply_text(f"🔍 Найдено ({len(found)}):\n{notes_text}")
+            notes_text = "\n".join(found)
+            await update.message.reply_text(f"🔍 Найденные заметки:\n{notes_text}")
         else:
             await update.message.reply_text("❌ Ничего не найдено!")
         
         await self.add_experience(user_data, 1)
 
-    async def clearnotes_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        user_data = await self.get_user_data(update)
-        self.db.log_command(user_data.user_id, "/clearnotes")
-        
-        count = len(user_data.notes)
-        user_data.notes = []
-        self.db.save_user(user_data)
-        await update.message.reply_text(f"✅ Очищено {count} заметок!")
-        await self.add_experience(user_data, 1)
-
-    async def memorysave_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        user_data = await self.get_user_data(update)
-        self.db.log_command(user_data.user_id, "/memorysave")
-        
-        if len(context.args) < 2:
-            await update.message.reply_text("🧠 /memorysave [ключ] [значение]")
-            return
-        
-        key = context.args[0]
-        value = " ".join(context.args[1:])
-        user_data.memory_data[key] = value
-        self.db.save_user(user_data)
-        await update.message.reply_text(f"🧠 Сохранено: {key} = {value}")
-        await self.add_experience(user_data, 1)
-
-    async def memoryget_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        user_data = await self.get_user_data(update)
-        self.db.log_command(user_data.user_id, "/memoryget")
-        
-        if not context.args:
-            await update.message.reply_text("🧠 /memoryget [ключ]")
-            return
-        
-        key = context.args[0]
-        value = user_data.memory_data.get(key)
-        
-        if value:
-            await update.message.reply_text(f"🧠 {key}: {value}")
-        else:
-            await update.message.reply_text(f"❌ Ключ '{key}' не найден!")
-        
-        await self.add_experience(user_data, 1)
-
-    async def memorylist_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        user_data = await self.get_user_data(update)
-        self.db.log_command(user_data.user_id, "/memorylist")
-        
-        if not user_data.memory_data:
-            await update.message.reply_text("🧠 Память пуста!")
-            return
-        
-        memory_text = "\n".join(f"• {key}: {value}" for key, value in user_data.memory_data.items())
-        await update.message.reply_text(f"🧠 Ваша память:\n{memory_text}")
-        await self.add_experience(user_data, 1)
-
-    async def memorydel_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        user_data = await self.get_user_data(update)
-        self.db.log_command(user_data.user_id, "/memorydel")
-        
-        if not context.args:
-            await update.message.reply_text("🧠 /memorydel [ключ]")
-            return
-        
-        key = context.args[0]
-        if key in user_data.memory_data:
-            del user_data.memory_data[key]
-            self.db.save_user(user_data)
-            await update.message.reply_text(f"🧠 Удалено: {key}")
-        else:
-            await update.message.reply_text(f"❌ Ключ '{key}' не найден!")
-        
-        await self.add_experience(user_data, 1)
-
-    async def weather_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        user_data = await self.get_user_data(update)
-        self.db.log_command(user_data.user_id, "/weather")
-        
-        if not context.args:
-            await update.message.reply_text("🌤️ Укажите город!\nПример: /weather Москва")
-            return
-            
-        if not OPENWEATHER_API_KEY:
-            await update.message.reply_text("❌ Погода недоступна - не настроен API ключ.")
-            return
-        
-        city = " ".join(context.args)
-        try:
-            url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={OPENWEATHER_API_KEY}&units=metric&lang=ru"
-            response = requests.get(url, timeout=10).json()
-            
-            if response.get("cod") == 200:
-                weather = response["weather"][0]["description"]
-                temp = round(response["main"]["temp"])
-                feels_like = round(response["main"]["feels_like"])
-                humidity = response["main"]["humidity"]
-                
-                weather_text = f"""
-🌤️ Погода в {city}:
-🌡️ Температура: {temp}°C (ощущается как {feels_like}°C)
-☁️ Описание: {weather.capitalize()}
-💧 Влажность: {humidity}%
-                """
-                await update.message.reply_text(weather_text)
-            else:
-                await update.message.reply_text("❌ Город не найден!")
-        except Exception as e:
-            await update.message.reply_text("❌ Ошибка получения погоды.")
-            logger.error(f"Ошибка weather: {e}")
-        
-        await self.add_experience(user_data, 2)
-
-    async def currency_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        user_data = await self.get_user_data(update)
-        self.db.log_command(user_data.user_id, "/currency")
-        
-        if len(context.args) < 2:
-            await update.message.reply_text("💰 /currency [из] [в]\nПример: /currency USD RUB")
-            return
-            
-        if not CURRENCY_API_KEY:
-            await update.message.reply_text("❌ Конвертация недоступна.")
-            return
-        
-        from_cur, to_cur = context.args[0].upper(), context.args[1].upper()
-        
-        try:
-            url = f"https://api.freecurrencyapi.com/v1/latest?apikey={CURRENCY_API_KEY}&currencies={to_cur}&base_currency={from_cur}"
-            response = requests.get(url, timeout=10).json()
-            rate = response.get("data", {}).get(to_cur)
-            
-            if rate:
-                await update.message.reply_text(f"💰 1 {from_cur} = {rate:.4f} {to_cur}")
-            else:
-                await update.message.reply_text("❌ Не удалось получить курс!")
-        except Exception as e:
-            await update.message.reply_text("❌ Ошибка конвертации.")
-            logger.error(f"Ошибка currency: {e}")
-        
-        await self.add_experience(user_data, 2)
-
-    async def translate_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        user_data = await self.get_user_data(update)
-        self.db.log_command(user_data.user_id, "/translate")
-        
-        if len(context.args) < 2:
-            await update.message.reply_text("🌐 /translate [язык] [текст]\nПример: /translate en Привет")
-            return
-        
-        if not self.gemini_model:
-            await update.message.reply_text("❌ Перевод недоступен.")
-            return
-        
-        target_lang = context.args[0]
-        text = " ".join(context.args[1:])
-        
-        try:
-            prompt = f"Переведи следующий текст на {target_lang}: {text}"
-            response = self.gemini_model.generate_content(prompt)
-            await update.message.reply_text(f"🌐 Перевод:\n{response.text}")
-        except Exception as e:
-            await update.message.reply_text("❌ Ошибка перевода.")
-            logger.error(f"Ошибка translate: {e}")
-        
-        await self.add_experience(user_data, 2)
-
-    async def joke_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        user_data = await self.get_user_data(update)
-        self.db.log_command(user_data.user_id, "/joke")
-        
-        jokes = [
-            "Почему программисты путают Хэллоуин и Рождество? Потому что Oct 31 == Dec 25!",
-            "Заходит программист в бар, а там нет мест...",
-            "- Доктор, я думаю, что я компьютерный вирус!\n- Не волнуйтесь, примите эту таблетку.\n- А что это?\n- Антивирус!"
-        ]
-        await update.message.reply_text(f"😄 {random.choice(jokes)}")
-        await self.add_experience(user_data, 1)
-
-    async def fact_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        user_data = await self.get_user_data(update)
-        self.db.log_command(user_data.user_id, "/fact")
-        
-        facts = [
-            "🧠 Человеческий мозг содержит около 86 миллиардов нейронов!",
-            "🌊 В океане больше исторических артефактов, чем во всех музеях мира!",
-            "🐙 У осьминогов три сердца и голубая кровь!"
-        ]
-        await update.message.reply_text(random.choice(facts))
-        await self.add_experience(user_data, 1)
-
-    async def quote_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        user_data = await self.get_user_data(update)
-        self.db.log_command(user_data.user_id, "/quote")
-        
-        quotes = [
-            "💫 'Будь собой. Остальные роли уже заняты.' - Оскар Уайльд",
-            "🚀 'Единственный способ сделать великую работу - любить то, что делаешь.' - Стив Джобс"
-        ]
-        await update.message.reply_text(random.choice(quotes))
-        await self.add_experience(user_data, 1)
-
-    async def coin_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        user_data = await self.get_user_data(update)
-        self.db.log_command(user_data.user_id, "/coin")
-        
-        result = random.choice(["🪙 Орёл!", "🪙 Решка!"])
-        await update.message.reply_text(result)
-        await self.add_experience(user_data, 1)
-
-    async def dice_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        user_data = await self.get_user_data(update)
-        self.db.log_command(user_data.user_id, "/dice")
-        
-        result = random.randint(1, 6)
-        dice_faces = ["⚀", "⚁", "⚂", "⚃", "⚄", "⚅"]
-        await update.message.reply_text(f"🎲 {dice_faces[result-1]} Выпало: {result}")
-        await self.add_experience(user_data, 1)
-
-    async def eightball_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        user_data = await self.get_user_data(update)
-        self.db.log_command(user_data.user_id, "/8ball")
-        
-        if not context.args:
-            await update.message.reply_text("🔮 Задайте вопрос!\nПример: /8ball Стоит ли мне изучать Python?")
-            return
-        
-        answers = ["✅ Да!", "❌ Нет", "🤔 Возможно", "⏳ Спроси позже"]
-        await update.message.reply_text(f"🔮 {random.choice(answers)}")
-        await self.add_experience(user_data, 1)
-
-    async def quiz_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        user_data = await self.get_user_data(update)
-        self.db.log_command(user_data.user_id, "/quiz")
-        
-        questions = [
-            {"q": "Сколько дней в високосном году?", "a": "366"},
-            {"q": "Столица Австралии?", "a": "Канберра"},
-            {"q": "Самый большой океан?", "a": "Тихий"}
-        ]
-        
-        question = random.choice(questions)
-        await update.message.reply_text(f"❓ {question['q']}\n\n💡 Напишите ответ!")
-        await self.add_experience(user_data, 1)
-
-    async def math_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        user_data = await self.get_user_data(update)
-        self.db.log_command(user_data.user_id, "/math")
-        
-        if not context.args:
-            await update.message.reply_text("🔢 Введите выражение!\nПример: /math 15 + 25")
-            return
-        
-        expression = " ".join(context.args)
-        try:
-            allowed_chars = set('0123456789+-*/()., ')
-            if not all(c in allowed_chars for c in expression):
-                await update.message.reply_text("❌ Разрешены только: +, -, *, /, ()")
-                return
-            
-            result = eval(expression)
-            await update.message.reply_text(f"🔢 {expression} = {result}")
-        except Exception as e:
-            await update.message.reply_text(f"❌ Ошибка вычисления")
-        
-        await self.add_experience(user_data, 1)
-
-    async def calculate_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        user_data = await self.get_user_data(update)
-        self.db.log_command(user_data.user_id, "/calculate")
-        
-        if not context.args:
-            await update.message.reply_text("🧮 /calculate [выражение]\nПример: /calculate sqrt(16)")
-            return
-        
-        expression = " ".join(context.args)
-        
-        try:
-            import math
-            safe_dict = {
-                "sqrt": math.sqrt, "sin": math.sin, "cos": math.cos,
-                "log": math.log, "pi": math.pi, "e": math.e
-            }
-            
-            result = eval(expression, {"__builtins__": {}}, safe_dict)
-            await update.message.reply_text(f"🧮 {expression} = {result}")
-        except Exception as e:
-            await update.message.reply_text(f"❌ Ошибка вычисления")
-        
-        await self.add_experience(user_data, 1)
-
-    async def password_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        user_data = await self.get_user_data(update)
-        self.db.log_command(user_data.user_id, "/password")
-        
-        length = 12
-        if context.args and context.args[0].isdigit():
-            length = min(int(context.args[0]), 50)
-        
-        import string
-        chars = string.ascii_letters + string.digits + "!@#$%^&*"
-        password = ''.join(random.choice(chars) for _ in range(length))
-        
-        await update.message.reply_text(f"🔐 Пароль ({length} символов):\n`{password}`", parse_mode='Markdown')
-        await self.add_experience(user_data, 1)
-
-    async def qr_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        user_data = await self.get_user_data(update)
-        self.db.log_command(user_data.user_id, "/qr")
-        
-        if not context.args:
-            await update.message.reply_text("📱 /qr [текст]\nПример: /qr https://google.com")
-            return
-        
-        text = " ".join(context.args)
-        qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=300x300&data={text}"
-        
-        await update.message.reply_text(f"📱 QR-код:")
-        await context.bot.send_photo(update.effective_chat.id, qr_url)
-        await self.add_experience(user_data, 1)
-
-    async def shorturl_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        user_data = await self.get_user_data(update)
-        self.db.log_command(user_data.user_id, "/shorturl")
-        
-        if not context.args:
-            await update.message.reply_text("🔗 /shorturl [URL]\nПример: /shorturl https://very-long-url.com")
-            return
-        
-        url = context.args[0]
-        if not url.startswith('http'):
-            url = 'https://' + url
-        
-        try:
-            response = requests.get(f"https://is.gd/create.php?format=simple&url={url}", timeout=10)
-            if response.status_code == 200:
-                await update.message.reply_text(f"🔗 Сокращённый URL:\n{response.text.strip()}")
-            else:
-                await update.message.reply_text("❌ Ошибка сокращения")
-        except:
-            await update.message.reply_text("❌ Ошибка подключения")
-        
-        await self.add_experience(user_data, 1)
-
-    async def uptime_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        user_data = await self.get_user_data(update)
-        self.db.log_command(user_data.user_id, "/uptime")
-        
-        await update.message.reply_text(f"⏱️ Бот работает!\n👥 Пользователей: {len(self.db.users)}\n📊 Команд: {len(self.db.logs)}")
-        await self.add_experience(user_data, 1)
-
-    async def ip_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        user_data = await self.get_user_data(update)
-        self.db.log_command(user_data.user_id, "/ip")
-        
-        try:
-            response = requests.get('https://httpbin.org/ip', timeout=5)
-            ip = response.json().get('origin', 'Неизвестно')
-            await update.message.reply_text(f"🌍 Ваш IP: {ip}")
-        except:
-            await update.message.reply_text("❌ Не удалось получить IP")
-        
-        await self.add_experience(user_data, 1)
+    # =============================================================================
+    # ВРЕМЯ И ДАТА
+    # =============================================================================
 
     async def time_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /time """
         user_data = await self.get_user_data(update)
         self.db.log_command(user_data.user_id, "/time")
         
-        now = datetime.datetime.now()
-        moscow_tz = pytz.timezone('Europe/Moscow')
-        moscow_time = now.astimezone(moscow_tz)
+        now_utc = datetime.datetime.now(pytz.utc)
         
-        await update.message.reply_text(f"⏰ Москва: {moscow_time.strftime('%H:%M:%S %d.%m.%Y')}")
+        times = {
+            "GMT (UTC)": now_utc.astimezone(pytz.utc).strftime('%H:%M:%S'),
+            "МСК (Moscow)": now_utc.astimezone(pytz.timezone('Europe/Moscow')).strftime('%H:%M:%S'),
+            "Washington (US/Eastern)": now_utc.astimezone(pytz.timezone('US/Eastern')).strftime('%H:%M:%S'),
+            "New York (US/Eastern)": now_utc.astimezone(pytz.timezone('US/Eastern')).strftime('%H:%M:%S'),
+            "CEST (Europe/Paris)": now_utc.astimezone(pytz.timezone('Europe/Paris')).strftime('%H:%M:%S')
+        }
+        
+        text = "\n".join(f"{zone}: {t}" for zone, t in times.items())
+        await update.message.reply_text(f"⏰ Время:\n{text}")
         await self.add_experience(user_data, 1)
 
     async def date_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /date """
         user_data = await self.get_user_data(update)
         self.db.log_command(user_data.user_id, "/date")
         
         now = datetime.datetime.now()
-        await update.message.reply_text(f"📅 Сегодня: {now.strftime('%d.%m.%Y')}")
+        await update.message.reply_text(f"📅 Текущая дата: {now.strftime('%d.%m.%Y')}")
         await self.add_experience(user_data, 1)
 
-    async def rank_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    async def timer_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /timer """
         user_data = await self.get_user_data(update)
-        self.db.log_command(user_data.user_id, "/rank")
+        self.db.log_command(user_data.user_id, "/timer")
         
-        required_exp = user_data.level * 100
-        progress = (user_data.experience / required_exp) * 100
+        if not context.args or not context.args[0].isdigit():
+            await update.message.reply_text("⏰ /timer [секунды]")
+            return
         
-        rank_text = f"""
-🏅 ВАШ УРОВЕНЬ
-
-👤 Пользователь: {user_data.first_name}
-🆙 Уровень: {user_data.level}
-⭐ Опыт: {user_data.experience}/{required_exp}
-📊 Прогресс: {progress:.1f}%
-
-💎 VIP: {"✅" if self.is_vip(user_data) else "❌"}
-        """
-        
-        await update.message.reply_text(rank_text)
+        seconds = int(context.args[0])
+        await update.message.reply_text(f"⏰ Таймер на {seconds} с запущен!")
+        await asyncio.sleep(seconds)
+        await update.message.reply_text("🔔 Время вышло!")
         await self.add_experience(user_data, 1)
 
-    # VIP команды
-    
+    # =============================================================================
+    # РАЗВЛЕКАТЕЛЬНЫЕ КОМАНДЫ
+    # =============================================================================
+
+    async def joke_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /joke """
+        user_data = await self.get_user_data(update)
+        self.db.log_command(user_data.user_id, "/joke")
+        
+        prompt = "Расскажи случайную шутку"
+        response = self.gemini_model.generate_content(prompt)
+        await update.message.reply_text(response.text)
+        await self.add_experience(user_data, 1)
+
+    async def fact_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /fact """
+        user_data = await self.get_user_data(update)
+        self.db.log_command(user_data.user_id, "/fact")
+        
+        prompt = "Расскажи интересный факт"
+        response = self.gemini_model.generate_content(prompt)
+        await update.message.reply_text(response.text)
+        await self.add_experience(user_data, 1)
+
+    async def quote_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /quote """
+        user_data = await self.get_user_data(update)
+        self.db.log_command(user_data.user_id, "/quote")
+        
+        prompt = "Дай вдохновляющую цитату"
+        response = self.gemini_model.generate_content(prompt)
+        await update.message.reply_text(response.text)
+        await self.add_experience(user_data, 1)
+
+    async def story_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /story """
+        user_data = await self.get_user_data(update)
+        self.db.log_command(user_data.user_id, "/story")
+        
+        prompt = "Придумай короткую историю"
+        response = self.gemini_model.generate_content(prompt)
+        await update.message.reply_text(response.text)
+        await self.add_experience(user_data, 1)
+
+    async def riddle_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /riddle """
+        user_data = await self.get_user_data(update)
+        self.db.log_command(user_data.user_id, "/riddle")
+        
+        prompt = "Задай загадку"
+        response = self.gemini_model.generate_content(prompt)
+        await update.message.reply_text(response.text)
+        await asyncio.sleep(30)
+        prompt2 = "Ответ на предыдущую загадку"
+        response2 = self.gemini_model.generate_content(prompt2)
+        await update.message.reply_text(response2.text)
+        await self.add_experience(user_data, 1)
+
+    async def motivate_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /motivate """
+        user_data = await self.get_user_data(update)
+        self.db.log_command(user_data.user_id, "/motivate")
+        
+        prompt = "Дай мотивационное сообщение"
+        response = self.gemini_model.generate_content(prompt)
+        await update.message.reply_text(response.text)
+        await self.add_experience(user_data, 1)
+
+    async def coin_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /coin """
+        user_data = await self.get_user_data(update)
+        self.db.log_command(user_data.user_id, "/coin")
+        
+        result = random.choice(["Орёл", "Решка"])
+        await update.message.reply_text(f"🪙 {result}!")
+        await self.add_experience(user_data, 1)
+
+    async def dice_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /dice """
+        user_data = await self.get_user_data(update)
+        self.db.log_command(user_data.user_id, "/dice")
+        
+        result = random.randint(1, 6)
+        await update.message.reply_text(f"🎲 {result}!")
+        await self.add_experience(user_data, 1)
+
+    async def random_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /random """
+        user_data = await self.get_user_data(update)
+        self.db.log_command(user_data.user_id, "/random")
+        
+        if not context.args or not context.args[0].isdigit():
+            await update.message.reply_text("🎲 /random [максимум]")
+            return
+        
+        max_num = int(context.args[0])
+        result = random.randint(1, max_num)
+        await update.message.reply_text(f"🎲 Случайное число: {result}")
+        await self.add_experience(user_data, 1)
+
+    async def eightball_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /8ball """
+        user_data = await self.get_user_data(update)
+        self.db.log_command(user_data.user_id, "/8ball")
+        
+        if not context.args:
+            await update.message.reply_text("🔮 Задайте вопрос!")
+            return
+        
+        answers = ["Да", "Нет", "Возможно", "Спроси позже"]
+        result = random.choice(answers)
+        await update.message.reply_text(f"🔮 {result}")
+        await self.add_experience(user_data, 1)
+
+    async def quiz_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /quiz """
+        user_data = await self.get_user_data(update)
+        self.db.log_command(user_data.user_id, "/quiz")
+        
+        # Генерация вопроса без ответа
+        prompt = "Задай вопрос для викторины с вариантами ответов. Не раскрывай ответ сразу!"
+        response = self.gemini_model.generate_content(prompt)
+        await update.message.reply_text(response.text)
+        
+        # Планируем отправку ответа через 30 секунд
+        async def send_answer():
+            prompt_answer = "Правильный ответ на предыдущий вопрос викторины"
+            response_answer = self.gemini_model.generate_content(prompt_answer)
+            await context.bot.send_message(chat_id=update.effective_chat.id, text=response_answer.text)
+        
+        self.scheduler.add_job(send_answer, 'date', run_date=datetime.datetime.now() + datetime.timedelta(seconds=30))
+        
+        await self.add_experience(user_data, 1)
+
+    async def poem_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /poem """
+        user_data = await self.get_user_data(update)
+        self.db.log_command(user_data.user_id, "/poem")
+        
+        prompt = "Сгенерируй стихотворение"
+        response = self.gemini_model.generate_content(prompt)
+        await update.message.reply_text(response.text)
+        await self.add_experience(user_data, 1)
+
+    async def storygen_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /storygen """
+        user_data = await self.get_user_data(update)
+        self.db.log_command(user_data.user_id, "/storygen")
+        
+        theme = " ".join(context.args) if context.args else "случайная"
+        prompt = f"Сгенерируй историю на тему: {theme}"
+        response = self.gemini_model.generate_content(prompt)
+        await update.message.reply_text(response.text)
+        await self.add_experience(user_data, 1)
+
+    async def idea_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /idea """
+        user_data = await self.get_user_data(update)
+        self.db.log_command(user_data.user_id, "/idea")
+        
+        prompt = "Придумай идею для проекта"
+        response = self.gemini_model.generate_content(prompt)
+        await update.message.reply_text(response.text)
+        await self.add_experience(user_data, 1)
+
+    async def compliment_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /compliment """
+        user_data = await self.get_user_data(update)
+        self.db.log_command(user_data.user_id, "/compliment")
+        
+        prompt = "Сделай комплимент пользователю"
+        response = self.gemini_model.generate_content(prompt)
+        await update.message.reply_text(response.text)
+        await self.add_experience(user_data, 1)
+
+    # =============================================================================
+    # ПОГОДА
+    # =============================================================================
+
+    async def weather_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /weather """
+        user_data = await self.get_user_data(update)
+        self.db.log_command(user_data.user_id, "/weather")
+        
+        if not context.args or not OPENWEATHER_API_KEY:
+            await update.message.reply_text("🌤️ /weather [город]. Установите OPENWEATHER_API_KEY!")
+            return
+        
+        city = " ".join(context.args)
+        url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={OPENWEATHER_API_KEY}&units=metric&lang=ru"
+        response = requests.get(url).json()
+        if response.get("cod") == 200:
+            weather = response["weather"][0]["description"]
+            temp = response["main"]["temp"]
+            await update.message.reply_text(f"🌤️ В {city}: {weather}, {temp}°C")
+        else:
+            await update.message.reply_text("❌ Город не найден!")
+        await self.add_experience(user_data, 2)
+
+    async def forecast_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /forecast """
+        user_data = await self.get_user_data(update)
+        self.db.log_command(user_data.user_id, "/forecast")
+        
+        if not context.args or not OPENWEATHER_API_KEY:
+            await update.message.reply_text("📅 /forecast [город]")
+            return
+        
+        city = " ".join(context.args)
+        url = f"http://api.openweathermap.org/data/2.5/forecast?q={city}&appid={OPENWEATHER_API_KEY}&units=metric&lang=ru"
+        response = requests.get(url).json()
+        if response.get("cod") == "200":
+            forecast = "\n".join(f"{item['dt_txt']}: {item['weather'][0]['description']}, {item['main']['temp']}°C" for item in response["list"][:3])
+            await update.message.reply_text(f"📅 Прогноз для {city}:\n{forecast}")
+        else:
+            await update.message.reply_text("❌ Город не найден!")
+        await self.add_experience(user_data, 2)
+
+    # =============================================================================
+    # ФИНАНСЫ
+    # =============================================================================
+
+    async def currency_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /currency """
+        user_data = await self.get_user_data(update)
+        self.db.log_command(user_data.user_id, "/currency")
+        
+        if len(context.args) < 2:
+            await update.message.reply_text("💰 /currency [from] [to]")
+            return
+        
+        from_cur, to_cur = context.args[0].upper(), context.args[1].upper()
+        url = f"https://api.freecurrencyapi.com/v1/latest?apikey={CURRENCY_API_KEY}&currencies={to_cur}&base_currency={from_cur}"
+        response = requests.get(url).json()
+        rate = response.get("data", {}).get(to_cur)
+        if rate:
+            await update.message.reply_text(f"💰 1 {from_cur} = {rate} {to_cur}")
+        else:
+            await update.message.reply_text("❌ Ошибка конвертации!")
+        await self.add_experience(user_data, 2)
+
+    async def crypto_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /crypto """
+        user_data = await self.get_user_data(update)
+        self.db.log_command(user_data.user_id, "/crypto")
+        
+        if not context.args:
+            await update.message.reply_text("📈 /crypto [монета]")
+            return
+        
+        coin = context.args[0].lower()
+        url = f"https://api.coingecko.com/api/v3/simple/price?ids={coin}&vs_currencies=usd"
+        response = requests.get(url).json()
+        price = response.get(coin, {}).get('usd')
+        if price:
+            await update.message.reply_text(f"💰 {coin.capitalize()}: ${price}")
+        else:
+            await update.message.reply_text("❌ Монета не найдена!")
+        await self.add_experience(user_data, 2)
+
+    async def stock_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /stock """
+        user_data = await self.get_user_data(update)
+        self.db.log_command(user_data.user_id, "/stock")
+        
+        if not context.args or not ALPHAVANTAGE_API_KEY:
+            await update.message.reply_text("📈 /stock [тикер]. Установите ALPHAVANTAGE_API_KEY!")
+            return
+        
+        ticker = context.args[0].upper()
+        url = f"https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY&symbol={ticker}&interval=5min&apikey={ALPHAVANTAGE_API_KEY}"
+        response = requests.get(url).json()
+        last_price = list(response.get("Time Series (5min)", {}).values())[0]["4. close"] if response else None
+        if last_price:
+            await update.message.reply_text(f"📈 {ticker}: ${last_price}")
+        else:
+            await update.message.reply_text("❌ Тикер не найден!")
+        await self.add_experience(user_data, 2)
+
+    # =============================================================================
+    # ПОИСК И ПЕРЕВОД
+    # =============================================================================
+
+    async def search_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /search """
+        user_data = await self.get_user_data(update)
+        self.db.log_command(user_data.user_id, "/search")
+        
+        if not context.args:
+            await update.message.reply_text("🔍 /search [запрос]")
+            return
+        
+        query = " ".join(context.args)
+        prompt = f"Найди информацию по запросу: {query}"
+        response = self.gemini_model.generate_content(prompt)
+        await update.message.reply_text(response.text)
+        await self.add_experience(user_data, 2)
+
+    async def wiki_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /wiki """
+        user_data = await self.get_user_data(update)
+        self.db.log_command(user_data.user_id, "/wiki")
+        
+        if not context.args:
+            await update.message.reply_text("📖 /wiki [запрос]")
+            return
+        
+        query = " ".join(context.args)
+        prompt = f"Расскажи о {query} из Wikipedia"
+        response = self.gemini_model.generate_content(prompt)
+        await update.message.reply_text(response.text)
+        await self.add_experience(user_data, 2)
+
+    async def news_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /news """
+        user_data = await self.get_user_data(update)
+        self.db.log_command(user_data.user_id, "/news")
+        
+        if not context.args or not self.news_api:
+            await update.message.reply_text("📰 /news [тема]. Установите NEWSAPI_KEY!")
+            return
+        
+        topic = " ".join(context.args)
+        articles = self.news_api.get_top_headlines(q=topic, language='ru')
+        if articles['articles']:
+            news_text = "\n".join(f"• {art['title']}" for art in articles['articles'][:3])
+            await update.message.reply_text(f"📰 Новости по {topic}:\n{news_text}")
+        else:
+            await update.message.reply_text("❌ Новости не найдены!")
+        await self.add_experience(user_data, 2)
+
+    async def youtube_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /youtube """
+        user_data = await self.get_user_data(update)
+        self.db.log_command(user_data.user_id, "/youtube")
+        
+        if not context.args:
+            await update.message.reply_text("📺 /youtube [запрос]")
+            return
+        
+        query = " ".join(context.args)
+        prompt = f"Найди видео на YouTube по: {query}"
+        response = self.gemini_model.generate_content(prompt)
+        await update.message.reply_text(response.text)
+        await self.add_experience(user_data, 2)
+
+    async def translate_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /translate """
+        user_data = await self.get_user_data(update)
+        self.db.log_command(user_data.user_id, "/translate")
+        
+        if len(context.args) < 2:
+            await update.message.reply_text("🌐 /translate [язык] [текст]")
+            return
+        
+        lang = context.args[0]
+        text = " ".join(context.args[1:])
+        prompt = f"Переведи на {lang}: {text}"
+        response = self.gemini_model.generate_content(prompt)
+        await update.message.reply_text(response.text)
+        await self.add_experience(user_data, 2)
+
+    async def summarize_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /summarize """
+        user_data = await self.get_user_data(update)
+        self.db.log_command(user_data.user_id, "/summarize")
+        
+        if not context.args:
+            await update.message.reply_text("📄 /summarize [текст]")
+            return
+        
+        text = " ".join(context.args)
+        prompt = f"Суммаризируй: {text}"
+        response = self.gemini_model.generate_content(prompt)
+        await update.message.reply_text(response.text)
+        await self.add_experience(user_data, 2)
+
+    async def paraphrase_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /paraphrase """
+        user_data = await self.get_user_data(update)
+        self.db.log_command(user_data.user_id, "/paraphrase")
+        
+        if not context.args:
+            await update.message.reply_text("🔄 /paraphrase [текст]")
+            return
+        
+        text = " ".join(context.args)
+        prompt = f"Перефразируй: {text}"
+        response = self.gemini_model.generate_content(prompt)
+        await update.message.reply_text(response.text)
+        await self.add_experience(user_data, 2)
+
+    async def spellcheck_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /spellcheck """
+        user_data = await self.get_user_data(update)
+        self.db.log_command(user_data.user_id, "/spellcheck")
+        
+        if not context.args:
+            await update.message.reply_text("🖊️ /spellcheck [текст]")
+            return
+        
+        text = " ".join(context.args)
+        prompt = f"Проверь орфографию и исправь: {text}"
+        response = self.gemini_model.generate_content(prompt)
+        await update.message.reply_text(response.text)
+        await self.add_experience(user_data, 2)
+
+    # =============================================================================
+    # VIP ФУНКЦИИ
+    # =============================================================================
+
     async def vip_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /vip """
         user_data = await self.get_user_data(update)
         self.db.log_command(user_data.user_id, "/vip")
         
         if not self.is_vip(user_data):
-            await update.message.reply_text("💎 Вы не VIP! Свяжитесь с @Ernest_Kostevich")
+            await update.message.reply_text("💎 Вы не VIP! Спросите у создателя.")
             return
         
-        expires_text = 'бессрочно'
-        if user_data.vip_expires:
-            try:
-                expires_date = datetime.datetime.fromisoformat(user_data.vip_expires)
-                expires_text = expires_date.strftime('%d.%m.%Y')
-            except:
-                pass
+        expires = user_data.vip_expires.strftime('%d.%m.%Y') if user_data.vip_expires else 'бессрочно'
+        await update.message.reply_text(f"💎 VIP активен до {expires}")
+        await self.add_experience(user_data, 1)
+
+    async def vipbenefits_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /vipbenefits """
+        user_data = await self.get_user_data(update)
+        self.db.log_command(user_data.user_id, "/vipbenefits")
         
-        await update.message.reply_text(f"💎 VIP активен до: {expires_text}")
+        if not self.is_vip(user_data):
+            await update.message.reply_text("💎 Вы не VIP!")
+            return
+        
+        benefits = """
+⭐ VIP преимущества:
+- Напоминания
+- Лотерея
+- Эксклюзивный контент
+- Приоритет
+- Персонализация
+        """
+        await update.message.reply_text(benefits)
+        await self.add_experience(user_data, 1)
+
+    async def viptime_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /viptime """
+        user_data = await self.get_user_data(update)
+        self.db.log_command(user_data.user_id, "/viptime")
+        
+        if not self.is_vip(user_data):
+            await update.message.reply_text("💎 Вы не VIP!")
+            return
+        
+        if user_data.vip_expires:
+            remaining = (user_data.vip_expires - datetime.datetime.now()).days
+            await update.message.reply_text(f"⏳ Осталось {remaining} дней VIP")
+        else:
+            await update.message.reply_text("⏳ VIP бессрочный")
         await self.add_experience(user_data, 1)
 
     async def remind_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /remind """
         user_data = await self.get_user_data(update)
-        
         if not self.is_vip(user_data):
-            await update.message.reply_text("💎 Только для VIP!")
+            await update.message.reply_text("💎 VIP функция!")
             return
         
         self.db.log_command(user_data.user_id, "/remind")
         
         if len(context.args) < 2:
-            await update.message.reply_text("⏰ /remind [минуты] [текст]")
+            await update.message.reply_text("⏰ /remind [время в минутах] [текст]")
             return
         
-        try:
-            minutes = int(context.args[0])
-            text = " ".join(context.args[1:])
-            
-            if minutes <= 0:
-                await update.message.reply_text("❌ Время должно быть больше 0!")
-                return
-            
-            run_date = datetime.datetime.now() + datetime.timedelta(minutes=minutes)
-            
-            job = self.scheduler.add_job(
-                self.send_notification,
-                trigger=DateTrigger(run_date=run_date),
-                args=[context, user_data.user_id, f"🔔 Напоминание: {text}"],
-                id=f"reminder_{user_data.user_id}_{int(time.time())}"
-            )
-            
-            reminder_data = {
-                "id": job.id,
-                "text": text,
-                "time": run_date.isoformat(),
-                "minutes": minutes
-            }
-            user_data.reminders.append(reminder_data)
-            self.db.save_user(user_data)
-            
-            await update.message.reply_text(f"⏰ Напоминание установлено на {minutes} минут!")
-            
-        except ValueError:
-            await update.message.reply_text("❌ Неверный формат!")
-        except Exception as e:
-            await update.message.reply_text(f"❌ Ошибка: {str(e)}")
+        minutes = int(context.args[0])
+        text = " ".join(context.args[1:])
+        run_date = datetime.datetime.now() + datetime.timedelta(minutes=minutes)
         
+        job = self.scheduler.add_job(
+            self.send_notification,
+            trigger=DateTrigger(run_date=run_date),
+            args=[context, user_data.user_id, f"🔔 Напоминание: {text}"]
+        )
+        
+        user_data.reminders.append({"id": job.id, "text": text, "time": run_date.isoformat()})
+        self.db.save_user(user_data)
+        
+        await update.message.reply_text(f"⏰ Напоминание установлено на {minutes} мин")
         await self.add_experience(user_data, 2)
 
     async def reminders_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /reminders """
         user_data = await self.get_user_data(update)
-        
         if not self.is_vip(user_data):
-            await update.message.reply_text("💎 Только для VIP!")
+            await update.message.reply_text("💎 VIP функция!")
             return
         
         self.db.log_command(user_data.user_id, "/reminders")
@@ -1328,246 +1344,659 @@ Maintenance: {"Вкл" if self.maintenance_mode else "Выкл"}
             await update.message.reply_text("❌ Нет напоминаний!")
             return
         
-        reminders_text = "\n".join([
-            f"{i+1}. {rem['text']} ({rem.get('time', 'неизвестно')})" 
-            for i, rem in enumerate(user_data.reminders)
-        ])
+        text = "\n".join(f"{i+1}. {rem['text']} at {rem['time']}" for i, rem in enumerate(user_data.reminders))
+        await update.message.reply_text(f"⏰ Напоминания:\n{text}")
+        await self.add_experience(user_data, 1)
+
+    async def delreminder_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /delreminder """
+        user_data = await self.get_user_data(update)
+        if not self.is_vip(user_data):
+            await update.message.reply_text("💎 VIP функция!")
+            return
         
-        await update.message.reply_text(f"⏰ Напоминания:\n{reminders_text}")
+        self.db.log_command(user_data.user_id, "/delreminder")
+        
+        if not context.args or not context.args[0].isdigit():
+            await update.message.reply_text("❌ /delreminder [номер]")
+            return
+        
+        index = int(context.args[0]) - 1
+        if 0 <= index < len(user_data.reminders):
+            job_id = user_data.reminders[index]["id"]
+            self.scheduler.remove_job(job_id)
+            del user_data.reminders[index]
+            self.db.save_user(user_data)
+            await update.message.reply_text("✅ Напоминание удалено!")
+        else:
+            await update.message.reply_text("❌ Неверный номер!")
+        await self.add_experience(user_data, 1)
+
+    async def recurring_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /recurring """
+        user_data = await self.get_user_data(update)
+        if not self.is_vip(user_data):
+            await update.message.reply_text("💎 VIP функция!")
+            return
+        
+        self.db.log_command(user_data.user_id, "/recurring")
+        
+        if len(context.args) < 2:
+            await update.message.reply_text("🔄 /recurring [интервал в минутах] [текст]")
+            return
+        
+        interval = int(context.args[0])
+        text = " ".join(context.args[1:])
+        
+        job = self.scheduler.add_job(
+            self.send_notification,
+            trigger=IntervalTrigger(minutes=interval),
+            args=[context, user_data.user_id, f"🔔 Повторяющееся: {text}"]
+        )
+        
+        user_data.reminders.append({"id": job.id, "text": text, "interval": interval})
+        self.db.save_user(user_data)
+        
+        await update.message.reply_text(f"🔄 Повторяющееся напоминание каждые {interval} мин")
+        await self.add_experience(user_data, 2)
+
+    async def secret_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /secret """
+        user_data = await self.get_user_data(update)
+        if not self.is_vip(user_data):
+            await update.message.reply_text("💎 VIP функция!")
+            return
+        
+        self.db.log_command(user_data.user_id, "/secret")
+        
+        await update.message.reply_text("🤫 Секрет: Ты особенный!")
+        await self.add_experience(user_data, 1)
+
+    async def lottery_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /lottery """
+        user_data = await self.get_user_data(update)
+        if not self.is_vip(user_data):
+            await update.message.reply_text("💎 VIP функция!")
+            return
+        
+        self.db.log_command(user_data.user_id, "/lottery")
+        
+        prize = random.choice(["100 XP", "VIP день", "Секретный факт"])
+        await update.message.reply_text(f"🎰 Вы выиграли: {prize}!")
+        if prize == "100 XP":
+            await self.add_experience(user_data, 100)
+        # Добавь логику для других призов
+        await self.add_experience(user_data, 1)
+
+    async def exquote_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /exquote """
+        user_data = await self.get_user_data(update)
+        if not self.is_vip(user_data):
+            await update.message.reply_text("💎 VIP функция!")
+            return
+        
+        prompt = "Эксклюзивная цитата для VIP"
+        response = self.gemini_model.generate_content(prompt)
+        await update.message.reply_text(response.text)
+        await self.add_experience(user_data, 1)
+
+    async def exfact_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /exfact """
+        user_data = await self.get_user_data(update)
+        if not self.is_vip(user_data):
+            await update.message.reply_text("💎 VIP функция!")
+            return
+        
+        prompt = "Уникальный факт для VIP"
+        response = self.gemini_model.generate_content(prompt)
+        await update.message.reply_text(response.text)
+        await self.add_experience(user_data, 1)
+
+    async def gift_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /gift """
+        user_data = await self.get_user_data(update)
+        if not self.is_vip(user_data):
+            await update.message.reply_text("💎 VIP функция!")
+            return
+        
+        gift = random.choice(["🎁 Подарок1", "🎁 Подарок2"])
+        await update.message.reply_text(gift)
+        await self.add_experience(user_data, 1)
+
+    async def priority_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /priority """
+        user_data = await self.get_user_data(update)
+        if not self.is_vip(user_data):
+            await update.message.reply_text("💎 VIP функция!")
+            return
+        
+        await update.message.reply_text("🚀 Приоритет активирован (просто placeholder)")
         await self.add_experience(user_data, 1)
 
     async def nickname_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /nickname """
         user_data = await self.get_user_data(update)
-        
         if not self.is_vip(user_data):
-            await update.message.reply_text("💎 Только для VIP!")
+            await update.message.reply_text("💎 VIP функция!")
             return
-        
-        self.db.log_command(user_data.user_id, "/nickname")
         
         if not context.args:
             await update.message.reply_text("👤 /nickname [имя]")
             return
         
-        nickname = " ".join(context.args)
-        user_data.nickname = nickname
+        user_data.nickname = " ".join(context.args)
         self.db.save_user(user_data)
-        await update.message.reply_text(f"✅ Никнейм установлен: {nickname}")
+        await update.message.reply_text(f"👤 Никнейм установлен: {user_data.nickname}")
         await self.add_experience(user_data, 1)
 
     async def profile_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /profile """
         user_data = await self.get_user_data(update)
-        
         if not self.is_vip(user_data):
-            await update.message.reply_text("💎 Только для VIP!")
+            await update.message.reply_text("💎 VIP функция!")
             return
         
-        self.db.log_command(user_data.user_id, "/profile")
-        
-        profile_text = f"""
-👤 ПРОФИЛЬ
-
+        profile = f"""
+👤 Профиль:
 Имя: {user_data.first_name}
-Никнейм: {user_data.nickname or "Не установлен"}
+Ник: {user_data.nickname}
 Уровень: {user_data.level}
-VIP: {"✅" if self.is_vip(user_data) else "❌"}
-Заметок: {len(user_data.notes)}
-Памяти: {len(user_data.memory_data)}
-Достижений: {len(user_data.achievements)}
+VIP: {"Да" if self.is_vip(user_data) else "Нет"}
         """
-        
-        await update.message.reply_text(profile_text)
+        await update.message.reply_text(profile)
         await self.add_experience(user_data, 1)
 
-    # Команды создателя
-    
-    async def users_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    async def achievements_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /achievements """
+        user_data = await self.get_user_data(update)
+        if not self.is_vip(user_data):
+            await update.message.reply_text("💎 VIP функция!")
+            return
+        
+        ach = "\n".join(user_data.achievements)
+        await update.message.reply_text(f"🏆 Достижения:\n{ach}")
+        await self.add_experience(user_data, 1)
+
+    # =============================================================================
+    # КОМАНДЫ СОЗДАТЕЛЯ
+    # =============================================================================
+
+    async def grant_vip_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /grant_vip """
         if not self.is_creator(update.effective_user.id):
             await update.message.reply_text("❌ Только для создателя!")
             return
         
-        users = self.db.get_all_users()
-        if not users:
-            await update.message.reply_text("👥 Пользователей пока нет!")
+        if len(context.args) < 2:
+            await update.message.reply_text("/grant_vip [user_id или @username] [duration: week/month/year/permanent]")
             return
-            
-        users_text = "👥 ПОЛЬЗОВАТЕЛИ:\n\n"
-        for user_id, first_name, level, last_activity in users[:20]:
-            vip_status = "💎" if any(u.get('user_id') == user_id and u.get('is_vip') for u in self.db.users) else "👤"
-            users_text += f"{vip_status} {first_name} (ID: {user_id}) - Ур.{level}\n"
         
-        if len(users) > 20:
-            users_text += f"\n... и ещё {len(users) - 20}"
-            
-        await update.message.reply_text(users_text)
+        target = context.args[0]
+        duration = context.args[1].lower()
+        
+        if target.startswith('@'):
+            target_user = self.db.get_user_by_username(target[1:])
+        else:
+            target_user = self.db.get_user(int(target))
+        
+        if not target_user:
+            await update.message.reply_text("❌ Пользователь не найден!")
+            return
+        
+        now = datetime.datetime.now()
+        if duration == "week":
+            target_user.vip_expires = (now + datetime.timedelta(weeks=1)).isoformat()
+        elif duration == "month":
+            target_user.vip_expires = (now + datetime.timedelta(days=30)).isoformat()
+        elif duration == "year":
+            target_user.vip_expires = (now + datetime.timedelta(days=365)).isoformat()
+        elif duration == "permanent":
+            target_user.vip_expires = None
+        else:
+            await update.message.reply_text("❌ Неверная длительность!")
+            return
+        
+        target_user.is_vip = True
+        self.db.save_user(target_user)
+        await update.message.reply_text("✅ VIP выдан!")
+        try:
+            await context.bot.send_message(target_user.user_id, "🎉 Вы получили VIP!")
+        except:
+            pass
+
+    async def revoke_vip_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /revoke_vip """
+        if not self.is_creator(update.effective_user.id):
+            await update.message.reply_text("❌ Только для создателя!")
+            return
+        
+        if not context.args:
+            await update.message.reply_text("/revoke_vip [user_id или @username]")
+            return
+        
+        target = context.args[0]
+        if target.startswith('@'):
+            target_user = self.db.get_user_by_username(target[1:])
+        else:
+            target_user = self.db.get_user(int(target))
+        
+        if target_user:
+            target_user.is_vip = False
+            target_user.vip_expires = None
+            self.db.save_user(target_user)
+            await update.message.reply_text("✅ VIP отозван!")
+        else:
+            await update.message.reply_text("❌ Пользователь не найден!")
+
+    async def vip_list_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /vip_list """
+        if not self.is_creator(update.effective_user.id):
+            await update.message.reply_text("❌ Только для создателя!")
+            return
+        
+        vips = self.db.get_vip_users()
+        text = "\n".join(f"{vip[1]} (ID: {vip[0]}) expires {vip[2]}" for vip in vips) if vips else "Нет VIP"
+        await update.message.reply_text(f"💎 VIP список:\n{text}")
+
+    async def userinfo_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /userinfo """
+        if not self.is_creator(update.effective_user.id):
+            await update.message.reply_text("❌ Только для создателя!")
+            return
+        
+        if not context.args:
+            await update.message.reply_text("/userinfo [user_id или @username]")
+            return
+        
+        target = context.args[0]
+        if target.startswith('@'):
+            target_user = self.db.get_user_by_username(target[1:])
+        else:
+            target_user = self.db.get_user(int(target))
+        
+        if target_user:
+            info = f"ID: {target_user.user_id}\nИмя: {target_user.first_name}\nVIP: {target_user.is_vip}\nУровень: {target_user.level}"
+            await update.message.reply_text(info)
+        else:
+            await update.message.reply_text("❌ Не найден!")
 
     async def broadcast_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /broadcast """
         if not self.is_creator(update.effective_user.id):
             await update.message.reply_text("❌ Только для создателя!")
             return
         
         if not context.args:
-            await update.message.reply_text("📢 /broadcast [сообщение]")
+            await update.message.reply_text("/broadcast [текст]")
             return
         
-        message = " ".join(context.args)
+        text = " ".join(context.args)
         users = self.db.get_all_users()
         sent = 0
-        failed = 0
-        
-        await update.message.reply_text(f"📢 Рассылка для {len(users)} пользователей...")
-        
-        for user_id, first_name, level, last_activity in users:
+        for user in users:
             try:
-                await context.bot.send_message(user_id, f"📢 Сообщение от создателя:\n\n{message}")
+                await context.bot.send_message(user[0], text)
                 sent += 1
-                await asyncio.sleep(0.1)
-            except Exception as e:
-                failed += 1
-                logger.warning(f"Не удалось отправить {user_id}: {e}")
-        
-        await update.message.reply_text(f"✅ Отправлено: {sent}\n❌ Неудачно: {failed}")
+            except:
+                pass
+        await update.message.reply_text(f"✅ Рассылка отправлена {sent} пользователям!")
 
     async def stats_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        user_data = await self.get_user_data(update)
-        
-        if self.is_creator(user_data.user_id):
-            total_users = self.db.get_growth_stats()
-            vip_users = len(self.db.get_vip_users())
-            total_commands = len(self.db.logs)
-            popular_commands = self.db.get_popular_commands()[:5]
-            
+        """ /stats """
+        user_id = update.effective_user.id
+        if not self.is_creator(user_id):
+            user_data = await self.get_user_data(update)
+            # Личная статистика
             stats_text = f"""
-📊 СТАТИСТИКА БОТА
+📊 ВАША СТАТИСТИКА
 
-👥 Пользователей: {total_users}
-💎 VIP: {vip_users}
-📈 Команд: {total_commands}
-
-🔥 ТОП-5:
-"""
-            for cmd, data in popular_commands:
-                stats_text += f"• {cmd}: {data['usage_count']}\n"
-            
-            stats_text += f"\n⚡ Обновлено: {datetime.datetime.now().strftime('%d.%m.%Y %H:%M')}"
-            
-        else:
-            stats_text = f"""
-📊 СТАТИСТИКА
-
-👤 {user_data.first_name}
+👤 Пользователь: {user_data.first_name}
 🆙 Уровень: {user_data.level}
 ⭐ Опыт: {user_data.experience}/{user_data.level * 100}
-💎 VIP: {"✅" if self.is_vip(user_data) else "❌"}
+💎 VIP: {"✅ Да" if self.is_vip(user_data) else "❌ Нет"}
 📝 Заметок: {len(user_data.notes)}
-🧠 Памяти: {len(user_data.memory_data)}
+🏆 Достижений: {len(user_data.achievements)}
             """
+            await update.message.reply_text(stats_text)
+            return
         
-        self.db.log_command(user_data.user_id, "/stats")
-        await update.message.reply_text(stats_text)
-        await self.add_experience(user_data, 1)
+        self.db.log_command(user_id, "/stats")
+        
+        total_users = self.db.get_growth_stats()
+        vip_users = len(self.db.get_vip_users())
+        total_commands = len(self.db.logs)
+        
+        stats_text = f"""
+📊 СТАТИСТИКА БОТА
 
-    async def maintenance_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+👥 Всего пользователей: {total_users}
+💎 VIP пользователей: {vip_users}
+📈 Выполнено команд: {total_commands}
+
+🔥 ПОПУЛЯРНЫЕ КОМАНДЫ:
+"""
+        
+        for cmd, count in self.db.get_popular_commands():
+            stats_text += f"• {cmd}: {count} раз\n"
+        
+        stats_text += f"""
+        
+⚡ Статус: Онлайн
+🤖 Версия: 2.0
+📅 Обновлено: {datetime.datetime.now().strftime('%d.%m.%Y %H:%M')}
+        """
+        
+        await update.message.reply_text(stats_text)
+
+    async def users_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /users """
         if not self.is_creator(update.effective_user.id):
             await update.message.reply_text("❌ Только для создателя!")
             return
         
-        if not context.args:
-            status = "включен" if self.maintenance_mode else "выключен"
-            await update.message.reply_text(f"🛠 Режим: {status}\n\n/maintenance [on/off]")
+        users = self.db.get_all_users()
+        text = "\n".join(f"{user[1]} (ID: {user[0]}) lvl {user[2]}" for user in users[:20])  # Лимит 20
+        await update.message.reply_text(f"👥 Пользователи (первые 20):\n{text}")
+
+    async def activity_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /activity """
+        if not self.is_creator(update.effective_user.id):
+            await update.message.reply_text("❌ Только для создателя!")
             return
         
-        mode = context.args[0].lower()
-        if mode in ['on', 'вкл']:
-            self.maintenance_mode = True
-            await update.message.reply_text("🛠 Режим обслуживания ВКЛЮЧЕН")
-        elif mode in ['off', 'выкл']:
-            self.maintenance_mode = False
-            await update.message.reply_text("✅ Режим обслуживания ВЫКЛЮЧЕН")
-        else:
-            await update.message.reply_text("❌ Используйте on/off")
+        users = self.db.get_all_users()
+        active = [user for user in users if datetime.datetime.fromisoformat(user[3]) > datetime.datetime.now() - datetime.timedelta(days=7)]
+        text = f"Активных за неделю: {len(active)} из {len(users)}"
+        await update.message.reply_text(text)
+
+    async def popular_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /popular """
+        if not self.is_creator(update.effective_user.id):
+            await update.message.reply_text("❌ Только для создателя!")
+            return
+        
+        popular = self.db.get_popular_commands()
+        text = "\n".join(f"{cmd}: {count} раз" for cmd, count in popular)
+        await update.message.reply_text(f"🔥 Популярные команды:\n{text}")
+
+    async def growth_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /growth """
+        if not self.is_creator(update.effective_user.id):
+            await update.message.reply_text("❌ Только для создателя!")
+            return
+        
+        total = self.db.get_growth_stats()
+        await update.message.reply_text(f"📈 Рост: Всего пользователей {total}")
+
+    async def memory_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /memory """
+        if not self.is_creator(update.effective_user.id):
+            await update.message.reply_text("❌ Только для создателя!")
+            return
+        
+        # Пример просмотра памяти, адаптируй
+        await update.message.reply_text("🧠 Память: (placeholder)")
 
     async def backup_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /backup """
+        if not self.is_creator(update.effective_user.id):
+            await update.message.reply_text("❌ Только для создателя!")
+            return
+        
+        self.db.save_data(BACKUP_PATH, {'users': self.db.users, 'logs': self.db.logs, 'statistics': self.db.statistics})
+        await update.message.reply_text("💾 Бэкап создан!")
+
+    async def restore_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /restore """
         if not self.is_creator(update.effective_user.id):
             await update.message.reply_text("❌ Только для создателя!")
             return
         
         try:
-            backup_data = {
-                'users': self.db.users,
-                'logs': self.db.logs[-100:],
-                'statistics': self.db.statistics,
-                'backup_time': datetime.datetime.now().isoformat()
-            }
-            
-            success = self.db.save_data(BACKUP_PATH, backup_data)
-            if success:
-                await update.message.reply_text(f"✅ Бэкап создан!\nПользователей: {len(self.db.users)}")
-            else:
-                await update.message.reply_text("❌ Ошибка создания бэкапа!")
-        except Exception as e:
-            await update.message.reply_text(f"❌ Ошибка: {str(e)}")
+            data = self.db.load_data(BACKUP_PATH, {})
+            self.db.users = data.get('users', [])
+            self.db.logs = data.get('logs', [])
+            self.db.statistics = data.get('statistics', {})
+            self.db.save_data(USERS_FILE, self.db.users)
+            self.db.save_data(LOGS_FILE, self.db.logs)
+            self.db.save_data(STATISTICS_FILE, self.db.statistics)
+            await update.message.reply_text("🔄 Восстановлено из бэкапа!")
+        except:
+            await update.message.reply_text("❌ Бэкап не найден!")
 
-    # Обработчики
-    
+    async def export_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /export """
+        if not self.is_creator(update.effective_user.id):
+            await update.message.reply_text("❌ Только для создателя!")
+            return
+        
+        if not context.args:
+            await update.message.reply_text("/export [user_id или @username]")
+            return
+        
+        target = context.args[0]
+        if target.startswith('@'):
+            target_user = self.db.get_user_by_username(target[1:])
+        else:
+            target_user = self.db.get_user(int(target))
+        
+        if target_user:
+            data = json.dumps(target_user.to_dict(), ensure_ascii=False)
+            await update.message.reply_text(f"📤 Экспорт: {data}")
+        else:
+            await update.message.reply_text("❌ Не найден!")
+
+    async def cleanup_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /cleanup """
+        if not self.is_creator(update.effective_user.id):
+            await update.message.reply_text("❌ Только для создателя!")
+            return
+        
+        deleted = self.db.cleanup_inactive()
+        await update.message.reply_text(f"🧹 Очищено {deleted} неактивных пользователей")
+
+    async def restart_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /restart """
+        if not self.is_creator(update.effective_user.id):
+            await update.message.reply_text("❌ Только для создателя!")
+            return
+        
+        await update.message.reply_text("🔄 Перезапуск...")
+        sys.exit(0)  # На Render перезапустит сервис
+
+    async def maintenance_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /maintenance """
+        if not self.is_creator(update.effective_user.id):
+            await update.message.reply_text("❌ Только для создателя!")
+            return
+        
+        if not context.args:
+            await update.message.reply_text("/maintenance [on/off]")
+            return
+        
+        mode = context.args[0].lower()
+        self.maintenance_mode = mode == "on"
+        await update.message.reply_text(f"🛠 Maintenance: {'Вкл' if self.maintenance_mode else 'Выкл'}")
+
+    async def log_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /log """
+        if not self.is_creator(update.effective_user.id):
+            await update.message.reply_text("❌ Только для создателя!")
+            return
+        
+        level = context.args[0] if context.args else "all"
+        logs = self.db.get_logs(level)
+        text = "\n".join(f"{log[4]} - User {log[1]}: {log[2]} {log[3]}" for log in logs)
+        await update.message.reply_text(f"📜 Логи ({level}):\n{text}")
+
+    async def config_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /config """
+        if not self.is_creator(update.effective_user.id):
+            await update.message.reply_text("❌ Только для создателя!")
+            return
+        
+        # Placeholder для конфига
+        await update.message.reply_text("⚙️ Конфиг: (placeholder)")
+
+    async def update_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /update """
+        if not self.is_creator(update.effective_user.id):
+            await update.message.reply_text("❌ Только для создателя!")
+            return
+        
+        # На Render: git pull или manual deploy
+        await update.message.reply_text("🔄 Обновление: Выполните manual deploy на Render")
+
+    # =============================================================================
+    # ИНТЕЛЛЕКТУАЛЬНЫЕ ФУНКЦИИ
+    # =============================================================================
+
+    async def memorysave_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /memorysave """
+        user_data = await self.get_user_data(update)
+        self.db.log_command(user_data.user_id, "/memorysave")
+        
+        if len(context.args) < 2:
+            await update.message.reply_text("/memorysave [ключ] [значение]")
+            return
+        
+        key = context.args[0]
+        value = " ".join(context.args[1:])
+        user_data.memory_data[key] = value
+        self.db.save_user(user_data)
+        await update.message.reply_text("🧠 Сохранено!")
+        await self.add_experience(user_data, 1)
+
+    async def ask_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /ask """
+        user_data = await self.get_user_data(update)
+        self.db.log_command(user_data.user_id, "/ask")
+        
+        if not context.args:
+            await update.message.reply_text("/ask [вопрос]")
+            return
+        
+        question = " ".join(context.args)
+        # Поиск в памяти
+        for key, value in user_data.memory_data.items():
+            if question in key:
+                await update.message.reply_text(value)
+                return
+        
+        # Если не найдено, Gemini
+        response = self.gemini_model.generate_content(question)
+        await update.message.reply_text(response.text)
+        await self.add_experience(user_data, 1)
+
+    async def memorylist_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /memorylist """
+        user_data = await self.get_user_data(update)
+        self.db.log_command(user_data.user_id, "/memorylist")
+        
+        if not user_data.memory_data:
+            await update.message.reply_text("🧠 Память пуста!")
+            return
+        
+        text = "\n".join(f"{key}: {value}" for key, value in user_data.memory_data.items())
+        await update.message.reply_text(f"🧠 Память:\n{text}")
+        await self.add_experience(user_data, 1)
+
+    async def memorydel_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /memorydel """
+        user_data = await self.get_user_data(update)
+        self.db.log_command(user_data.user_id, "/memorydel")
+        
+        if not context.args:
+            await update.message.reply_text("/memorydel [ключ]")
+            return
+        
+        key = context.args[0]
+        if key in user_data.memory_data:
+            del user_data.memory_data[key]
+            self.db.save_user(user_data)
+            await update.message.reply_text("🧠 Удалено!")
+        else:
+            await update.message.reply_text("❌ Ключ не найден!")
+        await self.add_experience(user_data, 1)
+
+    # =============================================================================
+    # СПЕЦИАЛЬНЫЕ ВОЗМОЖНОСТИ
+    # =============================================================================
+
+    async def rank_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /rank """
+        user_data = await self.get_user_data(update)
+        self.db.log_command(user_data.user_id, "/rank")
+        
+        await update.message.reply_text(f"🏅 Уровень: {user_data.level}, Опыт: {user_data.experience}")
+        await self.add_experience(user_data, 1)
+
+    async def leaderboard_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /leaderboard """
+        user_data = await self.get_user_data(update)
+        self.db.log_command(user_data.user_id, "/leaderboard")
+        
+        leaders = self.db.get_all_users()[:10]
+        text = "\n".join(f"{i+1}. {user[1]} - lvl {user[2]}" for i, user in enumerate(leaders))
+        await update.message.reply_text(f"🏆 Лидеры:\n{text}")
+        await self.add_experience(user_data, 1)
+
+    # =============================================================================
+    # МУЛЬТИЯЗЫЧНАЯ ПОДДЕРЖКА
+    # =============================================================================
+
+    async def language_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ /language """
+        user_data = await self.get_user_data(update)
+        self.db.log_command(user_data.user_id, "/language")
+        
+        if not context.args:
+            await update.message.reply_text("/language [ru/en/es/de/it]")
+            return
+        
+        lang = context.args[0].lower()
+        if lang in ['ru', 'en', 'es', 'de', 'it']:
+            user_data.language = lang
+            self.db.save_user(user_data)
+            await update.message.reply_text("🈯 Язык изменён!")
+        else:
+            await update.message.reply_text("❌ Неверный код языка! Доступны: ru, en, es, de, it")
+        # В реальности адаптируй ответы на lang
+        await self.add_experience(user_data, 1)
+
+    # =============================================================================
+    # CALLBACK ОБРАБОТЧИКИ
+    # =============================================================================
+
     async def button_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         query = update.callback_query
         await query.answer()
         
         if query.data == "help":
-            fake_update = Update(update_id=update.update_id, message=query.message)
-            await self.help_command(fake_update, context)
-            
+            await self.help_command(update, context)
         elif query.data == "vip_info":
-            fake_update = Update(update_id=update.update_id, message=query.message)
-            await self.vip_command(fake_update, context)
-            
+            await self.vip_command(update, context)
         elif query.data == "ai_demo":
             await query.edit_message_text(
-                "🤖 AI-чат готов!\n\n"
-                "Просто напишите сообщение или используйте /ai\n\n"
+                "🤖 AI-чат готов к работе!\n\n"
+                "Просто напишите мне любой вопрос или используйте команду /ai\n\n"
                 "Примеры:\n"
                 "• Расскажи о космосе\n"
                 "• Помоги с математикой\n"
-                "• Объясни квантовую физику"
+                "• Придумай идею для проекта\n"
+                "• Объясни квантовую физику просто"
             )
-            
         elif query.data == "my_stats":
-            fake_update = Update(update_id=update.update_id, message=query.message)
-            await self.stats_command(fake_update, context)
+            await self.stats_command(update, context)
 
-    async def self_ping(self):
-        try:
-            response = requests.get(RENDER_URL, timeout=10)
-            logger.info(f"Self-ping: {response.status_code}")
-        except Exception as e:
-            logger.warning(f"Self-ping failed: {e}")
+    # =============================================================================
+    # ГЛАВНАЯ ФУНКЦИЯ ЗАПУСКА
+    # =============================================================================
 
     async def run_bot(self):
-        if not BOT_TOKEN:
-            logger.error("BOT_TOKEN не найден!")
-            return
-
-        application = (
-            Application.builder()
-            .token(BOT_TOKEN)
-            .read_timeout(30)
-            .write_timeout(30)
-            .connect_timeout(30)
-            .pool_timeout(30)
-            .build()
-        )
+        application = Application.builder().token(BOT_TOKEN).build()
         
-        async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
-            logger.error(f"Error: {context.error}")
-            
-            if isinstance(context.error, Conflict):
-                logger.error("Конфликт: несколько экземпляров бота")
-                await asyncio.sleep(30)
-            
-        application.add_error_handler(error_handler)
-        
-        # Регистрация всех команд
+        # Добавь handlers только для оставшихся команд
         application.add_handler(CommandHandler("start", self.start_command))
         application.add_handler(CommandHandler("help", self.help_command))
         application.add_handler(CommandHandler("info", self.info_command))
@@ -1576,112 +2005,23 @@ VIP: {"✅" if self.is_vip(user_data) else "❌"}
         application.add_handler(CommandHandler("note", self.note_command))
         application.add_handler(CommandHandler("notes", self.notes_command))
         application.add_handler(CommandHandler("delnote", self.delnote_command))
-        application.add_handler(CommandHandler("findnote", self.findnote_command))
         application.add_handler(CommandHandler("clearnotes", self.clearnotes_command))
-        application.add_handler(CommandHandler("memorysave", self.memorysave_command))
-        application.add_handler(CommandHandler("memoryget", self.memoryget_command))
-        application.add_handler(CommandHandler("memorylist", self.memorylist_command))
-        application.add_handler(CommandHandler("memorydel", self.memorydel_command))
+        application.add_handler(CommandHandler("findnote", self.findnote_command))
         application.add_handler(CommandHandler("time", self.time_command))
         application.add_handler(CommandHandler("date", self.date_command))
+        application.add_handler(CommandHandler("timer", self.timer_command))
         application.add_handler(CommandHandler("joke", self.joke_command))
         application.add_handler(CommandHandler("fact", self.fact_command))
         application.add_handler(CommandHandler("quote", self.quote_command))
+        application.add_handler(CommandHandler("story", self.story_command))
+        application.add_handler(CommandHandler("riddle", self.riddle_command))
+        application.add_handler(CommandHandler("motivate", self.motivate_command))
         application.add_handler(CommandHandler("coin", self.coin_command))
         application.add_handler(CommandHandler("dice", self.dice_command))
+        application.add_handler(CommandHandler("random", self.random_command))
         application.add_handler(CommandHandler("8ball", self.eightball_command))
         application.add_handler(CommandHandler("quiz", self.quiz_command))
-        application.add_handler(CommandHandler("math", self.math_command))
-        application.add_handler(CommandHandler("calculate", self.calculate_command))
-        application.add_handler(CommandHandler("password", self.password_command))
-        application.add_handler(CommandHandler("qr", self.qr_command))
-        application.add_handler(CommandHandler("shorturl", self.shorturl_command))
-        application.add_handler(CommandHandler("uptime", self.uptime_command))
-        application.add_handler(CommandHandler("ip", self.ip_command))
-        application.add_handler(CommandHandler("weather", self.weather_command))
-        application.add_handler(CommandHandler("currency", self.currency_command))
-        application.add_handler(CommandHandler("translate", self.translate_command))
-        application.add_handler(CommandHandler("rank", self.rank_command))
-        application.add_handler(CommandHandler("vip", self.vip_command))
-        application.add_handler(CommandHandler("remind", self.remind_command))
-        application.add_handler(CommandHandler("reminders", self.reminders_command))
-        application.add_handler(CommandHandler("nickname", self.nickname_command))
-        application.add_handler(CommandHandler("profile", self.profile_command))
-        application.add_handler(CommandHandler("grant_vip", self.grant_vip_command))
-        application.add_handler(CommandHandler("revoke_vip", self.revoke_vip_command))
-        application.add_handler(CommandHandler("users", self.users_command))
-        application.add_handler(CommandHandler("broadcast", self.broadcast_command))
-        application.add_handler(CommandHandler("maintenance", self.maintenance_command))
-        application.add_handler(CommandHandler("backup", self.backup_command))
-        application.add_handler(CommandHandler("stats", self.stats_command))
-        
-        application.add_handler(
-            MessageHandler(
-                filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE, 
-                self.handle_message
-            )
-        )
-        
-        application.add_handler(CallbackQueryHandler(self.button_callback))
-        
-        loop = asyncio.get_running_loop()
-        self.scheduler.configure(event_loop=loop)
-        self.scheduler.start()
-        
-        # Пинг каждые 14 минут
-        self.scheduler.add_job(
-            self.self_ping,
-            'interval',
-            minutes=14,
-            id='self_ping'
-        )
-        
-        # Проверка дней рождения каждый день в 9:00
-        self.scheduler.add_job(
-            self.check_birthdays,
-            'cron',
-            hour=9,
-            minute=0,
-            args=[application],
-            id='birthday_check'
-        )
-        
-        logger.info("🤖 Бот запущен!")
-        
-        try:
-            await application.run_polling(
-                drop_pending_updates=True,
-                timeout=30,
-                bootstrap_retries=3
-            )
-        except Exception as e:
-            logger.error(f"Критическая ошибка: {e}")
-            raise
-
-async def main():
-    bot = TelegramBot()
-    await bot.run_bot()
-
-# Flask для Render
-app = Flask(__name__)
-
-@app.route('/')
-def home():
-    return f"🤖 Telegram AI Bot is running!\n⏰ Time: {datetime.datetime.now()}"
-
-@app.route('/health')
-def health():
-    return {"status": "ok", "time": datetime.datetime.now().isoformat()}
-
-if __name__ == "__main__":
-    from threading import Thread
-    
-    port = int(os.getenv("PORT", 8080))
-    flask_thread = Thread(
-        target=app.run, 
-        kwargs={'host': '0.0.0.0', 'port': port, 'debug': False}
-    )
-    flask_thread.daemon = True
-    flask_thread.start()
-    
-    asyncio.run(main())
+        application.add_handler(CommandHandler("poem", self.poem_command))
+        application.add_handler(CommandHandler("storygen", self.storygen_command))
+        application.add_handler(CommandHandler("idea", self.idea_command))
+        application.add_handler(CommandHandler("compliment", self.com
