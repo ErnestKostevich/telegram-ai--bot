@@ -79,6 +79,9 @@ if GEMINI_API_KEY:
 # Render URL
 RENDER_URL = os.getenv("RENDER_EXTERNAL_URL", "https://telegram-ai--bot.onrender.com")
 
+# Maintenance mode
+MAINTENANCE_MODE = False
+
 # =============================================================================
 # КЛАССЫ ДАННЫХ
 # =============================================================================
@@ -1699,6 +1702,8 @@ ID: {user_data.user_id}
         await update.message.reply_text(logs_text)
 
     async def maintenance_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        global MAINTENANCE_MODE
+        
         if not self.is_creator(update.effective_user.id):
             await update.message.reply_text("❌ Доступно только создателю!")
             return
@@ -1712,7 +1717,6 @@ ID: {user_data.user_id}
         
         mode = context.args[0].lower()
         if mode == "on":
-            global MAINTENANCE_MODE
             MAINTENANCE_MODE = True
             await update.message.reply_text("🛠 Режим обслуживания ВКЛЮЧЕН")
         elif mode == "off":
