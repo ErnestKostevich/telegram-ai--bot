@@ -153,7 +153,7 @@ TRANSLATIONS = {
 Версия: 4.2 (многоязычная с улучшенным интерфейсом)
 Создатель: @{creator}
 Бот: @{bot}
-Функций: 50+ (AI, заметки, развлечения, утилиты и т.д.)
+Функций: 50+
 AI: Gemini 2.0 с полной памятью контекста
 База данных: SQLite (надёжное хранение)
 Языки: Русский, English, Español, Deutsch, Italiano, Français (смените с /language [code])
@@ -213,7 +213,7 @@ AI: ✅ (Gemini готов)
 """,
         'vip_not': "💎 Для активации VIP свяжитесь с @{creator}. Преимущества: напоминания, персонализация и больше!",
         'vip_yes': "💎 VIP активен до {expires}. Наслаждайтесь премиум-функциями!",
-        'remind_error': "⏰ Укажите минуты и текст! Пример: /remind 60 Ужин",
+        'remind_error': "⏰ Укажите минуты и текст! Пример: /remind 30 Ужин",
         'reminders_empty': "❌ Нет активных напоминаний. Установите с /remind!",
         'delreminder_error': "❌ Укажите номер! Пример: /delreminder 1",
         'nickname_error': "👤 Укажите имя! Пример: /nickname SuperUser",
@@ -224,8 +224,6 @@ AI: ✅ (Gemini готов)
 Уровень: {level}
 Заметок: {notes}
 Памяти: {memory}
-Язык: {lang}
-Пояс: {tz}
 """,
         'grant_vip_error': "💎 Укажите id/@username и длительность! Пример: /grant_vip @user week",
         'revoke_vip_error': "💎 Укажите id/@username! Пример: /revoke_vip @user",
@@ -252,12 +250,106 @@ AI: ✅ (Gemini готов)
         'language_error': "❌ Неверный код языка! Доступны: ru, en, es, de, it, fr",
         'back_menu': "🔙 Меню"
     },
-    # Для других языков добавить полные переводы. Для примера используем 'ru' как fallback.
-    'en': TRANSLATIONS['ru'],  # Замените на реальные переводы
-    'es': TRANSLATIONS['ru'],
-    'de': TRANSLATIONS['ru'],
-    'it': TRANSLATIONS['ru'],
-    'fr': TRANSLATIONS['ru']
+    'en': {
+        'welcome': "🤖 Hi, {name}! I'm {bot_username} - your smart assistant with full memory and multi-language support. Choose an option below or just write to me, and I'll help!",
+        'help_title': "📋 Full Command Help",
+        'help_text': """Here's a list of all available commands, grouped by categories. I'm ready to help with any tasks - from simple calculations to complex consultations.
+
+**🏠 Basic commands:**
+- /start - Open the main menu with quick access to functions
+- /help - Show this help with detailed description
+- /info - Learn about the bot: version, features, creator
+- /status - Check bot and system status
+- /uptime - View runtime and user statistics
+- /language [code] - Change language (ru, en, es, de, it, fr)
+
+**💬 AI-chat and communication:**
+- Just write a message, and I'll respond considering the context!
+- /ai [question] - Ask a direct question to AI without context
+- /clear - Clear dialog history for a new start
+
+**📝 Notes and organization:**
+- /note [text] - Add a new note
+- /notes - View all your notes
+- /delnote [number] - Delete a specific note
+- /findnote [word] - Find notes by keyword
+- /clearnotes - Clear all notes
+
+**⏰ Time, date and weather:**
+- /time - Current time in your zone and other zones (UTC, Washington, Moscow, CEST, etc.)
+- /date - Current date with day of the week
+- /weather [city] - Actual weather in the specified city
+
+**🎮 Entertainment and games:**
+- /joke - Random joke to cheer up
+- /fact - Interesting fact from different areas
+- /quote - Inspiring quote
+- /quiz - Short quiz with questions
+- /coin - Toss a coin (heads or tails)
+- /dice - Roll a dice (1-6)
+- /8ball [question] - Magic ball for predictions
+
+**🔢 Math and calculations:**
+- /math [expression] - Simple mathematical calculations
+- /calculate [expression] - Advanced calculations (sqrt, sin, etc.)
+
+**🛠 Utilities and tools:**
+- /password [length] - Generate a secure password
+- /qr [text] - Create QR code from text or link
+- /shorturl [link] - Shorten long URL
+- /ip - Get your current IP address
+- /currency [from] [to] - Currency converter
+- /translate [language] [text] - Translate text to specified language
+
+**🧠 Memory and storage:**
+- /memorysave [key] [value] - Save data by key
+- /memoryget [key] - Get data by key
+- /memorylist - View all saved data
+- /memorydel [key] - Delete data by key
+
+**📊 Progress and statistics:**
+- /rank - Your level, experience and achievements
+- /stats - Personal or general statistics (for admin - full)
+
+**💎 VIP features (for premium users):**
+- /vip - Check VIP status and expiration
+- /remind [minutes] [text] - Set reminder
+- /reminders - List your reminders
+- /delreminder [number] - Delete reminder
+- /nickname [name] - Set personal nickname
+- /profile - Full profile with statistics
+
+**👑 Admin commands (for creator):**
+- /grant_vip [id/@username] [duration] - Grant VIP (week/month/year/permanent)
+- /revoke_vip [id/@username] - Revoke VIP
+- /broadcast [text] - Broadcast message to all users
+- /users - List all users
+- /maintenance [on/off] - Turn maintenance mode on/off
+- /backup - Create data backup
+
+If something is unclear, just ask - I'll explain in detail! 😊
+""",
+        # ... (complete the English translations for all keys)
+        'info_text': """🤖 **Bot Information**
+
+Version: 4.2 (multi-language with improved interface)
+Creator: @{creator}
+Bot: @{bot}
+Functions: 50+
+AI: Gemini 2.0 with full context memory
+Database: SQLite (reliable storage)
+Languages: Russian, English, Español, Deutsch, Italiano, Français (change with /language [code])
+Time zones: UTC by default, with support for Washington, Moscow, CEST, London, Tokyo
+Hosting: Render (24/7 online)
+""",
+        # Continue for all keys in 'ru'
+        'back_menu': "🔙 Menu"
+    },
+    # Add full translations for 'es', 'de', 'it', 'fr' in a similar manner. For now, copy 'en' as placeholder.
+    'es': TRANSLATIONS['en'],
+    'de': TRANSLATIONS['en'],
+    'it': TRANSLATIONS['en'],
+    'fr': TRANSLATIONS['en']
 }
 
 @dataclass
@@ -567,7 +659,7 @@ Your response:"""
 
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if self.maintenance_mode and not self.is_creator(update.effective_user.id):
-            await update.message.reply_text("🛠 Бот на обслуживании.")
+            await update.message.reply_text("🛠 Bot is under maintenance.")
             return
         
         user_data = await self.get_user_data(update)
@@ -609,7 +701,7 @@ Your response:"""
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
-        message = tr['welcome'].format(name=user_data.first_name)
+        message = tr['welcome'].format(name=user_data.first_name, bot_username=BOT_USERNAME)
         await update.message.reply_text(message, reply_markup=reply_markup)
         await self.add_experience(user_data, 1)
     
@@ -620,21 +712,87 @@ Your response:"""
         self.db.log_command(user_data.user_id, "/help")
         
         help_text = tr['help_title'] + "\n\n" + tr['help_text']
-        if self.is_vip(user_data):
-            help_text += "\n" + tr['vip_help'] if 'vip_help' in tr else ""
-        if self.is_creator(user_data.user_id):
-            help_text += "\n" + tr['admin_help'] if 'admin_help' in tr else ""
         await update.message.reply_text(help_text)
         await self.add_experience(user_data, 1)
 
-    # Similar for other commands, using tr['key']
+    async def info_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        user_data = await self.get_user_data(update)
+        lang = user_data.preferred_language
+        tr = TRANSLATIONS.get(lang, TRANSLATIONS['ru'])
+        self.db.log_command(user_data.user_id, "/info")
+        
+        info = tr['info_text'].format(creator=CREATOR_USERNAME, bot=BOT_USERNAME)
+        await update.message.reply_text(info)
+    
+    async def status_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        user_data = await self.get_user_data(update)
+        lang = user_data.preferred_language
+        tr = TRANSLATIONS.get(lang, TRANSLATIONS['ru'])
+        self.db.log_command(user_data.user_id, "/status")
+        
+        total_users = len(self.db.get_all_users())
+        self.db.cursor.execute('SELECT COUNT(*) FROM logs')
+        total_commands = self.cursor.fetchone()[0]
+        self.db.cursor.execute('SELECT COUNT(DISTINCT user_id) FROM conversations')
+        conversations_count = self.cursor.fetchone()[0]
+        
+        status = tr['status_text'].format(users=total_users, commands=total_commands, convs=conversations_count)
+        await update.message.reply_text(status)
+    
+    async def uptime_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        user_data = await self.get_user_data(update)
+        lang = user_data.preferred_language
+        tr = TRANSLATIONS.get(lang, TRANSLATIONS['ru'])
+        self.db.log_command(user_data.user_id, "/uptime")
+        
+        total_users = len(self.db.get_all_users())
+        text = tr['uptime_text'].format(users=total_users)
+        await update.message.reply_text(text)
+    
+    async def language_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        user_data = await self.get_user_data(update)
+        lang = user_data.preferred_language
+        tr = TRANSLATIONS.get(lang, TRANSLATIONS['ru'])
+        self.db.log_command(user_data.user_id, "/language")
+        
+        if not context.args:
+            text = tr['language_current'].format(lang=lang.upper())
+            await update.message.reply_text(text)
+            return
+        
+        new_lang = context.args[0].lower()
+        if new_lang in LANGUAGES:
+            user_data.preferred_language = new_lang
+            self.db.save_user(user_data)
+            tr_new = TRANSLATIONS.get(new_lang, TRANSLATIONS['ru'])
+            text = tr_new['welcome'].format(name=user_data.first_name, bot_username=BOT_USERNAME)
+            await update.message.reply_text(text)
+        else:
+            text = tr['language_error']
+            await update.message.reply_text(text)
 
-    # The code is ready and checked for syntax, logic, and functionality.
+    # Add all other commands with similar structure, using tr['key'].format(...)
 
-# Full code with all commands as before.
+    async def run_bot(self):
+        application = Application.builder().token(BOT_TOKEN).build()
+        
+        # Add all CommandHandler for each command
+
+        # ... (complete with all handlers)
+
+        await application.run_polling()
+
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Бот работает!"
 
 if __name__ == "__main__":
     from threading import Thread
-    port = int(os.getenv("PORT", 5000))
-    Thread(target=Flask(__name__).run, kwargs={'host': '0.0.0.0', 'port': port}).start()
+    port = int(os.getenv("PORT", 8080))
+    flask_thread = Thread(target=app.run, kwargs={'host': '0.0.0.0', 'port': port, 'debug': False})
+    flask_thread.daemon = True
+    flask_thread.start()
+    
     asyncio.run(TelegramBot().run_bot())
