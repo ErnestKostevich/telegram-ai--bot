@@ -1250,14 +1250,15 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return f"""
+    now = datetime.datetime.now().strftime('%d.%m.%Y %H:%M:%S')
+    html_content = """
 <!DOCTYPE html>
 <html>
 <head>
     <title>Telegram AI Bot v3.0</title>
     <meta charset="utf-8">
     <style>
-        body {{
+        body {
             font-family: 'Segoe UI', Arial, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
@@ -1265,8 +1266,8 @@ def home():
             text-align: center;
             margin: 0;
             min-height: 100vh;
-        }}
-        .container {{
+        }
+        .container {
             background: rgba(255,255,255,0.1);
             backdrop-filter: blur(10px);
             border-radius: 20px;
@@ -1274,31 +1275,31 @@ def home():
             max-width: 700px;
             margin: 0 auto;
             box-shadow: 0 8px 32px rgba(0,0,0,0.3);
-        }}
-        h1 {{
+        }
+        h1 {
             font-size: 56px;
             margin: 20px 0;
             text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
-        }}
-        .status {{
+        }
+        .status {
             color: #00ff88;
             font-weight: bold;
             font-size: 24px;
             animation: pulse 2s infinite;
-        }}
-        @keyframes pulse {{
-            0%, 100% {{ opacity: 1; }}
-            50% {{ opacity: 0.7; }}
-        }}
-        .feature {{
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        .feature {
             background: rgba(255,255,255,0.05);
             padding: 15px;
             margin: 10px 0;
             border-radius: 10px;
-        }}
-        .emoji {{
+        }
+        .emoji {
             font-size: 32px;
-        }}
+        }
     </style>
 </head>
 <body>
@@ -1309,7 +1310,7 @@ def home():
         <div class="feature">
             <p class="emoji">📅</p>
             <p>Версия: 3.0 (Улучшенная)</p>
-            <p>⏰ {datetime.datetime.now().strftime('%d.%m.%Y %H:%M:%S')}</p>
+            <p>⏰ """ + now + """</p>
         </div>
         
         <div class="feature">
@@ -1323,35 +1324,37 @@ def home():
         <div class="feature">
             <p class="emoji">🌐</p>
             <p>6 языков | 50+ команд</p>
-            <p>Бот: {BOT_USERNAME}</p>
-            <p>Создатель: {CREATOR_USERNAME}</p>
+            <p>Бот: """ + BOT_USERNAME + """</p>
+            <p>Создатель: """ + CREATOR_USERNAME + """</p>
         </div>
     </div>
 </body>
 </html>
 """
+    return html_content
 
 @app.route('/health')
 def health():
-    return {{
+    return {
         "status": "ok",
         "version": "3.0",
         "time": datetime.datetime.now().isoformat(),
         "ai_active": GEMINI_API_KEY is not None
-    }}
+    }
 
 @app.route('/stats')
 def stats():
     try:
         db = Database()
         users = db.get_all_users()
-        return {{
+        uptime_val = str(datetime.datetime.now() - bot_start_time).split('.')[0] if 'bot_start_time' in globals() else "N/A"
+        return {
             "users": len(users),
             "version": "3.0",
-            "uptime": str(datetime.datetime.now() - bot_start_time).split('.')[0] if 'bot_start_time' in globals() else "N/A"
-        }}
+            "uptime": uptime_val
+        }
     except:
-        return {{"error": "Stats unavailable"}}, 500
+        return {"error": "Stats unavailable"}, 500
 
 # ============================================================================
 # ТОЧКА ВХОДА
@@ -1367,12 +1370,12 @@ if __name__ == "__main__":
     port = int(os.getenv("PORT", 8080))
     flask_thread = Thread(
         target=app.run,
-        kwargs={{
+        kwargs={
             'host': '0.0.0.0',
             'port': port,
             'debug': False,
             'use_reloader': False
-        }}
+        }
     )
     flask_thread.daemon = True
     flask_thread.start()
@@ -2029,10 +2032,9 @@ if __name__ == "__main__":
 /status - Статус системы
 /uptime - Время работы
 
-💬 AI-ЧАТ (с полной памятью):
+💬 AI-ЧАТ:
 /ai [вопрос] - Задать вопрос AI
 /clearhistory - Очистить историю
-💡 Просто пишите - я отвечу!
 
 📝 ЗАМЕТКИ:
 /note [текст] - Создать заметку
@@ -2041,13 +2043,13 @@ if __name__ == "__main__":
 /findnote [текст] - Найти заметку
 /clearnotes - Удалить все заметки
 
-🧠 ПАМЯТЬ (долговременная):
+🧠 ПАМЯТЬ:
 /memorysave [ключ] [значение]
 /memoryget [ключ]
 /memorylist - Вся память
 /memorydel [ключ]
 
-⏰ ВРЕМЯ И ДАТА (актуальное!):
+⏰ ВРЕМЯ И ДАТА:
 /time - Мировое время
 /date - Текущая дата
 
@@ -2069,7 +2071,7 @@ if __name__ == "__main__":
 /qr [текст] - Создать QR-код
 /shorturl [url] - Короткая ссылка
 /ip - Мой IP адрес
-/weather [город] - Погода (актуальная!)
+/weather [город] - Погода
 /currency [сумма] [из] [в] - Конвертер
 /translate [язык] [текст] - Перевод
 
@@ -2290,21 +2292,20 @@ if __name__ == "__main__":
         user_data['total_commands'] = user_data.get('total_commands', 0) + 1
         
         if not context.args:
-            # Показываем статистику разговора
             summary = self.conversation_memory.get_summary(user_data['user_id'])
             if summary:
                 await update.message.reply_text(
-                    f"🤖 AI готов к диалогу!\n\n"
-                    f"📊 Статистика нашего разговора:\n"
-                    f"• Всего сообщений: {summary['total_messages']}\n"
-                    f"• Ваших сообщений: {summary['user_messages']}\n"
-                    f"• Моих ответов: {summary['ai_messages']}\n\n"
-                    f"💡 Задайте вопрос: /ai [ваш вопрос]\n"
-                    f"или просто напишите мне!"
+                    f"AI готов к диалогу\n\n"
+                    f"Статистика разговора:\n"
+                    f"Всего сообщений: {summary['total_messages']}\n"
+                    f"Ваших сообщений: {summary['user_messages']}\n"
+                    f"Моих ответов: {summary['ai_messages']}\n\n"
+                    f"Задайте вопрос: /ai [ваш вопрос]\n"
+                    f"или просто напишите мне"
                 )
             else:
                 await update.message.reply_text(
-                    "🤖 AI готов! Задайте вопрос:\n"
+                    "AI готов! Задайте вопрос\n"
                     "Пример: /ai Расскажи о квантовых компьютерах"
                 )
             return
@@ -2328,7 +2329,6 @@ if __name__ == "__main__":
                     role = "Пользователь" if msg['role'] == 'user' else "AI"
                     context_str += f"{role}: {msg['content'][:200]}\n"
             
-            # Расширенный промпт с контекстом
             prompt = f"""Ты умный AI-ассистент. У тебя есть доступ к полной истории разговора.
 
 История последних сообщений:
@@ -2340,7 +2340,6 @@ if __name__ == "__main__":
 
             response = self.gemini_model.generate_content(prompt)
             
-            # Сохраняем в память
             self.conversation_memory.add_message(user_data['user_id'], 'user', query)
             self.conversation_memory.add_message(user_data['user_id'], 'assistant', response.text)
             
@@ -2372,7 +2371,6 @@ if __name__ == "__main__":
         await self.add_experience(user_data, 1)
     
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Обработка обычных сообщений с AI"""
         if self.maintenance_mode and not self.is_creator(update.effective_user.id):
             return
         
@@ -2380,7 +2378,6 @@ if __name__ == "__main__":
         user_data['total_messages'] = user_data.get('total_messages', 0) + 1
         message = update.message.text
         
-        # Проверка кнопок
         lang = user_data.get('language', 'ru')
         if message == self.t('help', lang):
             return await self.help_command(update, context)
@@ -2393,17 +2390,15 @@ if __name__ == "__main__":
         elif message == self.t('language', lang):
             return await self.language_command(update, context)
         elif message == self.t('ai_chat', lang):
-            await update.message.reply_text("💬 AI активен! Напишите ваш вопрос.")
+            await update.message.reply_text("AI активен! Напишите ваш вопрос")
             return
         
-        # AI чат для всех остальных сообщений
         if not self.gemini_model:
             return
         
         try:
             await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
             
-            # Получаем контекст
             history = self.conversation_memory.get_context(user_data['user_id'], limit=None)
             context_str = ""
             if history:
@@ -2428,7 +2423,7 @@ if __name__ == "__main__":
             await update.message.reply_text(response.text)
             
         except Exception as e:
-            await update.message.reply_text("❌ Ошибка обработки")
+            await update.message.reply_text("Ошибка обработки")
             logger.error(f"Ошибка: {e}")
         
         await self.add_experience(user_data, 1)
