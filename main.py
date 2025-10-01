@@ -2,7 +2,6 @@
 
 # -*- coding: utf-8 -*-
 
-“””
 TELEGRAM AI BOT v2.1 - Полностью рабочая версия
 ✅ Все команды работают
 ✅ Актуальные часовые пояса (GMT, CEST, Washington, Paris, Berlin и др.)
@@ -1321,4 +1320,3 @@ except KeyboardInterrupt:
 except Exception as e:
     logger.error(f"Фатальная ошибка: {e}")
     sys.exit(1)
-```
