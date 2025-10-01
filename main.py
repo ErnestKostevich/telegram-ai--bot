@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-ПРОФЕССИОНАЛЬНЫЙ TELEGRAM AI-АССИСТЕНТ v4.0
-Умный помощник с полной памятью, персонализацией и интуитивным интерфейсом
+ПРОФЕССИОНАЛЬНЫЙ TELEGRAM AI-АССИСТЕНТ v4.1
+Улучшенный интерфейс с интерактивными меню, персонализацией и умными ответами
 """
 
 import asyncio
@@ -27,7 +27,7 @@ import math
 nest_asyncio.apply()
 
 import telegram
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler
 import google.generativeai as genai
 
@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 CURRENCY_API_KEY = os.getenv("FREECURRENCY_API_KEY")
-CONVERSATIONS_FILE = "conversations.json"  # Для бэкапа
+CONVERSATIONS_FILE = "conversations.json"
 BACKUP_PATH = "bot_backup.json"
 DB_FILE = "bot_database.db"
 
@@ -70,13 +70,13 @@ class UserData:
     notes: List[str] = field(default_factory=list)
     reminders: List[Dict] = field(default_factory=list)
     memory_data: Dict = field(default_factory=dict)
-    preferences: Dict = field(default_factory=dict)  # Для персонализации
+    preferences: Dict = field(default_factory=dict)
     nickname: Optional[str] = None
     level: int = 1
     experience: int = 0
     achievements: List[str] = field(default_factory=list)
     last_activity: str = field(default_factory=lambda: datetime.datetime.now().isoformat())
-    preferred_timezone: str = 'moscow'  # По умолчанию
+    preferred_timezone: str = 'moscow'
 
     @classmethod
     def from_dict(cls, data: Dict):
@@ -145,7 +145,7 @@ class DatabaseManager:
         self.conn = sqlite3.connect(DB_FILE, check_same_thread=False)
         self.cursor = self.conn.cursor()
         self._create_tables()
-        self.cache = {}  # Кэш для производительности
+        self.cache = {}
 
     def _create_tables(self):
         self.cursor.execute('''
@@ -402,7 +402,8 @@ class TelegramBot:
             bot_response = response.text
             
             self.db.add_to_conversation(user_data.user_id, "assistant", bot_response)
-            await update.message.reply_text(bot_response)
+            reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("📋 Меню", callback_data="start")]])
+            await update.message.reply_text(bot_response, reply_markup=reply_markup)
             await self.add_experience(user_data, 1)
             
         except Exception as e:
@@ -414,119 +415,118 @@ class TelegramBot:
         user_data = await self.get_user_data(update)
         self.db.log_command(user_data.user_id, "/start")
         
-        keyboard = [
-            [InlineKeyboardButton("📋 Помощь", callback_data="help"),
-             InlineKeyboardButton("💎 VIP", callback_data="vip_info")],
-            [InlineKeyboardButton("🤖 AI чат", callback_data="ai_demo"),
-             InlineKeyboardButton("📊 Статистика", callback_data="my_stats")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("📋 Помощь", callback_data="help"), InlineKeyboardButton("💎 VIP", callback_data="vip_info")],
+            [InlineKeyboardButton("🕒 Время", callback_data="time"), InlineKeyboardButton("📊 Профиль", callback_data="profile")],
+            [InlineKeyboardButton("🎮 Развлечения", callback_data="entertainment"), InlineKeyboardButton("🛠 Утилиты", callback_data="utilities")]
+        ])
         
-        message = f"🤖 Привет, {user_data.first_name}!\n\nЯ AI-бот с расширенной памятью и точным знанием времени!\n\nПросто напиши мне что-нибудь 💬"
-        await update.message.reply_text(message, reply_markup=reply_markup)
+        message = f"🤖 Добро пожаловать, {user_data.first_name}!\n\nЯ ваш умный ассистент. Выберите опцию ниже или просто напишите вопрос."
+        await update.message.reply_text(message, reply_markup=keyboard)
         await self.add_experience(user_data, 1)
     
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_data = await self.get_user_data(update)
         self.db.log_command(user_data.user_id, "/help")
         
-        help_text = """📋 ПОЛНЫЙ СПИСОК КОМАНД
+        help_text = """📋 **Руководство по ассистенту**
 
-🏠 БАЗОВЫЕ:
-/start - Главное меню
-/help - Эта справка
-/info - О боте
-/status - Статус системы
-/uptime - Время работы
+### 🏠 Основное
+- /start - Главное меню
+- /help - Это руководство
+- /info - О ассистенте
+- /status - Статус
+- /uptime - Время работы
 
-💬 AI-ЧАТ:
-/ai [вопрос] - Задать вопрос AI
-/clear - Очистить историю диалога
-Или просто напишите сообщение!
+### 💬 AI-чат
+- Просто напишите сообщение!
+- /ai [вопрос] - Прямой вопрос AI
+- /clear - Очистить диалог
 
-📝 ЗАМЕТКИ:
-/note [текст] - Сохранить заметку
-/notes - Показать все заметки
-/delnote [номер] - Удалить заметку
-/findnote [слово] - Поиск в заметках
-/clearnotes - Очистить все заметки
+### 📝 Заметки
+- /note [текст] - Добавить
+- /notes - Просмотр
+- /delnote [№] - Удалить
+- /findnote [слово] - Поиск
+- /clearnotes - Очистить все
 
-⏰ ВРЕМЯ И ДАТА:
-/time - Текущее время
-/date - Текущая дата
+### ⏰ Время/Дата
+- /time - Текущее время
+- /date - Дата
 
-🎮 РАЗВЛЕЧЕНИЯ:
-/joke - Случайная шутка
-/fact - Интересный факт
-/quote - Вдохновляющая цитата
-/quiz - Викторина
-/coin - Монетка
-/dice - Кубик
-/8ball [вопрос] - Магический шар
+### 🎉 Развлечения
+- /joke - Шутка
+- /fact - Факт
+- /quote - Цитата
+- /quiz - Викторина
+- /coin - Монетка
+- /dice - Кубик
+- /8ball [вопрос] - Шар предсказаний
 
-🔢 МАТЕМАТИКА:
-/math [выражение] - Простые вычисления
-/calculate [выражение] - Продвинутый калькулятор
+### 🔢 Математика
+- /math [выражение] - Простой расчет
+- /calculate [выражение] - Сложный
 
-🛠️ УТИЛИТЫ:
-/password [длина] - Генератор паролей
-/qr [текст] - QR-код
-/shorturl [ссылка] - Сокращение URL
-/ip - Информация об IP
-/weather [город] - Текущая погода
-/currency [из] [в] - Конвертер валют
-/translate [язык] [текст] - Перевод
+### 🛠 Утилиты
+- /password [длина] - Генератор пароля
+- /qr [текст] - QR-код
+- /shorturl [ссылка] - Сократить URL
+- /ip - IP-адрес
+- /weather [город] - Погода
+- /currency [из] [в] - Конвертер валют
+- /translate [язык] [текст] - Перевод
 
-🧠 ПАМЯТЬ:
-/memorysave [ключ] [значение] - Сохранить
-/memoryget [ключ] - Получить
-/memorylist - Список
-/memorydel [ключ] - Удалить
+### 🧠 Память
+- /memorysave [ключ] [значение] - Сохранить
+- /memoryget [ключ] - Получить
+- /memorylist - Список
+- /memorydel [ключ] - Удалить
 
-📊 ПРОГРЕСС:
-/rank - Ваш уровень"""
-        
+### 📊 Прогресс
+- /rank - Уровень и опыт
+"""
+
         if self.is_vip(user_data):
-            help_text += """
+            help_text += """### 💎 VIP-функции
+- /vip - Статус VIP
+- /remind [мин] [текст] - Напоминание
+- /reminders - Список
+- /delreminder [№] - Удалить
+- /nickname [имя] - Установить ник
+- /profile - Полный профиль
+"""
 
-💎 VIP КОМАНДЫ:
-/vip - VIP информация
-/remind [минуты] [текст] - Напоминание
-/reminders - Список напоминаний
-/delreminder [номер] - Удалить напоминание
-/nickname [имя] - Установить никнейм
-/profile - Ваш профиль"""
-        
         if self.is_creator(user_data.user_id):
-            help_text += """
+            help_text += """### 👑 Админ
+- /grant_vip [id/@user] [duration] - Выдать VIP
+- /revoke_vip [id/@user] - Отозвать
+- /broadcast [текст] - Рассылка
+- /users - Пользователи
+- /stats - Статистика
+- /maintenance [on/off] - Обслуживание
+- /backup - Бэкап
+"""
 
-👑 КОМАНДЫ СОЗДАТЕЛЯ:
-/grant_vip [user_id/@username] [duration] - Выдать VIP
-/revoke_vip [user_id/@username] - Отозвать VIP
-/broadcast [текст] - Рассылка всем
-/users - Список пользователей
-/stats - Статистика бота
-/maintenance [on/off] - Режим обслуживания
-/backup - Создать резервную копию"""
-        
-        await update.message.reply_text(help_text)
+        reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Меню", callback_data="start")]])
+        await update.message.reply_text(help_text, parse_mode="Markdown", reply_markup=reply_markup)
         await self.add_experience(user_data, 1)
     
     async def info_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_data = await self.get_user_data(update)
         self.db.log_command(user_data.user_id, "/info")
         
-        info = f"""🤖 О БОТЕ
+        info = f"""🤖 **Информация об ассистенте**
 
-Версия: 4.0
-Создатель: @Ernest_Kostevich
+Версия: 4.1
+Создатель: @{CREATOR_USERNAME}
 Функций: 50+
 AI: {"Gemini 2.0 ✅" if self.gemini_model else "❌"}
-База данных: SQLite
-Память: Полная история
-Хостинг: Render 24/7"""
-        
-        await update.message.reply_text(info)
+База данных: SQLite с полной памятью
+Интерфейс: Интерактивные меню и кнопки
+Хостинг: Render 24/7
+"""
+        reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Меню", callback_data="start")]])
+        await update.message.reply_text(info, parse_mode="Markdown", reply_markup=reply_markup)
     
     async def status_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_data = await self.get_user_data(update)
@@ -538,22 +538,25 @@ AI: {"Gemini 2.0 ✅" if self.gemini_model else "❌"}
         self.db.cursor.execute('SELECT COUNT(DISTINCT user_id) FROM conversations')
         conversations_count = self.db.cursor.fetchone()[0]
         
-        status = f"""⚡ СТАТУС БОТА
+        status = f"""⚡ **Статус ассистента**
 
 Онлайн: ✅
-Версия: 4.0
+Версия: 4.1
 Пользователей: {total_users}
-Команд: {total_commands}
-Диалогов: {conversations_count}
-Gemini: {"✅" if self.gemini_model else "❌"}"""
-        
-        await update.message.reply_text(status)
+Команд выполнено: {total_commands}
+Активных диалогов: {conversations_count}
+AI: {"✅" if self.gemini_model else "❌"}
+"""
+        reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Меню", callback_data="start")]])
+        await update.message.reply_text(status, reply_markup=reply_markup)
     
     async def uptime_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_data = await self.get_user_data(update)
         self.db.log_command(user_data.user_id, "/uptime")
         
-        await update.message.reply_text(f"⏱️ Бот работает!\n👥 Пользователей: {len(self.db.get_all_users())}")
+        text = f"⏱️ Ассистент онлайн!\n👥 Пользователей: {len(self.db.get_all_users())}\n\nСпасибо, что используете меня!"
+        reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Меню", callback_data="start")]])
+        await update.message.reply_text(text, reply_markup=reply_markup)
     
     async def clear_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_data = await self.get_user_data(update)
@@ -561,14 +564,18 @@ Gemini: {"✅" if self.gemini_model else "❌"}"""
         
         count = len(self.db.get_conversation(user_data.user_id))
         self.db.clear_conversation(user_data.user_id)
-        await update.message.reply_text(f"✅ История очищена ({count} сообщений)")
+        text = f"✅ История диалога очищена ({count} сообщений).\n\nНачнем заново!"
+        reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Меню", callback_data="start")]])
+        await update.message.reply_text(text, reply_markup=reply_markup)
     
     async def ai_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_data = await self.get_user_data(update)
         self.db.log_command(user_data.user_id, "/ai")
         
         if not context.args:
-            await update.message.reply_text("🤖 Задайте вопрос после /ai!")
+            text = "🤖 Задайте вопрос после /ai!\n\nПример: /ai Расскажи о Python"
+            reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Меню", callback_data="start")]])
+            await update.message.reply_text(text, reply_markup=reply_markup)
             return
         
         if not self.gemini_model:
@@ -579,48 +586,62 @@ Gemini: {"✅" if self.gemini_model else "❌"}"""
         try:
             await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
             response = self.gemini_model.generate_content(query)
-            await update.message.reply_text(response.text)
+            text = response.text
+            reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Меню", callback_data="start")]])
+            await update.message.reply_text(text, reply_markup=reply_markup)
         except Exception as e:
             await update.message.reply_text("❌ Ошибка AI")
     
-    # Заметки
+    # Заметки с улучшенным интерфейсом
     async def note_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_data = await self.get_user_data(update)
         self.db.log_command(user_data.user_id, "/note")
         
         if not context.args:
-            await update.message.reply_text("📝 Укажите текст заметки!")
+            text = "📝 Укажите текст заметки после команды!\n\nПример: /note Купить молоко"
+            reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Меню", callback_data="start")]])
+            await update.message.reply_text(text, reply_markup=reply_markup)
             return
         
         note = " ".join(context.args)
         user_data.notes.append(note)
         self.db.save_user(user_data)
-        await update.message.reply_text("✅ Заметка сохранена!")
+        text = f"✅ Заметка сохранена: '{note}'\n\nВсего заметок: {len(user_data.notes)}"
+        reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("📝 Просмотреть заметки", callback_data="notes")]])
+        await update.message.reply_text(text, reply_markup=reply_markup)
     
     async def notes_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_data = await self.get_user_data(update)
         self.db.log_command(user_data.user_id, "/notes")
         
         if not user_data.notes:
-            await update.message.reply_text("❌ Нет заметок!")
+            text = "❌ У вас нет заметок.\n\nДобавьте новую с /note [текст]"
+            reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Меню", callback_data="start")]])
+            await update.message.reply_text(text, reply_markup=reply_markup)
             return
         
-        notes_text = "\n".join(f"{i+1}. {note}" for i, note in enumerate(user_data.notes))
-        await update.message.reply_text(f"📝 Ваши заметки:\n{notes_text}")
+        notes_text = "\n\n".join(f"**{i+1}.** {note}" for i, note in enumerate(user_data.notes))
+        text = f"📝 **Ваши заметки:**\n\n{notes_text}"
+        reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("🗑 Удалить заметку", callback_data="delnote"), InlineKeyboardButton("🔙 Меню", callback_data="start")]])
+        await update.message.reply_text(text, parse_mode="Markdown", reply_markup=reply_markup)
     
     async def delnote_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_data = await self.get_user_data(update)
         self.db.log_command(user_data.user_id, "/delnote")
         
         if not context.args or not context.args[0].isdigit():
-            await update.message.reply_text("❌ Укажите номер заметки!")
+            text = "❌ Укажите номер заметки!\n\nПример: /delnote 1"
+            reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("📝 Просмотреть заметки", callback_data="notes")]])
+            await update.message.reply_text(text, reply_markup=reply_markup)
             return
         
         index = int(context.args[0]) - 1
         if 0 <= index < len(user_data.notes):
-            user_data.notes.pop(index)
+            deleted = user_data.notes.pop(index)
             self.db.save_user(user_data)
-            await update.message.reply_text("✅ Заметка удалена")
+            text = f"✅ Заметка удалена: '{deleted}'\n\nОставшиеся заметки: {len(user_data.notes)}"
+            reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("📝 Просмотреть заметки", callback_data="notes")]])
+            await update.message.reply_text(text, reply_markup=reply_markup)
         else:
             await update.message.reply_text("❌ Неверный номер!")
     
@@ -629,15 +650,19 @@ Gemini: {"✅" if self.gemini_model else "❌"}"""
         self.db.log_command(user_data.user_id, "/findnote")
         
         if not context.args:
-            await update.message.reply_text("🔍 Укажите ключевое слово!")
+            text = "🔍 Укажите ключевое слово!\n\nПример: /findnote молоко"
+            reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Меню", callback_data="start")]])
+            await update.message.reply_text(text, reply_markup=reply_markup)
             return
         
         keyword = " ".join(context.args).lower()
         found = [(i+1, note) for i, note in enumerate(user_data.notes) if keyword in note.lower()]
         
         if found:
-            notes_text = "\n".join(f"{i}. {note}" for i, note in found)
-            await update.message.reply_text(f"🔍 Найдено ({len(found)}):\n{notes_text}")
+            notes_text = "\n\n".join(f"**{i}.** {note}" for i, note in found)
+            text = f"🔍 **Найдено ({len(found)}):** \n\n{notes_text}"
+            reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("🗑 Удалить заметку", callback_data="delnote")]])
+            await update.message.reply_text(text, parse_mode="Markdown", reply_markup=reply_markup)
         else:
             await update.message.reply_text("❌ Ничего не найдено!")
     
@@ -648,55 +673,67 @@ Gemini: {"✅" if self.gemini_model else "❌"}"""
         count = len(user_data.notes)
         user_data.notes = []
         self.db.save_user(user_data)
-        await update.message.reply_text(f"✅ Очищено {count} заметок!")
+        text = f"✅ Все заметки очищены ({count})!\n\nДобавьте новые с /note"
+        reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Меню", callback_data="start")]])
+        await update.message.reply_text(text, reply_markup=reply_markup)
     
-    # Время и дата
+    # Время и дата с улучшениями
     async def time_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_data = await self.get_user_data(update)
         self.db.log_command(user_data.user_id, "/time")
         
         dt = self.tools.get_datetime(user_data.preferred_timezone)
-        await update.message.reply_text(f"⏰ ВРЕМЯ\n\n{dt['timezone']}: {dt['time']}\nДата: {dt['date']}\nДень: {dt['day_of_week']}")
+        text = f"⏰ **Текущее время**\n\n**{dt['timezone']}**: {dt['time']}\nДата: {dt['date']} ({dt['day_of_week']})\n\n**Другие зоны:**\n{self.tools.get_all_timezones()}"
+        reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("🌍 Сменить зону", callback_data="change_timezone"), InlineKeyboardButton("🔙 Меню", callback_data="start")]])
+        await update.message.reply_text(text, reply_markup=reply_markup)
     
     async def date_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_data = await self.get_user_data(update)
         self.db.log_command(user_data.user_id, "/date")
         
         dt = self.tools.get_datetime(user_data.preferred_timezone)
-        await update.message.reply_text(f"📅 Сегодня: {dt['date']} ({dt['day_of_week']})")
+        text = f"📅 **Сегодняшняя дата**\n\n{dt['date']} ({dt['day_of_week']})\nВремя: {dt['time']} ({dt['timezone']})"
+        reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("⏰ Время", callback_data="time"), InlineKeyboardButton("🔙 Меню", callback_data="start")]])
+        await update.message.reply_text(text, reply_markup=reply_markup)
     
-    # Развлечения
+    # Развлечения с кнопками
     async def joke_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_data = await self.get_user_data(update)
         self.db.log_command(user_data.user_id, "/joke")
         
         jokes = [
-            "Почему программисты путают Хэллоуин и Рождество? Oct 31 == Dec 25!",
-            "Заходит программист в бар...",
-            "10 типов людей: те кто понимает двоичную систему и те кто нет"
+            "Почему программисты путают Хэллоуин и Рождество? Потому что Oct 31 == Dec 25!",
+            "Заходит программист в бар... и выходит из бара, входит в бар, выходит из бара — тестирует функцию.",
+            "Сколько программистов нужно, чтобы вкрутить лампочку? Ни одного — это проблема оборудования."
         ]
-        await update.message.reply_text(f"😄 {random.choice(jokes)}")
+        text = f"😄 **Шутка дня:**\n\n{random.choice(jokes)}"
+        reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("Ещё шутка", callback_data="joke"), InlineKeyboardButton("🔙 Развлечения", callback_data="entertainment")]])
+        await update.message.reply_text(text, reply_markup=reply_markup)
     
     async def fact_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_data = await self.get_user_data(update)
         self.db.log_command(user_data.user_id, "/fact")
         
         facts = [
-            "🧠 Человеческий мозг ~86 млрд нейронов",
-            "🐙 У осьминогов три сердца",
-            "🌍 Земля проходит 30 км/сек по орбите"
+            "🧠 Человеческий мозг содержит около 86 миллиардов нейронов.",
+            "🐙 У осьминогов три сердца: два для жабр, одно для тела.",
+            "🌍 Земля вращается со скоростью около 1670 км/ч на экваторе."
         ]
-        await update.message.reply_text(random.choice(facts))
+        text = random.choice(facts)
+        reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("Ещё факт", callback_data="fact"), InlineKeyboardButton("🔙 Развлечения", callback_data="entertainment")]])
+        await update.message.reply_text(text, reply_markup=reply_markup)
     
     async def quote_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_data = await self.get_user_data(update)
         self.db.log_command(user_data.user_id, "/quote")
         
         quotes = [
-            "💫 'Будь собой. Остальные роли заняты.' - Оскар Уайльд",
-            "🚀 'Единственный способ - любить то, что делаешь.' - Стив Джобс"
+            "💫 'Будь собой. Остальные роли заняты.' — Оскар Уайльд",
+            "🚀 'Единственный способ делать великую работу — любить то, что делаешь.' — Стив Джобс"
         ]
-        await update.message.reply_text(random.choice(quotes))
+        text = random.choice(quotes)
+        reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("Ещё цитата", callback_data="quote"), InlineKeyboardButton("🔙 Развлечения", callback_data="entertainment")]])
+        await update.message.reply_text(text, reply_markup=reply_markup)
     
     async def quiz_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_data = await self.get_user_data(update)
@@ -704,15 +741,21 @@ Gemini: {"✅" if self.gemini_model else "❌"}"""
         
         questions = [
             {"q": "Сколько дней в високосном году?", "a": "366"},
-            {"q": "Столица Австралии?", "a": "Канберра"}
+            {"q": "Какова столица Австралии?", "a": "Канберра"}
         ]
         q = random.choice(questions)
-        await update.message.reply_text(f"❓ {q['q']}\n\n💡 Напишите ответ!")
+        text = f"❓ **Викторина:** {q['q']}\n\nНапишите ответ ниже!"
+        reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("Новый вопрос", callback_data="quiz"), InlineKeyboardButton("🔙 Развлечения", callback_data="entertainment")]])
+        await update.message.reply_text(text, reply_markup=reply_markup)
     
     async def coin_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_data = await self.get_user_data(update)
         self.db.log_command(user_data.user_id, "/coin")
-        await update.message.reply_text(random.choice(["🪙 Орёл!", "🪙 Решка!"]))
+        
+        result = random.choice(["🪙 Орёл!", "🪙 Решка!"])
+        text = f"{result}\n\nБросить ещё раз?"
+        reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("Да", callback_data="coin"), InlineKeyboardButton("🔙 Развлечения", callback_data="entertainment")]])
+        await update.message.reply_text(text, reply_markup=reply_markup)
     
     async def dice_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_data = await self.get_user_data(update)
@@ -720,18 +763,24 @@ Gemini: {"✅" if self.gemini_model else "❌"}"""
         
         result = random.randint(1, 6)
         dice_faces = ["⚀", "⚁", "⚂", "⚃", "⚄", "⚅"]
-        await update.message.reply_text(f"🎲 {dice_faces[result-1]} Выпало: {result}")
+        text = f"🎲 {dice_faces[result-1]} Выпало: {result}\n\nБросить снова?"
+        reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("Да", callback_data="dice"), InlineKeyboardButton("🔙 Развлечения", callback_data="entertainment")]])
+        await update.message.reply_text(text, reply_markup=reply_markup)
     
     async def eightball_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_data = await self.get_user_data(update)
         self.db.log_command(user_data.user_id, "/8ball")
         
         if not context.args:
-            await update.message.reply_text("🔮 Задайте вопрос!")
+            text = "🔮 Задайте вопрос!\n\nПример: /8ball Будет ли дождь завтра?"
+            reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Развлечения", callback_data="entertainment")]])
+            await update.message.reply_text(text, reply_markup=reply_markup)
             return
         
-        answers = ["✅ Да!", "❌ Нет", "🤔 Возможно", "⏳ Спроси позже"]
-        await update.message.reply_text(f"🔮 {random.choice(answers)}")
+        answers = ["✅ Да!", "❌ Нет", "🤔 Возможно", "⏳ Спроси позже", "⭐ Без сомнений!", "🚫 Ни в коем случае"]
+        text = f"🔮 **Ответ:** {random.choice(answers)}"
+        reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("Новый вопрос", callback_data="8ball"), InlineKeyboardButton("🔙 Развлечения", callback_data="entertainment")]])
+        await update.message.reply_text(text, reply_markup=reply_markup)
     
     # Математика
     async def math_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -739,31 +788,39 @@ Gemini: {"✅" if self.gemini_model else "❌"}"""
         self.db.log_command(user_data.user_id, "/math")
         
         if not context.args:
-            await update.message.reply_text("🔢 Пример: /math 15 + 25")
+            text = "🔢 Укажите выражение!\n\nПример: /math 2 + 2 * 2"
+            reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Утилиты", callback_data="utilities")]])
+            await update.message.reply_text(text, reply_markup=reply_markup)
             return
         
         expression = " ".join(context.args)
         try:
             result = eval(expression)
-            await update.message.reply_text(f"🔢 {expression} = {result}")
+            text = f"🔢 **Расчет:** {expression} = {result}"
+            reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("Новый расчет", callback_data="math"), InlineKeyboardButton("🔙 Утилиты", callback_data="utilities")]])
+            await update.message.reply_text(text, reply_markup=reply_markup)
         except:
-            await update.message.reply_text("❌ Ошибка вычисления")
+            await update.message.reply_text("❌ Ошибка в выражении!")
     
     async def calculate_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_data = await self.get_user_data(update)
         self.db.log_command(user_data.user_id, "/calculate")
         
         if not context.args:
-            await update.message.reply_text("🧮 Пример: /calculate sqrt(16)")
+            text = "🧮 Укажите выражение!\n\nПример: /calculate sqrt(16) + sin(pi/2)"
+            reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Утилиты", callback_data="utilities")]])
+            await update.message.reply_text(text, reply_markup=reply_markup)
             return
         
         expression = " ".join(context.args)
         try:
             safe_dict = {"sqrt": math.sqrt, "sin": math.sin, "cos": math.cos, "pi": math.pi, "e": math.e}
             result = eval(expression, {"__builtins__": {}}, safe_dict)
-            await update.message.reply_text(f"🧮 {expression} = {result}")
+            text = f"🧮 **Расчет:** {expression} = {result}"
+            reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("Новый расчет", callback_data="calculate"), InlineKeyboardButton("🔙 Утилиты", callback_data="utilities")]])
+            await update.message.reply_text(text, reply_markup=reply_markup)
         except:
-            await update.message.reply_text("❌ Ошибка")
+            await update.message.reply_text("❌ Ошибка в выражении!")
     
     # Утилиты
     async def password_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -774,26 +831,34 @@ Gemini: {"✅" if self.gemini_model else "❌"}"""
         
         chars = string.ascii_letters + string.digits + "!@#$%^&*"
         password = ''.join(random.choice(chars) for _ in range(length))
-        await update.message.reply_text(f"🔐 Пароль:\n`{password}`", parse_mode='Markdown')
+        text = f"🔐 **Сгенерированный пароль:**\n`{password}`\n\nДлина: {length}"
+        reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("Новый пароль", callback_data="password"), InlineKeyboardButton("🔙 Утилиты", callback_data="utilities")]])
+        await update.message.reply_text(text, parse_mode='Markdown', reply_markup=reply_markup)
     
     async def qr_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_data = await self.get_user_data(update)
         self.db.log_command(user_data.user_id, "/qr")
         
         if not context.args:
-            await update.message.reply_text("📱 /qr [текст]")
+            text = "📱 Укажите текст для QR-кода!\n\nПример: /qr https://example.com"
+            reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Утилиты", callback_data="utilities")]])
+            await update.message.reply_text(text, reply_markup=reply_markup)
             return
         
         text = " ".join(context.args)
         qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=300x300&data={requests.utils.quote(text)}"
-        await context.bot.send_photo(update.effective_chat.id, qr_url)
+        caption = f"📱 QR-код для: {text[:50]}..."
+        reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("Новый QR", callback_data="qr"), InlineKeyboardButton("🔙 Утилиты", callback_data="utilities")]])
+        await context.bot.send_photo(update.effective_chat.id, qr_url, caption=caption, reply_markup=reply_markup)
     
     async def shorturl_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_data = await self.get_user_data(update)
         self.db.log_command(user_data.user_id, "/shorturl")
         
         if not context.args:
-            await update.message.reply_text("🔗 /shorturl [URL]")
+            text = "🔗 Укажите URL для сокращения!\n\nПример: /shorturl https://example.com"
+            reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Утилиты", callback_data="utilities")]])
+            await update.message.reply_text(text, reply_markup=reply_markup)
             return
         
         url = context.args[0]
@@ -803,9 +868,12 @@ Gemini: {"✅" if self.gemini_model else "❌"}"""
         try:
             response = requests.get(f"https://is.gd/create.php?format=simple&url={requests.utils.quote(url)}", timeout=10)
             if response.status_code == 200:
-                await update.message.reply_text(f"🔗 {response.text.strip()}")
+                short = response.text.strip()
+                text = f"🔗 **Сокращенный URL:** {short}"
+                reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("Новый URL", callback_data="shorturl"), InlineKeyboardButton("🔙 Утилиты", callback_data="utilities")]])
+                await update.message.reply_text(text, reply_markup=reply_markup)
             else:
-                await update.message.reply_text("❌ Ошибка")
+                await update.message.reply_text("❌ Ошибка сокращения")
         except:
             await update.message.reply_text("❌ Ошибка подключения")
     
@@ -816,7 +884,9 @@ Gemini: {"✅" if self.gemini_model else "❌"}"""
         try:
             response = requests.get('https://httpbin.org/ip', timeout=5)
             ip = response.json().get('origin', 'Неизвестно')
-            await update.message.reply_text(f"🌍 Ваш IP: {ip}")
+            text = f"🌍 **Ваш IP-адрес:** {ip}"
+            reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Утилиты", callback_data="utilities")]])
+            await update.message.reply_text(text, reply_markup=reply_markup)
         except:
             await update.message.reply_text("❌ Не удалось получить IP")
     
@@ -826,10 +896,12 @@ Gemini: {"✅" if self.gemini_model else "❌"}"""
         
         city = " ".join(context.args) if context.args else "Москва"
         try:
-            response = requests.get(f"http://wttr.in/{requests.utils.quote(city)}?format=3", timeout=10)
+            response = requests.get(f"http://wttr.in/{requests.utils.quote(city)}?format=%l:+%c+%t+%w+%h+%p", timeout=10)
             if response.status_code == 200:
                 weather = response.text.strip()
-                await update.message.reply_text(f"🌤️ {weather}")
+                text = f"🌤️ **Погода в {city}:**\n\n{weather}"
+                reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("Другой город", callback_data="weather"), InlineKeyboardButton("🔙 Утилиты", callback_data="utilities")]])
+                await update.message.reply_text(text, reply_markup=reply_markup)
             else:
                 await update.message.reply_text("❌ Город не найден")
         except:
@@ -840,11 +912,9 @@ Gemini: {"✅" if self.gemini_model else "❌"}"""
         self.db.log_command(user_data.user_id, "/currency")
         
         if len(context.args) < 2:
-            await update.message.reply_text("💰 /currency [из] [в]")
-            return
-        
-        if not CURRENCY_API_KEY:
-            await update.message.reply_text("❌ API не настроен")
+            text = "💰 Укажите валюты!\n\nПример: /currency USD RUB"
+            reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Утилиты", callback_data="utilities")]])
+            await update.message.reply_text(text, reply_markup=reply_markup)
             return
         
         from_cur, to_cur = context.args[0].upper(), context.args[1].upper()
@@ -854,7 +924,9 @@ Gemini: {"✅" if self.gemini_model else "❌"}"""
             rate = response.get("data", {}).get(to_cur)
             
             if rate:
-                await update.message.reply_text(f"💰 1 {from_cur} = {rate:.4f} {to_cur}")
+                text = f"💰 **Конвертер:** 1 {from_cur} = {rate:.4f} {to_cur}"
+                reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("Новый курс", callback_data="currency"), InlineKeyboardButton("🔙 Утилиты", callback_data="utilities")]])
+                await update.message.reply_text(text, reply_markup=reply_markup)
             else:
                 await update.message.reply_text("❌ Ошибка")
         except:
@@ -865,7 +937,9 @@ Gemini: {"✅" if self.gemini_model else "❌"}"""
         self.db.log_command(user_data.user_id, "/translate")
         
         if len(context.args) < 2:
-            await update.message.reply_text("🌐 /translate [язык] [текст]")
+            text = "🌐 Укажите язык и текст!\n\nПример: /translate en Привет, мир"
+            reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Утилиты", callback_data="utilities")]])
+            await update.message.reply_text(text, reply_markup=reply_markup)
             return
         
         if not self.gemini_model:
@@ -873,11 +947,14 @@ Gemini: {"✅" if self.gemini_model else "❌"}"""
             return
         
         target_lang = context.args[0]
-        text = " ".join(context.args[1:])
+        text_input = " ".join(context.args[1:])
         
         try:
-            response = self.gemini_model.generate_content(f"Переведи на {target_lang}: {text}")
-            await update.message.reply_text(f"🌐 {response.text}")
+            response = self.gemini_model.generate_content(f"Переведи на {target_lang}: {text_input}")
+            translated = response.text
+            text = f"🌐 **Перевод:**\n\n{translated}"
+            reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("Новый перевод", callback_data="translate"), InlineKeyboardButton("🔙 Утилиты", callback_data="utilities")]])
+            await update.message.reply_text(text, reply_markup=reply_markup)
         except:
             await update.message.reply_text("❌ Ошибка")
     
@@ -887,28 +964,36 @@ Gemini: {"✅" if self.gemini_model else "❌"}"""
         self.db.log_command(user_data.user_id, "/memorysave")
         
         if len(context.args) < 2:
-            await update.message.reply_text("🧠 /memorysave [ключ] [значение]")
+            text = "🧠 Укажите ключ и значение!\n\nПример: /memorysave email example@mail.com"
+            reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Утилиты", callback_data="utilities")]])
+            await update.message.reply_text(text, reply_markup=reply_markup)
             return
         
         key = context.args[0]
         value = " ".join(context.args[1:])
         user_data.memory_data[key] = value
         self.db.save_user(user_data)
-        await update.message.reply_text(f"🧠 Сохранено: {key}")
+        text = f"🧠 **Сохранено:** {key} = {value}"
+        reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("Список памяти", callback_data="memorylist"), InlineKeyboardButton("🔙 Утилиты", callback_data="utilities")]])
+        await update.message.reply_text(text, reply_markup=reply_markup)
     
     async def memoryget_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_data = await self.get_user_data(update)
         self.db.log_command(user_data.user_id, "/memoryget")
         
         if not context.args:
-            await update.message.reply_text("🧠 /memoryget [ключ]")
+            text = "🧠 Укажите ключ!\n\nПример: /memoryget email"
+            reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Утилиты", callback_data="utilities")]])
+            await update.message.reply_text(text, reply_markup=reply_markup)
             return
         
         key = context.args[0]
         value = user_data.memory_data.get(key)
         
         if value:
-            await update.message.reply_text(f"🧠 {key}: {value}")
+            text = f"🧠 **Значение:** {key} = {value}"
+            reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("Список памяти", callback_data="memorylist"), InlineKeyboardButton("🔙 Утилиты", callback_data="utilities")]])
+            await update.message.reply_text(text, reply_markup=reply_markup)
         else:
             await update.message.reply_text(f"❌ Ключ '{key}' не найден!")
     
@@ -917,60 +1002,64 @@ Gemini: {"✅" if self.gemini_model else "❌"}"""
         self.db.log_command(user_data.user_id, "/memorylist")
         
         if not user_data.memory_data:
-            await update.message.reply_text("🧠 Память пуста!")
+            text = "🧠 Память пуста!\n\nСохраните данные с /memorysave"
+            reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Утилиты", callback_data="utilities")]])
+            await update.message.reply_text(text, reply_markup=reply_markup)
             return
         
-        memory_text = "\n".join(f"• {key}: {value}" for key, value in user_data.memory_data.items())
-        await update.message.reply_text(f"🧠 Ваша память:\n{memory_text}")
+        memory_text = "\n\n".join(f"**{key}:** {value}" for key, value in user_data.memory_data.items())
+        text = f"🧠 **Ваша память:**\n\n{memory_text}"
+        reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("Удалить запись", callback_data="memorydel"), InlineKeyboardButton("🔙 Утилиты", callback_data="utilities")]])
+        await update.message.reply_text(text, parse_mode="Markdown", reply_markup=reply_markup)
     
     async def memorydel_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_data = await self.get_user_data(update)
         self.db.log_command(user_data.user_id, "/memorydel")
         
         if not context.args:
-            await update.message.reply_text("🧠 /memorydel [ключ]")
+            text = "🧠 Укажите ключ для удаления!\n\nПример: /memorydel email"
+            reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("Список памяти", callback_data="memorylist")]])
+            await update.message.reply_text(text, reply_markup=reply_markup)
             return
         
         key = context.args[0]
         if key in user_data.memory_data:
             del user_data.memory_data[key]
             self.db.save_user(user_data)
-            await update.message.reply_text(f"🧠 Удалено: {key}")
+            text = f"🧠 **Удалено:** {key}"
+            reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("Список памяти", callback_data="memorylist"), InlineKeyboardButton("🔙 Утилиты", callback_data="utilities")]])
+            await update.message.reply_text(text, reply_markup=reply_markup)
         else:
             await update.message.reply_text(f"❌ Ключ '{key}' не найден!")
     
+    # Прогресс
     async def rank_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_data = await self.get_user_data(update)
         self.db.log_command(user_data.user_id, "/rank")
         
         req = user_data.level * 100
-        progress = (user_data.experience / req) * 100
+        progress = (user_data.experience / req) * 100 if req > 0 else 0
+        achievements = "\n".join(user_data.achievements) if user_data.achievements else "Нет достижений"
         
-        text = f"""🏅 УРОВЕНЬ
-
-👤 {user_data.first_name}
-🆙 Уровень: {user_data.level}
-⭐ Опыт: {user_data.experience}/{req}
-📊 Прогресс: {progress:.1f}%
-💎 VIP: {"✅" if self.is_vip(user_data) else "❌"}"""
-        
-        await update.message.reply_text(text)
+        text = f"🏅 **Ваш прогресс**\n\n**Уровень:** {user_data.level}\n**Опыт:** {user_data.experience}/{req} ({progress:.1f}%)\n**VIP:** {'✅' if self.is_vip(user_data) else '❌'}\n\n**Достижения:**\n{achievements}"
+        reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("📊 Статистика", callback_data="stats"), InlineKeyboardButton("🔙 Меню", callback_data="start")]])
+        await update.message.reply_text(text, reply_markup=reply_markup)
     
-    # VIP команды
+    # VIP команды с улучшениями
     async def vip_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_data = await self.get_user_data(update)
         self.db.log_command(user_data.user_id, "/vip")
         
         if not self.is_vip(user_data):
-            await update.message.reply_text("💎 Свяжитесь с @Ernest_Kostevich")
+            text = "💎 **VIP доступ**\n\nСвяжитесь с @{CREATOR_USERNAME} для активации.\n\nПреимущества: напоминания, профиль, никнейм."
+            reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Меню", callback_data="start")]])
+            await update.message.reply_text(text, reply_markup=reply_markup)
             return
         
-        expires = 'бессрочно'
-        if user_data.vip_expires:
-            exp_date = datetime.datetime.fromisoformat(user_data.vip_expires)
-            expires = exp_date.strftime('%d.%m.%Y')
-        
-        await update.message.reply_text(f"💎 VIP активен до: {expires}")
+        expires = 'бессрочно' if not user_data.vip_expires else datetime.datetime.fromisoformat(user_data.vip_expires).strftime('%d.%m.%Y')
+        text = f"💎 **VIP статус активен**\n\nДо: {expires}\n\nНаслаждайтесь премиум-функциями!"
+        reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("📊 Профиль", callback_data="profile"), InlineKeyboardButton("🔙 Меню", callback_data="start")]])
+        await update.message.reply_text(text, reply_markup=reply_markup)
     
     async def remind_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_data = await self.get_user_data(update)
@@ -982,15 +1071,17 @@ Gemini: {"✅" if self.gemini_model else "❌"}"""
         self.db.log_command(user_data.user_id, "/remind")
         
         if len(context.args) < 2:
-            await update.message.reply_text("⏰ /remind [минуты] [текст]")
+            text = "⏰ Укажите минуты и текст!\n\nПример: /remind 30 Купить хлеб"
+            reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 VIP", callback_data="vip")]])
+            await update.message.reply_text(text, reply_markup=reply_markup)
             return
         
         try:
             minutes = int(context.args[0])
-            text = " ".join(context.args[1:])
+            text_remind = " ".join(context.args[1:])
             
             if minutes <= 0:
-                await update.message.reply_text("❌ Время > 0!")
+                await update.message.reply_text("❌ Время должно быть положительным!")
                 return
             
             run_date = datetime.datetime.now() + datetime.timedelta(minutes=minutes)
@@ -998,16 +1089,18 @@ Gemini: {"✅" if self.gemini_model else "❌"}"""
             job = self.scheduler.add_job(
                 self.send_notification,
                 trigger=DateTrigger(run_date=run_date),
-                args=[context, user_data.user_id, f"🔔 {text}"],
+                args=[context, user_data.user_id, f"🔔 Напоминание: {text_remind}"],
                 id=f"rem_{user_data.user_id}_{int(time.time())}"
             )
             
-            user_data.reminders.append({"id": job.id, "text": text, "time": run_date.isoformat()})
+            user_data.reminders.append({"id": job.id, "text": text_remind, "time": run_date.isoformat()})
             self.db.save_user(user_data)
             
-            await update.message.reply_text(f"⏰ Напоминание на {minutes} мин!")
+            text = f"⏰ Напоминание установлено на {minutes} минут: '{text_remind}'"
+            reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("Список напоминаний", callback_data="reminders"), InlineKeyboardButton("🔙 VIP", callback_data="vip")]])
+            await update.message.reply_text(text, reply_markup=reply_markup)
         except:
-            await update.message.reply_text("❌ Ошибка!")
+            await update.message.reply_text("❌ Ошибка установки!")
     
     async def reminders_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_data = await self.get_user_data(update)
@@ -1019,11 +1112,15 @@ Gemini: {"✅" if self.gemini_model else "❌"}"""
         self.db.log_command(user_data.user_id, "/reminders")
         
         if not user_data.reminders:
-            await update.message.reply_text("❌ Нет напоминаний!")
+            text = "❌ Нет активных напоминаний.\n\nУстановите новое с /remind"
+            reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 VIP", callback_data="vip")]])
+            await update.message.reply_text(text, reply_markup=reply_markup)
             return
         
-        text = "\n".join([f"{i+1}. {r['text']} ({r['time']})" for i, r in enumerate(user_data.reminders)])
-        await update.message.reply_text(f"⏰ Напоминания:\n{text}")
+        reminders_text = "\n\n".join(f"**{i+1}.** {r['text']} (в {datetime.datetime.fromisoformat(r['time']).strftime('%H:%M %d.%m')})" for i, r in enumerate(user_data.reminders))
+        text = f"⏰ **Ваши напоминания:**\n\n{reminders_text}"
+        reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("🗑 Удалить", callback_data="delreminder"), InlineKeyboardButton("🔙 VIP", callback_data="vip")]])
+        await update.message.reply_text(text, parse_mode="Markdown", reply_markup=reply_markup)
     
     async def delreminder_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_data = await self.get_user_data(update)
@@ -1035,16 +1132,23 @@ Gemini: {"✅" if self.gemini_model else "❌"}"""
         self.db.log_command(user_data.user_id, "/delreminder")
         
         if not context.args or not context.args[0].isdigit():
-            await update.message.reply_text("❌ /delreminder [номер]")
+            text = "❌ Укажите номер напоминания!\n\nПример: /delreminder 1"
+            reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("Список", callback_data="reminders")]])
+            await update.message.reply_text(text, reply_markup=reply_markup)
             return
         
         index = int(context.args[0]) - 1
         if 0 <= index < len(user_data.reminders):
             job_id = user_data.reminders[index]['id']
-            self.scheduler.remove_job(job_id)
-            user_data.reminders.pop(index)
+            try:
+                self.scheduler.remove_job(job_id)
+            except:
+                pass
+            deleted = user_data.reminders.pop(index)['text']
             self.db.save_user(user_data)
-            await update.message.reply_text("✅ Напоминание удалено")
+            text = f"✅ Напоминание удалено: '{deleted}'"
+            reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("Список напоминаний", callback_data="reminders"), InlineKeyboardButton("🔙 VIP", callback_data="vip")]])
+            await update.message.reply_text(text, reply_markup=reply_markup)
         else:
             await update.message.reply_text("❌ Неверный номер!")
     
@@ -1058,13 +1162,17 @@ Gemini: {"✅" if self.gemini_model else "❌"}"""
         self.db.log_command(user_data.user_id, "/nickname")
         
         if not context.args:
-            await update.message.reply_text("👤 /nickname [имя]")
+            text = "👤 Укажите новый никнейм!\n\nПример: /nickname SuperUser"
+            reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 VIP", callback_data="vip")]])
+            await update.message.reply_text(text, reply_markup=reply_markup)
             return
         
         nickname = " ".join(context.args)
         user_data.nickname = nickname
         self.db.save_user(user_data)
-        await update.message.reply_text(f"✅ Никнейм: {nickname}")
+        text = f"✅ Никнейм установлен: {nickname}"
+        reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("📊 Профиль", callback_data="profile"), InlineKeyboardButton("🔙 VIP", callback_data="vip")]])
+        await update.message.reply_text(text, reply_markup=reply_markup)
     
     async def profile_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_data = await self.get_user_data(update)
@@ -1075,15 +1183,22 @@ Gemini: {"✅" if self.gemini_model else "❌"}"""
         
         self.db.log_command(user_data.user_id, "/profile")
         
-        text = f"""👤 ПРОФИЛЬ
+        conv_count = len(self.db.get_conversation(user_data.user_id))
+        preferences = "\n".join(f"- {k}: {v}" for k, v in user_data.preferences.items()) if user_data.preferences else "Нет предпочтений"
+        text = f"""👤 **Ваш профиль**
 
-Имя: {user_data.first_name}
-Никнейм: {user_data.nickname or "Не установлен"}
-Уровень: {user_data.level}
-Заметок: {len(user_data.notes)}
-Памяти: {len(user_data.memory_data)}"""
-        
-        await update.message.reply_text(text)
+**Имя:** {user_data.first_name}
+**Никнейм:** {user_data.nickname or "Не установлен"}
+**Уровень:** {user_data.level}
+**Опыт:** {user_data.experience}
+**Заметок:** {len(user_data.notes)}
+**Памяти:** {len(user_data.memory_data)}
+**Диалогов:** {conv_count} сообщений
+**Предпочтения:** {preferences}
+**Часовой пояс:** {user_data.preferred_timezone.capitalize()}
+"""
+        reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("⚙️ Настройки", callback_data="settings"), InlineKeyboardButton("🔙 Меню", callback_data="start")]])
+        await update.message.reply_text(text, reply_markup=reply_markup)
     
     # Команды создателя
     async def grant_vip_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1092,7 +1207,9 @@ Gemini: {"✅" if self.gemini_model else "❌"}"""
             return
         
         if len(context.args) < 2:
-            await update.message.reply_text("💎 /grant_vip [id/@username] [week/month/year/permanent]")
+            text = "💎 Укажите ID/юзернейм и длительность!\n\nПример: /grant_vip @user week"
+            reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("Список пользователей", callback_data="users")]])
+            await update.message.reply_text(text, reply_markup=reply_markup)
             return
         
         target = context.args[0]
@@ -1114,23 +1231,25 @@ Gemini: {"✅" if self.gemini_model else "❌"}"""
         
         target_user.is_vip = True
         
+        now = datetime.datetime.now()
         if duration == "week":
-            target_user.vip_expires = (datetime.datetime.now() + datetime.timedelta(weeks=1)).isoformat()
+            target_user.vip_expires = (now + datetime.timedelta(weeks=1)).isoformat()
         elif duration == "month":
-            target_user.vip_expires = (datetime.datetime.now() + datetime.timedelta(days=30)).isoformat()
+            target_user.vip_expires = (now + datetime.timedelta(days=30)).isoformat()
         elif duration == "year":
-            target_user.vip_expires = (datetime.datetime.now() + datetime.timedelta(days=365)).isoformat()
+            target_user.vip_expires = (now + datetime.timedelta(days=365)).isoformat()
         elif duration == "permanent":
             target_user.vip_expires = None
         else:
-            await update.message.reply_text("❌ week/month/year/permanent")
+            await update.message.reply_text("❌ Длительность: week/month/year/permanent")
             return
         
         self.db.save_user(target_user)
-        await update.message.reply_text(f"✅ VIP выдан {target_user.first_name}")
+        text = f"✅ VIP выдан {target_user.first_name} на {duration}"
+        await update.message.reply_text(text)
         
         try:
-            await context.bot.send_message(target_user.user_id, f"🎉 VIP ({duration})!")
+            await context.bot.send_message(target_user.user_id, f"🎉 Вам выдан VIP на {duration}!")
         except:
             pass
     
@@ -1140,7 +1259,9 @@ Gemini: {"✅" if self.gemini_model else "❌"}"""
             return
         
         if not context.args:
-            await update.message.reply_text("💎 /revoke_vip [id/@username]")
+            text = "💎 Укажите ID/юзернейм!\n\nПример: /revoke_vip @user"
+            reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("Список пользователей", callback_data="users")]])
+            await update.message.reply_text(text, reply_markup=reply_markup)
             return
         
         target = context.args[0]
@@ -1163,7 +1284,8 @@ Gemini: {"✅" if self.gemini_model else "❌"}"""
         target_user.vip_expires = None
         self.db.save_user(target_user)
         
-        await update.message.reply_text(f"✅ VIP отозван у {target_user.first_name}")
+        text = f"✅ VIP отозван у {target_user.first_name}"
+        await update.message.reply_text(text)
     
     async def broadcast_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not self.is_creator(update.effective_user.id):
@@ -1171,23 +1293,24 @@ Gemini: {"✅" if self.gemini_model else "❌"}"""
             return
         
         if not context.args:
-            await update.message.reply_text("📢 /broadcast [текст]")
+            text = "📢 Укажите текст рассылки!\n\nПример: /broadcast Важное объявление!"
+            await update.message.reply_text(text)
             return
         
         message = " ".join(context.args)
         sent = 0
         
-        await update.message.reply_text(f"📢 Рассылка для {len(self.db.get_all_users())}...")
+        await update.message.reply_text(f"📢 Начинаю рассылку для {len(self.db.get_all_users())} пользователей...")
         
         for u in self.db.get_all_users():
             try:
-                await context.bot.send_message(u.user_id, f"📢 От создателя:\n\n{message}")
+                await context.bot.send_message(u.user_id, f"📢 Объявление:\n\n{message}")
                 sent += 1
                 await asyncio.sleep(0.1)
             except:
                 pass
         
-        await update.message.reply_text(f"✅ Отправлено: {sent}")
+        await update.message.reply_text(f"✅ Рассылка завершена. Отправлено: {sent}")
     
     async def users_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not self.is_creator(update.effective_user.id):
@@ -1196,18 +1319,19 @@ Gemini: {"✅" if self.gemini_model else "❌"}"""
         
         users = self.db.get_all_users()
         if not users:
-            await update.message.reply_text("👥 Пользователей нет!")
+            await update.message.reply_text("👥 Нет пользователей!")
             return
         
-        text = "👥 ПОЛЬЗОВАТЕЛИ:\n\n"
+        text = "👥 **Список пользователей:**\n\n"
         for u in users[:20]:
             vip = "💎" if u.is_vip else "👤"
-            text += f"{vip} {u.first_name} (ID: {u.user_id})\n"
+            text += f"{vip} {u.first_name} (@{u.username or 'нет'}) ID: {u.user_id}\n"
         
         if len(users) > 20:
-            text += f"\n... +{len(users) - 20}"
+            text += f"\n... и ещё {len(users) - 20}"
         
-        await update.message.reply_text(text)
+        reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Админ", callback_data="admin")]])
+        await update.message.reply_text(text, reply_markup=reply_markup)
     
     async def stats_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_data = await self.get_user_data(update)
@@ -1219,25 +1343,29 @@ Gemini: {"✅" if self.gemini_model else "❌"}"""
             self.db.cursor.execute('SELECT COUNT(*) FROM conversations')
             msgs = self.db.cursor.fetchone()[0]
             
-            text = f"""📊 СТАТИСТИКА БОТА
+            text = f"""📊 **Статистика бота**
 
 👥 Пользователей: {len(users)}
 💎 VIP: {vip}
 💬 Сообщений: {msgs}
-⚡ {datetime.datetime.now().strftime('%d.%m.%Y %H:%M')}"""
+⚡ Дата: {datetime.datetime.now().strftime('%d.%m.%Y %H:%M')}
+"""
+            reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Админ", callback_data="admin")]])
         else:
             conv = len(self.db.get_conversation(user_data.user_id))
             
-            text = f"""📊 СТАТИСТИКА
+            text = f"""📊 **Ваша статистика**
 
 👤 {user_data.first_name}
 🆙 Уровень: {user_data.level}
 ⭐ Опыт: {user_data.experience}
-💬 История: {conv} сообщений
+💬 Сообщений в диалоге: {conv}
 📝 Заметок: {len(user_data.notes)}
-🧠 Памяти: {len(user_data.memory_data)}"""
+🧠 Записей в памяти: {len(user_data.memory_data)}
+"""
+            reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Меню", callback_data="start")]])
         
-        await update.message.reply_text(text)
+        await update.message.reply_text(text, reply_markup=reply_markup)
     
     async def maintenance_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not self.is_creator(update.effective_user.id):
@@ -1246,16 +1374,18 @@ Gemini: {"✅" if self.gemini_model else "❌"}"""
         
         if not context.args:
             status = "включен" if self.maintenance_mode else "выключен"
-            await update.message.reply_text(f"🛠 Режим: {status}")
+            text = f"🛠 **Режим обслуживания:** {status}"
+            reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Админ", callback_data="admin")]])
+            await update.message.reply_text(text, reply_markup=reply_markup)
             return
         
         mode = context.args[0].lower()
         if mode in ['on', 'вкл']:
             self.maintenance_mode = True
-            await update.message.reply_text("🛠 ВКЛЮЧЕН")
+            await update.message.reply_text("🛠 Режим обслуживания включен")
         elif mode in ['off', 'выкл']:
             self.maintenance_mode = False
-            await update.message.reply_text("✅ ВЫКЛЮЧЕН")
+            await update.message.reply_text("✅ Режим обслуживания выключен")
     
     async def backup_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not self.is_creator(update.effective_user.id):
@@ -1263,20 +1393,117 @@ Gemini: {"✅" if self.gemini_model else "❌"}"""
             return
         
         self.db._backup()
-        await update.message.reply_text("✅ Резервная копия создана!")
+        text = "✅ Резервная копия создана!\n\nФайлы: {BACKUP_PATH}, {CONVERSATIONS_FILE}"
+        await update.message.reply_text(text)
     
+    # Обработчик кнопок с расширенными меню
     async def button_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         query = update.callback_query
         await query.answer()
         
-        if query.data == "help":
+        data = query.data
+        
+        if data == "help":
             await self.help_command(Update(update_id=update.update_id, message=query.message), context)
-        elif query.data == "vip_info":
-            await query.edit_message_text("💎 VIP дает доступ к напоминаниям.\n\nСвяжитесь с @Ernest_Kostevich")
-        elif query.data == "ai_demo":
-            await query.edit_message_text("🤖 AI готов!\n\nПросто напишите сообщение!")
-        elif query.data == "my_stats":
+        elif data == "vip_info":
+            await self.vip_command(Update(update_id=update.update_id, message=query.message), context)
+        elif data == "ai_demo":
+            await query.edit_message_text("🤖 AI готов! Напишите любое сообщение для разговора.")
+        elif data == "my_stats":
             await self.stats_command(Update(update_id=update.update_id, message=query.message), context)
+        elif data == "entertainment":
+            keyboard = InlineKeyboardMarkup([
+                [InlineKeyboardButton("😄 Шутка", callback_data="joke"), InlineKeyboardButton("🧠 Факт", callback_data="fact")],
+                [InlineKeyboardButton("💫 Цитата", callback_data="quote"), InlineKeyboardButton("❓ Викторина", callback_data="quiz")],
+                [InlineKeyboardButton("🪙 Монетка", callback_data="coin"), InlineKeyboardButton("🎲 Кубик", callback_data="dice")],
+                [InlineKeyboardButton("🔮 Шар", callback_data="8ball"), InlineKeyboardButton("🔙 Меню", callback_data="start")]
+            ])
+            await query.edit_message_text("🎮 **Развлечения**", reply_markup=keyboard)
+        elif data == "utilities":
+            keyboard = InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔐 Пароль", callback_data="password"), InlineKeyboardButton("📱 QR-код", callback_data="qr")],
+                [InlineKeyboardButton("🔗 Сократить URL", callback_data="shorturl"), InlineKeyboardButton("🌍 IP", callback_data="ip")],
+                [InlineKeyboardButton("🌤️ Погода", callback_data="weather"), InlineKeyboardButton("💰 Валюта", callback_data="currency")],
+                [InlineKeyboardButton("🌐 Перевод", callback_data="translate"), InlineKeyboardButton("🧠 Память", callback_data="memory")],
+                [InlineKeyboardButton("🔢 Математика", callback_data="math_menu"), InlineKeyboardButton("🔙 Меню", callback_data="start")]
+            ])
+            await query.edit_message_text("🛠 **Утилиты**", reply_markup=keyboard)
+        elif data == "math_menu":
+            keyboard = InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔢 Простой расчет", callback_data="math"), InlineKeyboardButton("🧮 Сложный расчет", callback_data="calculate")],
+                [InlineKeyboardButton("🔙 Утилиты", callback_data="utilities")]
+            ])
+            await query.edit_message_text("🔢 **Математика**", reply_markup=keyboard)
+        elif data == "memory":
+            keyboard = InlineKeyboardMarkup([
+                [InlineKeyboardButton("Сохранить", callback_data="memorysave"), InlineKeyboardButton("Получить", callback_data="memoryget")],
+                [InlineKeyboardButton("Список", callback_data="memorylist"), InlineKeyboardButton("Удалить", callback_data="memorydel")],
+                [InlineKeyboardButton("🔙 Утилиты", callback_data="utilities")]
+            ])
+            await query.edit_message_text("🧠 **Память**", reply_markup=keyboard)
+        elif data == "joke":
+            await self.joke_command(Update(update_id=update.update_id, message=query.message), context)
+        elif data == "fact":
+            await self.fact_command(Update(update_id=update.update_id, message=query.message), context)
+        elif data == "quote":
+            await self.quote_command(Update(update_id=update.update_id, message=query.message), context)
+        elif data == "quiz":
+            await self.quiz_command(Update(update_id=update.update_id, message=query.message), context)
+        elif data == "coin":
+            await self.coin_command(Update(update_id=update.update_id, message=query.message), context)
+        elif data == "dice":
+            await self.dice_command(Update(update_id=update.update_id, message=query.message), context)
+        elif data == "8ball":
+            await update.message.reply_text("🔮 Задайте вопрос в чате!")
+        elif data == "password":
+            await update.message.reply_text("🔐 Укажите длину: /password [число]")
+        elif data == "qr":
+            await update.message.reply_text("📱 Укажите текст: /qr [текст]")
+        elif data == "shorturl":
+            await update.message.reply_text("🔗 Укажите URL: /shorturl [ссылка]")
+        elif data == "ip":
+            await self.ip_command(Update(update_id=update.update_id, message=query.message), context)
+        elif data == "weather":
+            await update.message.reply_text("🌤️ Укажите город: /weather [город]")
+        elif data == "currency":
+            await update.message.reply_text("💰 Укажите валюты: /currency [из] [в]")
+        elif data == "translate":
+            await update.message.reply_text("🌐 Укажите язык и текст: /translate [язык] [текст]")
+        elif data == "memorysave":
+            await update.message.reply_text("🧠 Укажите ключ и значение: /memorysave [ключ] [значение]")
+        elif data == "memoryget":
+            await update.message.reply_text("🧠 Укажите ключ: /memoryget [ключ]")
+        elif data == "memorylist":
+            await self.memorylist_command(Update(update_id=update.update_id, message=query.message), context)
+        elif data == "memorydel":
+            await update.message.reply_text("🧠 Укажите ключ: /memorydel [ключ]")
+        elif data == "math":
+            await update.message.reply_text("🔢 Укажите выражение: /math [выражение]")
+        elif data == "calculate":
+            await update.message.reply_text("🧮 Укажите выражение: /calculate [выражение]")
+        elif data == "notes":
+            await self.notes_command(Update(update_id=update.update_id, message=query.message), context)
+        elif data == "delnote":
+            await update.message.reply_text("🗑 Укажите номер: /delnote [номер]")
+        elif data == "time":
+            await self.time_command(Update(update_id=update.update_id, message=query.message), context)
+        elif data == "profile":
+            await self.profile_command(Update(update_id=update.update_id, message=query.message), context)
+        elif data == "reminders":
+            await self.reminders_command(Update(update_id=update.update_id, message=query.message), context)
+        elif data == "delreminder":
+            await update.message.reply_text("🗑 Укажите номер: /delreminder [номер]")
+        elif data == "change_timezone":
+            keyboard = InlineKeyboardMarkup([[InlineKeyboardButton(tz.capitalize(), callback_data=f"set_tz_{tz}") for tz in TIMEZONES]])
+            await query.edit_message_text("🌍 Выберите часовой пояс:", reply_markup=keyboard)
+        elif data.startswith("set_tz_"):
+            tz = data.split("_")[2]
+            user_data = await self.get_user_data(Update(update_id=update.update_id, message=query.message))
+            user_data.preferred_timezone = tz
+            self.db.save_user(user_data)
+            await query.edit_message_text(f"✅ Часовой пояс установлен: {tz.capitalize()}")
+        elif data == "start":
+            await self.start_command(Update(update_id=update.update_id, message=query.message), context)
     
     async def self_ping(self):
         try:
