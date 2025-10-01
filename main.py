@@ -115,7 +115,6 @@ class UserData:
     sound_notifications: bool = True
     last_activity: str = field(default_factory=lambda: datetime.datetime.now().isoformat())
 
-Ernest, [01.10.2025 03:41]
 @classmethod
     def from_dict(cls, data: Dict):
         return cls(
