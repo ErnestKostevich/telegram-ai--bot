@@ -811,7 +811,6 @@ f"🎉 Поздравляем! Вы получили VIP статус!\nДлит
         await update.message.reply_text(f"📝 Ваши заметки:\n{notes_text}")
         await self.add_experience(user_data, 1)
 
-Ernest, [01.10.2025 03:41]
 async def delnote_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_data = await self.get_user_data(update)
         self.db.log_command(user_data.user_id, "/delnote")
