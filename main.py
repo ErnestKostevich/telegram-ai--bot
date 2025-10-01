@@ -1,4 +1,3 @@
-Ernest, [01.10.2025 03:41]
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
