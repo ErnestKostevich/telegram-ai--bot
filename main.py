@@ -221,7 +221,6 @@ class DatabaseManager:
                 self.repo.update_file(path, f"Update {path}", content, file.sha)
             except:
 
-Ernest, [01.10.2025 03:41]
 self.repo.create_file(path, f"Create {path}", content)
             
             logger.info(f"Успешно сохранено в {path}")
@@ -307,7 +306,6 @@ self.repo.create_file(path, f"Create {path}", content)
 # ОСНОВНОЙ КЛАСС БОТА
 # =============================================================================
 
-Ernest, [01.10.2025 03:41]
 class TelegramBot:
     def init(self):
         self.db = DatabaseManager()
@@ -409,7 +407,6 @@ class TelegramBot:
     # БАЗОВЫЕ КОМАНДЫ
     # =============================================================================
 
-Ernest, [01.10.2025 03:41]
 async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_data = await self.get_user_data(update)
         self.db.log_command(user_data.user_id, "/start")
@@ -729,7 +726,6 @@ async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYP
                 await context.bot.send_message(
                     target_user.user_id,
 
-Ernest, [01.10.2025 03:41]
 f"🎉 Поздравляем! Вы получили VIP статус!\nДлительность: {duration}"
                 )
             except:
@@ -995,7 +991,6 @@ async def memorydel_command(self, update: Update, context: ContextTypes.DEFAULT_
         
         await self.add_experience(user_data, 2)
 
-Ernest, [01.10.2025 03:41]
 async def translate_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_data = await self.get_user_data(update)
         self.db.log_command(user_data.user_id, "/translate")
@@ -1176,7 +1171,6 @@ async def quiz_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE)
         await context.bot.send_photo(update.effective_chat.id, qr_url)
         await self.add_experience(user_data, 1)
 
-Ernest, [01.10.2025 03:41]
 async def shorturl_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_data = await self.get_user_data(update)
         self.db.log_command(user_data.user_id, "/shorturl")
@@ -1260,7 +1254,6 @@ async def shorturl_command(self, update: Update, context: ContextTypes.DEFAULT_T
         await update.message.reply_text(rank_text)
         await self.add_experience(user_data, 1)
 
-Ernest, [01.10.2025 03:41]
 # VIP команды
     
     async def vip_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1630,7 +1623,6 @@ application = (
         application.add_handler(CommandHandler("users", self.users_command))
         application.add_handler(CommandHandler("broadcast", self.broadcast_command))
 
-Ernest, [01.10.2025 03:41]
 application.add_handler(CommandHandler("maintenance", self.maintenance_command))
         application.add_handler(CommandHandler("backup", self.backup_command))
         application.add_handler(CommandHandler("stats", self.stats_command))
