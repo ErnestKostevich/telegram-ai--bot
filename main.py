@@ -904,7 +904,6 @@ async def delnote_command(self, update: Update, context: ContextTypes.DEFAULT_TY
         await update.message.reply_text(f"🧠 Ваша память:\n{memory_text}")
         await self.add_experience(user_data, 1)
 
-Ernest, [01.10.2025 03:41]
 async def memorydel_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_data = await self.get_user_data(update)
         self.db.log_command(user_data.user_id, "/memorydel")
@@ -1557,7 +1556,6 @@ Ernest, [01.10.2025 03:41]
             logger.error("BOT_TOKEN не найден!")
             return
 
-Ernest, [01.10.2025 03:41]
 application = (
             Application.builder()
             .token(BOT_TOKEN)
