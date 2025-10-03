@@ -10,34 +10,36 @@ import asyncio
 from datetime import datetime, timedelta
 from typing import Dict, Optional
 import pytz
-from threading import Thread
-import requests  # Added for potential keep-awake, but note: self-ping may not prevent sleep on all hosts
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 from telegram.constants import ParseMode
+from telegram.error import TelegramError
 
 import google.generativeai as genai
 import aiohttp
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
-from flask import Flask
+from flask import Flask, request, Response
 
+# Environment variables
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
-PORT = int(os.getenv('PORT', 5000))
-APP_URL = os.getenv('APP_URL')  # Set this environment variable to your app's public URL, e.g., https://your-app-name.onrender.com
+PORT = int(os.getenv('PORT', 8443))  # Default to 8443 for webhooks
+APP_URL = os.getenv('APP_URL')  # e.g., https://your-app-name.onrender.com
 
 CREATOR_USERNAME = "Ernest_Kostevich"
 CREATOR_ID = None
 BOT_START_TIME = datetime.now()
 
+# Logging configuration
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
+# Gemini AI configuration
 genai.configure(api_key=GEMINI_API_KEY)
 
 generation_config = {
@@ -55,13 +57,15 @@ safety_settings = [
 ]
 
 model = genai.GenerativeModel(
-    model_name='gemini-2.5-flash',  # Updated to Gemini 2.5 Flash
+    model_name='gemini-2.5-flash',
     generation_config=generation_config,
     safety_settings=safety_settings,
     system_instruction="You are AI DISCO BOT, a friendly and helpful AI assistant built with Gemini 2.5. Respond in a friendly, engaging manner with emojis where appropriate. Your creator is @Ernest_Kostevich."
 )
 
+# Flask app for webhook
 flask_app = Flask(__name__)
+application = None  # Will be initialized in main()
 
 @flask_app.route('/')
 def health_check():
@@ -71,8 +75,15 @@ def health_check():
 def health():
     return 'Healthy', 200
 
-def run_flask():
-    flask_app.run(host='0.0.0.0', port=PORT)
+@flask_app.route(f'/webhook/{BOT_TOKEN}', methods=['POST'])
+async def webhook():
+    try:
+        update = Update.de_json(request.get_json(force=True), application.bot)
+        await application.process_update(update)
+        return Response(status=200)
+    except Exception as e:
+        logger.error(f"Webhook error: {e}")
+        return Response(status=500)
 
 class DataStorage:
     def __init__(self):
@@ -139,10 +150,8 @@ class DataStorage:
         identifier = identifier.strip()
         if identifier.startswith('@'):
             identifier = identifier[1:]
-        
         if identifier.isdigit():
             return int(identifier)
-        
         return self.username_to_id.get(identifier.lower())
 
     def get_user(self, user_id: int) -> Dict:
@@ -215,13 +224,10 @@ def get_main_keyboard(user_id: int) -> ReplyKeyboardMarkup:
         [KeyboardButton("🌍 Погода"), KeyboardButton("⏰ Время")],
         [KeyboardButton("🎲 Развлечения"), KeyboardButton("ℹ️ Инфо")]
     ]
-
     if storage.is_vip(user_id):
         keyboard.append([KeyboardButton("💎 VIP Меню")])
-
     if is_creator(user_id):
         keyboard.append([KeyboardButton("👑 Админ Панель")])
-
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
 def format_user_info(user: Dict) -> str:
@@ -229,18 +235,15 @@ def format_user_info(user: Dict) -> str:
     info += f"🆔 <b>ID:</b> <code>{user['id']}</code>\n"
     if user.get('username'):
         info += f"📱 <b>Username:</b> @{user['username']}\n"
-
     info += f"📅 <b>Зарегистрирован:</b> {user['registered'][:10]}\n"
     info += f"📊 <b>Сообщений:</b> {user['messages_count']}\n"
     info += f"🎯 <b>Команд:</b> {user['commands_count']}\n"
-
     if user['vip']:
         if user['vip_until']:
             vip_until = datetime.fromisoformat(user['vip_until'])
             info += f"💎 <b>VIP до:</b> {vip_until.strftime('%d.%m.%Y %H:%M')}\n"
         else:
             info += f"💎 <b>VIP:</b> Навсегда ♾️\n"
-
     return info
 
 async def get_weather_data(city: str) -> Optional[Dict]:
@@ -257,9 +260,7 @@ async def get_weather_data(city: str) -> Optional[Dict]:
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-
     identify_creator(user)
-
     user_data = storage.get_user(user.id)
     storage.update_user(user.id, {
         'username': user.username or '',
@@ -391,7 +392,6 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     stats = storage.stats
     total_users = len(storage.users)
     vip_users = sum(1 for u in storage.users.values() if u['vip'])
-
     uptime = datetime.now() - datetime.fromisoformat(stats.get('start_date', datetime.now().isoformat()))
     uptime_str = f"{uptime.days}д {uptime.seconds // 3600}ч {(uptime.seconds % 3600) // 60}м"
 
@@ -418,14 +418,11 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     user = storage.get_user(user_id)
-
     profile_text = format_user_info(user)
     profile_text += f"\n📝 <b>Заметок:</b> {len(user['notes'])}\n"
     profile_text += f"🧠 <b>Записей в памяти:</b> {len(user['memory'])}\n"
-
     if storage.is_vip(user_id):
         profile_text += f"⏰ <b>Напоминаний:</b> {len(user['reminders'])}\n"
-
     await update.message.reply_text(profile_text, parse_mode=ParseMode.HTML)
 
 async def uptime_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -448,21 +445,18 @@ async def uptime_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def ai_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-
     if not context.args:
         await update.message.reply_text(
             "❓ Использование: /ai [ваш вопрос]\n\n"
             "Пример: /ai Расскажи интересный факт"
         )
         return
-
     question = ' '.join(context.args)
     await process_ai_message(update, question, user_id)
 
 async def clear_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     storage.clear_chat_session(user_id)
-
     await update.message.reply_text(
         "🧹 Контекст диалога очищен! Начнём с чистого листа."
     )
@@ -470,18 +464,11 @@ async def clear_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def process_ai_message(update: Update, text: str, user_id: int):
     try:
         await update.message.chat.send_action("typing")
-
         chat = storage.get_chat_session(user_id)
         response = chat.send_message(text)
-        
         storage.stats['ai_requests'] = storage.stats.get('ai_requests', 0) + 1
         storage.save_stats()
-        
-        await update.message.reply_text(
-            response.text,
-            parse_mode=ParseMode.HTML
-        )
-        
+        await update.message.reply_text(response.text, parse_mode=ParseMode.HTML)
     except Exception as e:
         logger.error(f"AI error: {e}")
         await update.message.reply_text(
@@ -490,44 +477,35 @@ async def process_ai_message(update: Update, text: str, user_id: int):
 
 async def memory_save_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-
     if len(context.args) < 2:
         await update.message.reply_text(
             "❓ Использование: /memorysave [ключ] [значение]\n\n"
             "Пример: /memorysave любимый_цвет синий"
         )
         return
-
     key = context.args[0]
     value = ' '.join(context.args[1:])
-
     user = storage.get_user(user_id)
     user['memory'][key] = value
     storage.save_users()
-
     await update.message.reply_text(
-        f"✅ Сохранено в память:\n"
-        f"🔑 <b>{key}</b> = <code>{value}</code>",
+        f"✅ Сохранено в память:\n🔑 <b>{key}</b> = <code>{value}</code>",
         parse_mode=ParseMode.HTML
     )
 
 async def memory_get_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-
     if not context.args:
         await update.message.reply_text(
             "❓ Использование: /memoryget [ключ]\n\n"
             "Пример: /memoryget любимый_цвет"
         )
         return
-
     key = context.args[0]
     user = storage.get_user(user_id)
-
     if key in user['memory']:
         await update.message.reply_text(
-            f"🔍 Найдено:\n"
-            f"🔑 <b>{key}</b> = <code>{user['memory'][key]}</code>",
+            f"🔍 Найдено:\n🔑 <b>{key}</b> = <code>{user['memory'][key]}</code>",
             parse_mode=ParseMode.HTML
         )
     else:
@@ -536,30 +514,24 @@ async def memory_get_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
 async def memory_list_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     user = storage.get_user(user_id)
-
     if not user['memory']:
         await update.message.reply_text("📭 Ваша память пуста.")
         return
-
     memory_text = "🧠 <b>Ваша память:</b>\n\n"
     for key, value in user['memory'].items():
         memory_text += f"🔑 <b>{key}</b>: <code>{value}</code>\n"
-
     await update.message.reply_text(memory_text, parse_mode=ParseMode.HTML)
 
 async def memory_del_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-
     if not context.args:
         await update.message.reply_text(
             "❓ Использование: /memorydel [ключ]\n\n"
             "Пример: /memorydel любимый_цвет"
         )
         return
-
     key = context.args[0]
     user = storage.get_user(user_id)
-
     if key in user['memory']:
         del user['memory'][key]
         storage.save_users()
@@ -569,67 +541,49 @@ async def memory_del_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 async def note_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-
     if not context.args:
         await update.message.reply_text(
             "❓ Использование: /note [текст заметки]\n\n"
             "Пример: /note Купить молоко"
         )
         return
-
     note_text = ' '.join(context.args)
     user = storage.get_user(user_id)
-
-    note = {
-        'text': note_text,
-        'created': datetime.now().isoformat()
-    }
-
+    note = {'text': note_text, 'created': datetime.now().isoformat()}
     user['notes'].append(note)
     storage.save_users()
-
     await update.message.reply_text(
-        f"✅ Заметка #{len(user['notes'])} сохранена!\n\n"
-        f"📝 {note_text}"
+        f"✅ Заметка #{len(user['notes'])} сохранена!\n\n📝 {note_text}"
     )
 
 async def notes_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     user = storage.get_user(user_id)
-
     if not user['notes']:
         await update.message.reply_text("📭 У вас пока нет заметок.")
         return
-
     notes_text = f"📝 <b>Ваши заметки ({len(user['notes'])}):</b>\n\n"
-
     for i, note in enumerate(user['notes'], 1):
         created = datetime.fromisoformat(note['created'])
-        notes_text += f"<b>#{i}</b> ({created.strftime('%d.%m.%Y %H:%M')})\n"
-        notes_text += f"{note['text']}\n\n"
-
+        notes_text += f"<b>#{i}</b> ({created.strftime('%d.%m.%Y %H:%M')})\n{note['text']}\n\n"
     await update.message.reply_text(notes_text, parse_mode=ParseMode.HTML)
 
 async def delnote_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-
     if not context.args:
         await update.message.reply_text(
             "❓ Использование: /delnote [номер]\n\n"
             "Пример: /delnote 1"
         )
         return
-
     try:
         note_num = int(context.args[0])
         user = storage.get_user(user_id)
-        
         if 1 <= note_num <= len(user['notes']):
             deleted_note = user['notes'].pop(note_num - 1)
             storage.save_users()
             await update.message.reply_text(
-                f"✅ Заметка #{note_num} удалена:\n\n"
-                f"📝 {deleted_note['text']}"
+                f"✅ Заметка #{note_num} удалена:\n\n📝 {deleted_note['text']}"
             )
         else:
             await update.message.reply_text(f"❌ Заметка #{note_num} не найдена.")
@@ -638,30 +592,19 @@ async def delnote_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def time_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     city = ' '.join(context.args) if context.args else 'Moscow'
-
     timezones = {
-        'moscow': 'Europe/Moscow',
-        'london': 'Europe/London',
-        'new york': 'America/New_York',
-        'tokyo': 'Asia/Tokyo',
-        'paris': 'Europe/Paris',
-        'berlin': 'Europe/Berlin',
-        'dubai': 'Asia/Dubai',
-        'sydney': 'Australia/Sydney',
-        'los angeles': 'America/Los_Angeles',
+        'moscow': 'Europe/Moscow', 'london': 'Europe/London', 'new york': 'America/New_York',
+        'tokyo': 'Asia/Tokyo', 'paris': 'Europe/Paris', 'berlin': 'Europe/Berlin',
+        'dubai': 'Asia/Dubai', 'sydney': 'Australia/Sydney', 'los angeles': 'America/Los_Angeles',
         'beijing': 'Asia/Shanghai'
     }
-
     city_lower = city.lower()
     tz_name = timezones.get(city_lower, 'Europe/Moscow')
-
     try:
         tz = pytz.timezone(tz_name)
         current_time = datetime.now(tz)
-        
         time_text = f"""
 ⏰ <b>Текущее время</b>
-
 📍 <b>Город:</b> {city.title()}
 🕐 <b>Время:</b> {current_time.strftime('%H:%M:%S')}
 📅 <b>Дата:</b> {current_time.strftime('%d.%m.%Y')}
@@ -677,19 +620,15 @@ async def time_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def weather_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     city = ' '.join(context.args) if context.args else 'Moscow'
-
     try:
         weather_data = await get_weather_data(city)
-        
         if weather_data and 'current_condition' in weather_data:
             current = weather_data['current_condition'][0]
-            
             temp_c = current['temp_C']
             feels_like = current['FeelsLikeC']
             description = current['weatherDesc'][0]['value']
             humidity = current['humidity']
             wind_speed = current['windspeedKmph']
-            
             weather_emojis = {
                 'Sunny': '☀️', 'Clear': '🌙', 'Partly cloudy': '⛅',
                 'Cloudy': '☁️', 'Overcast': '☁️', 'Mist': '🌫️',
@@ -698,12 +637,9 @@ async def weather_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 'Patchy snow possible': '🌨️', 'Light snow': '❄️',
                 'Moderate snow': '❄️', 'Heavy snow': '❄️'
             }
-            
             emoji = weather_emojis.get(description, '🌤️')
-            
             weather_text = f"""
 {emoji} <b>Погода в {city.title()}</b>
-
 🌡 <b>Температура:</b> {temp_c}°C
 🤔 <b>Ощущается как:</b> {feels_like}°C
 ☁️ <b>Описание:</b> {description}
@@ -724,19 +660,13 @@ async def translate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Пример: /translate en Привет, как дела?"
         )
         return
-
     target_lang = context.args[0]
     text = ' '.join(context.args[1:])
-
     try:
         prompt = f"Переведи следующий текст на {target_lang}: {text}"
         chat = storage.get_chat_session(update.effective_user.id)
         response = chat.send_message(prompt)
-        
-        await update.message.reply_text(
-            f"🌐 <b>Перевод:</b>\n\n{response.text}",
-            parse_mode=ParseMode.HTML
-        )
+        await update.message.reply_text(f"🌐 <b>Перевод:</b>\n\n{response.text}", parse_mode=ParseMode.HTML)
     except Exception as e:
         logger.error(f"Translation error: {e}")
         await update.message.reply_text("❌ Ошибка при переводе текста.")
@@ -749,11 +679,9 @@ async def random_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             min_val = 1
             max_val = 100
-
         result = random.randint(min_val, max_val)
         await update.message.reply_text(
-            f"🎲 Случайное число от {min_val} до {max_val}:\n\n"
-            f"<b>{result}</b>",
+            f"🎲 Случайное число от {min_val} до {max_val}:\n\n<b>{result}</b>",
             parse_mode=ParseMode.HTML
         )
     except ValueError:
@@ -762,20 +690,16 @@ async def random_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def dice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     result = random.randint(1, 6)
     dice_emoji = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'][result - 1]
-
     await update.message.reply_text(
-        f"🎲 Бросаем кубик...\n\n"
-        f"{dice_emoji} Выпало: <b>{result}</b>",
+        f"🎲 Бросаем кубик...\n\n{dice_emoji} Выпало: <b>{result}</b>",
         parse_mode=ParseMode.HTML
     )
 
 async def coin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     result = random.choice(['Орёл', 'Решка'])
     emoji = '🦅' if result == 'Орёл' else '💰'
-
     await update.message.reply_text(
-        f"🪙 Подбрасываем монету...\n\n"
-        f"{emoji} Выпало: <b>{result}</b>",
+        f"🪙 Подбрасываем монету...\n\n{emoji} Выпало: <b>{result}</b>",
         parse_mode=ParseMode.HTML
     )
 
@@ -785,11 +709,8 @@ async def joke_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "— Почему программисты путают Хэллоуин и Рождество? — Потому что 31 OCT = 25 DEC! 🎃🎄",
         "Зачем программисту очки? Чтобы лучше C++! 👓",
         "Искусственный интеллект никогда не заменит человека. Он слишком умный для этого! 🤖",
-        "— Сколько программистов нужно, чтобы вкрутить лампочку? — Ни одного, это аппаратная проблема! 💡",
-        "Жена программиста просит: — Сходи в магазин, купи батон хлеба, и если будут яйца — возьми десяток. Он приходит с 10 батонами. — Зачем?! — Ну, яйца же были! 🥚",
-        "— Что такое рекурсия? — Чтобы понять что такое рекурсия, нужно сначала понять что такое рекурсия… 🔄"
+        "— Сколько программистов нужно, чтобы вкрутить лампочку? — Ни одного, это аппаратная проблема! 💡"
     ]
-
     joke = random.choice(jokes)
     await update.message.reply_text(f"😄 <b>Шутка дня:</b>\n\n{joke}", parse_mode=ParseMode.HTML)
 
@@ -798,12 +719,8 @@ async def quote_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Единственный способ сделать великую работу — любить то, что вы делаете. — Стив Джобс",
         "Инновация отличает лидера от последователя. — Стив Джобс",
         "Программирование — это искусство превращать кофе в код. — Неизвестный автор",
-        "Лучший код — это отсутствие кода. — Джефф Этвуд",
-        "Сначала сделай это, потом сделай правильно, потом сделай лучше. — Адди Османи",
-        "Простота — залог надёжности. — Эдсгер Дейкстра",
-        "Любой дурак может написать код, который поймёт компьютер. Хорошие программисты пишут код, который поймут люди. — Мартин Фаулер"
+        "Лучший код — это отсутствие кода. — Джефф Этвуд"
     ]
-
     quote = random.choice(quotes)
     await update.message.reply_text(f"💭 <b>Цитата:</b>\n\n<i>{quote}</i>", parse_mode=ParseMode.HTML)
 
@@ -812,112 +729,71 @@ async def fact_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🌍 Земля — единственная планета Солнечной системы, названная не в честь бога.",
         "🐙 У осьминогов три сердца и голубая кровь.",
         "🍯 Мёд — единственный продукт питания, который не портится тысячи лет.",
-        "💎 Алмазы формируются на глубине около 150 км под землёй.",
-        "🧠 Человеческий мозг потребляет около 20% всей энергии тела.",
-        "🌊 95% мирового океана остаются неисследованными.",
-        "⚡ Молния в 5 раз горячее поверхности Солнца.",
-        "🦈 Акулы существуют дольше, чем деревья — более 400 миллионов лет!"
+        "💎 Алмазы формируются на глубине около 150 км под землёй."
     ]
-
     fact = random.choice(facts)
     await update.message.reply_text(f"🔬 <b>Интересный факт:</b>\n\n{fact}", parse_mode=ParseMode.HTML)
 
 async def vip_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     user = storage.get_user(user_id)
-
     if storage.is_vip(user_id):
-        vip_text = "💎 <b>VIP СТАТУС</b>\n\n"
-        vip_text += "✅ У вас активен VIP статус!\n\n"
-        
+        vip_text = "💎 <b>VIP СТАТУС</b>\n\n✅ У вас активен VIP статус!\n\n"
         if user['vip_until']:
             vip_until = datetime.fromisoformat(user['vip_until'])
             vip_text += f"⏰ <b>Активен до:</b> {vip_until.strftime('%d.%m.%Y %H:%M')}\n\n"
         else:
             vip_text += "⏰ <b>Активен:</b> Навсегда ♾️\n\n"
-        
-        vip_text += "<b>🎁 Преимущества VIP:</b>\n"
-        vip_text += "• ⏰ Система напоминаний\n"
-        vip_text += "• 🎯 Приоритетная обработка\n"
-        vip_text += "• 🚀 Расширенные возможности\n"
-        vip_text += "• 💬 Увеличенный контекст AI\n"
+        vip_text += "<b>🎁 Преимущества VIP:</b>\n• ⏰ Система напоминаний\n• 🎯 Приоритетная обработка\n• 🚀 Расширенные возможности\n• 💬 Увеличенный контекст AI\n"
     else:
-        vip_text = "💎 <b>VIP СТАТУС</b>\n\n"
-        vip_text += "❌ У вас нет VIP статуса.\n\n"
-        vip_text += "Свяжитесь с @Ernest_Kostevich для получения VIP."
-
+        vip_text = "💎 <b>VIP СТАТУС</b>\n\n❌ У вас нет VIP статуса.\n\nСвяжитесь с @Ernest_Kostevich для получения VIP."
     await update.message.reply_text(vip_text, parse_mode=ParseMode.HTML)
 
 async def remind_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-
     if not storage.is_vip(user_id):
         await update.message.reply_text(
-            "💎 Эта команда доступна только VIP пользователям.\n"
-            "Свяжитесь с @Ernest_Kostevich для получения VIP."
+            "💎 Эта команда доступна только VIP пользователям.\nСвяжитесь с @Ernest_Kostevich для получения VIP."
         )
         return
-
     if len(context.args) < 2:
         await update.message.reply_text(
-            "❓ Использование: /remind [минуты] [текст]\n\n"
-            "Пример: /remind 30 Проверить почту"
+            "❓ Использование: /remind [минуты] [текст]\n\nПример: /remind 30 Проверить почту"
         )
         return
-
     try:
         minutes = int(context.args[0])
         text = ' '.join(context.args[1:])
-        
         remind_time = datetime.now() + timedelta(minutes=minutes)
-        
         user = storage.get_user(user_id)
-        reminder = {
-            'text': text,
-            'time': remind_time.isoformat(),
-            'created': datetime.now().isoformat()
-        }
-        
+        reminder = {'text': text, 'time': remind_time.isoformat(), 'created': datetime.now().isoformat()}
         user['reminders'].append(reminder)
         storage.save_users()
-        
         scheduler.add_job(
             send_reminder,
             'date',
             run_date=remind_time,
             args=[context.bot, user_id, text]
         )
-        
         await update.message.reply_text(
-            f"⏰ Напоминание создано!\n\n"
-            f"📝 {text}\n"
-            f"🕐 Напомню через {minutes} минут ({remind_time.strftime('%H:%M')})"
+            f"⏰ Напоминание создано!\n\n📝 {text}\n🕐 Напомню через {minutes} минут ({remind_time.strftime('%H:%M')})"
         )
     except ValueError:
         await update.message.reply_text("❌ Укажите корректное количество минут.")
 
 async def reminders_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-
     if not storage.is_vip(user_id):
-        await update.message.reply_text(
-            "💎 Эта команда доступна только VIP пользователям."
-        )
+        await update.message.reply_text("💎 Эта команда доступна только VIP пользователям.")
         return
-
     user = storage.get_user(user_id)
-
     if not user['reminders']:
         await update.message.reply_text("📭 У вас нет активных напоминаний.")
         return
-
     reminders_text = f"⏰ <b>Ваши напоминания ({len(user['reminders'])}):</b>\n\n"
-
     for i, reminder in enumerate(user['reminders'], 1):
         remind_time = datetime.fromisoformat(reminder['time'])
-        reminders_text += f"<b>#{i}</b> {remind_time.strftime('%d.%m %H:%M')}\n"
-        reminders_text += f"📝 {reminder['text']}\n\n"
-
+        reminders_text += f"<b>#{i}</b> {remind_time.strftime('%d.%m %H:%M')}\n📝 {reminder['text']}\n\n"
     await update.message.reply_text(reminders_text, parse_mode=ParseMode.HTML)
 
 async def send_reminder(bot, user_id: int, text: str):
@@ -927,7 +803,6 @@ async def send_reminder(bot, user_id: int, text: str):
             text=f"⏰ <b>НАПОМИНАНИЕ</b>\n\n📝 {text}",
             parse_mode=ParseMode.HTML
         )
-
         user = storage.get_user(user_id)
         user['reminders'] = [r for r in user['reminders'] if r['text'] != text]
         storage.save_users()
@@ -939,40 +814,24 @@ async def grant_vip_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_creator(update.effective_user.id):
         await update.message.reply_text("❌ Эта команда доступна только создателю.")
         return
-
     if len(context.args) < 2:
         await update.message.reply_text(
-            "❓ Использование: /grant_vip [id/@username] [срок]\n\n"
-            "Сроки: week, month, year, forever\n"
-            "Пример: /grant_vip @username month\n"
-            "Пример: /grant_vip 123456789 forever"
+            "❓ Использование: /grant_vip [id/@username] [срок]\n\nСроки: week, month, year, forever\nПример: /grant_vip @username month"
         )
         return
-
     try:
         identifier = context.args[0]
         duration = context.args[1].lower()
-        
         target_id = storage.get_user_id_by_identifier(identifier)
-        
         if not target_id:
             await update.message.reply_text(f"❌ Пользователь '{identifier}' не найден.")
             return
-        
-        durations = {
-            'week': timedelta(weeks=1),
-            'month': timedelta(days=30),
-            'year': timedelta(days=365),
-            'forever': None
-        }
-        
+        durations = {'week': timedelta(weeks=1), 'month': timedelta(days=30), 'year': timedelta(days=365), 'forever': None}
         if duration not in durations:
             await update.message.reply_text("❌ Неверный срок. Используйте: week, month, year, forever")
             return
-        
         user = storage.get_user(target_id)
         user['vip'] = True
-        
         if durations[duration]:
             vip_until = datetime.now() + durations[duration]
             user['vip_until'] = vip_until.isoformat()
@@ -980,19 +839,12 @@ async def grant_vip_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             user['vip_until'] = None
             duration_text = "навсегда"
-        
         storage.save_users()
-        
         username_info = f"@{user['username']}" if user.get('username') else ""
-        
         await update.message.reply_text(
-            f"✅ VIP статус выдан!\n\n"
-            f"👤 {user.get('first_name', 'Unknown')} {username_info}\n"
-            f"🆔 ID: <code>{target_id}</code>\n"
-            f"⏰ Срок: {duration_text}",
+            f"✅ VIP статус выдан!\n\n👤 {user.get('first_name', 'Unknown')} {username_info}\n🆔 ID: <code>{target_id}</code>\n⏰ Срок: {duration_text}",
             parse_mode=ParseMode.HTML
         )
-        
         try:
             await context.bot.send_message(
                 chat_id=target_id,
@@ -1001,7 +853,6 @@ async def grant_vip_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         except:
             pass
-            
     except Exception as e:
         logger.error(f"Grant VIP error: {e}")
         await update.message.reply_text(f"❌ Ошибка: {str(e)}")
@@ -1011,34 +862,24 @@ async def revoke_vip_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if not is_creator(update.effective_user.id):
         await update.message.reply_text("❌ Эта команда доступна только создателю.")
         return
-
     if not context.args:
         await update.message.reply_text(
-            "❓ Использование: /revoke_vip [id/@username]\n\n"
-            "Пример: /revoke_vip @username\n"
-            "Пример: /revoke_vip 123456789"
+            "❓ Использование: /revoke_vip [id/@username]\n\nПример: /revoke_vip @username"
         )
         return
-
     try:
         identifier = context.args[0]
         target_id = storage.get_user_id_by_identifier(identifier)
-        
         if not target_id:
             await update.message.reply_text(f"❌ Пользователь '{identifier}' не найден.")
             return
-        
         user = storage.get_user(target_id)
         user['vip'] = False
         user['vip_until'] = None
         storage.save_users()
-        
         username_info = f"@{user['username']}" if user.get('username') else ""
-        
         await update.message.reply_text(
-            f"✅ VIP статус отозван!\n\n"
-            f"👤 {user.get('first_name', 'Unknown')} {username_info}\n"
-            f"🆔 ID: <code>{target_id}</code>",
+            f"✅ VIP статус отозван!\n\n👤 {user.get('first_name', 'Unknown')} {username_info}\n�ID: <code>{target_id}</code>",
             parse_mode=ParseMode.HTML
         )
     except Exception as e:
@@ -1050,18 +891,14 @@ async def users_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_creator(update.effective_user.id):
         await update.message.reply_text("❌ Эта команда доступна только создателю.")
         return
-
     users_text = f"👥 <b>СПИСОК ПОЛЬЗОВАТЕЛЕЙ ({len(storage.users)}):</b>\n\n"
-
     for user_id, user in list(storage.users.items())[:20]:
         vip_badge = "💎" if user['vip'] else ""
         users_text += f"{vip_badge} <code>{user_id}</code> - {user.get('first_name', 'Unknown')}\n"
         if user.get('username'):
             users_text += f"   @{user['username']}\n"
-
     if len(storage.users) > 20:
         users_text += f"\n<i>... и ещё {len(storage.users) - 20} пользователей</i>"
-
     await update.message.reply_text(users_text, parse_mode=ParseMode.HTML)
 
 async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1069,25 +906,19 @@ async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_creator(update.effective_user.id):
         await update.message.reply_text("❌ Эта команда доступна только создателю.")
         return
-
     if not context.args:
         await update.message.reply_text(
-            "❓ Использование: /broadcast [текст сообщения]\n\n"
-            "Пример: /broadcast Привет всем!"
+            "❓ Использование: /broadcast [текст сообщения]\n\nПример: /broadcast Привет всем!"
         )
         return
-
     message_text = ' '.join(context.args)
-
     success = 0
     failed = 0
-
     status_msg = await update.message.reply_text("📤 Начинаю рассылку...")
-
     for user_id in storage.users.keys():
         try:
             await context.bot.send_message(
-                chat_id=user_id,
+                chat_id=int(user_id),
                 text=f"📢 <b>Сообщение от создателя:</b>\n\n{message_text}",
                 parse_mode=ParseMode.HTML
             )
@@ -1096,48 +927,35 @@ async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             failed += 1
             logger.error(f"Broadcast error for {user_id}: {e}")
-
-    await status_msg.edit_text(
-        f"✅ Рассылка завершена!\n\n"
-        f"✅ Успешно: {success}\n"
-        f"❌ Ошибок: {failed}"
-    )
+    await status_msg.edit_text(f"✅ Рассылка завершена!\n\n✅ Успешно: {success}\n❌ Ошибок: {failed}")
 
 async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     identify_creator(update.effective_user)
     if not is_creator(update.effective_user.id):
         await update.message.reply_text("❌ Эта команда доступна только создателю.")
         return
-
     stats = storage.stats
     total_users = len(storage.users)
     vip_users = sum(1 for u in storage.users.values() if u['vip'])
     active_users = sum(1 for u in storage.users.values() 
                       if (datetime.now() - datetime.fromisoformat(u['last_active'])).days < 7)
-
     total_notes = sum(len(u['notes']) for u in storage.users.values())
     total_memory = sum(len(u['memory']) for u in storage.users.values())
-
     stats_text = f"""
 📊 <b>ПОЛНАЯ СТАТИСТИКА</b>
-
 <b>👥 Пользователи:</b>
 • Всего: {total_users}
 • VIP: {vip_users}
 • Активных (7 дней): {active_users}
-
 <b>📈 Активность:</b>
 • Сообщений: {stats.get('total_messages', 0)}
 • Команд: {stats.get('total_commands', 0)}
 • AI запросов: {stats.get('ai_requests', 0)}
-
 <b>📝 Данные:</b>
 • Заметок: {total_notes}
 • Записей в памяти: {total_memory}
-
 <b>📅 Запущен:</b> {stats.get('start_date', 'N/A')[:10]}
 """
-
     await update.message.reply_text(stats_text, parse_mode=ParseMode.HTML)
 
 async def backup_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1145,26 +963,16 @@ async def backup_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_creator(update.effective_user.id):
         await update.message.reply_text("❌ Эта команда доступна только создателю.")
         return
-
     try:
-        backup_data = {
-            'users': storage.users,
-            'stats': storage.stats,
-            'backup_date': datetime.now().isoformat()
-        }
-        
+        backup_data = {'users': storage.users, 'stats': storage.stats, 'backup_date': datetime.now().isoformat()}
         backup_filename = f"backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-        
         with open(backup_filename, 'w', encoding='utf-8') as f:
             json.dump(backup_data, f, ensure_ascii=False, indent=2)
-        
         await update.message.reply_document(
             document=open(backup_filename, 'rb'),
             caption=f"✅ Резервная копия создана!\n\n📅 {datetime.now().strftime('%d.%m.%Y %H:%M')}"
         )
-        
         os.remove(backup_filename)
-        
     except Exception as e:
         logger.error(f"Backup error: {e}")
         await update.message.reply_text("❌ Ошибка при создании резервной копии.")
@@ -1174,7 +982,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     chat_type = update.message.chat.type
     text = update.message.text
-
     user = storage.get_user(user_id)
     storage.update_user(user_id, {
         'messages_count': user['messages_count'] + 1,
@@ -1199,73 +1006,45 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_menu_button(update: Update, context: ContextTypes.DEFAULT_TYPE, button: str):
     user_id = update.effective_user.id
-
     if button == "💬 AI Чат":
         await update.message.reply_text(
-            "🤖 <b>AI Чат режим</b>\n\n"
-            "Просто напиши мне что-нибудь, и я отвечу!\n"
-            "Используй /clear чтобы очистить контекст.",
+            "🤖 <b>AI Чат режим</b>\n\nПросто напиши мне что-нибудь, и я отвечу!\nИспользуй /clear чтобы очистить контекст.",
             parse_mode=ParseMode.HTML
         )
-
     elif button == "📝 Заметки":
         keyboard = [
             [InlineKeyboardButton("➕ Создать заметку", callback_data="note_create")],
             [InlineKeyboardButton("📋 Мои заметки", callback_data="note_list")]
         ]
         await update.message.reply_text(
-            "📝 <b>Система заметок</b>",
-            parse_mode=ParseMode.HTML,
-            reply_markup=InlineKeyboardMarkup(keyboard)
+            "📝 <b>Система заметок</b>", parse_mode=ParseMode.HTML, reply_markup=InlineKeyboardMarkup(keyboard)
         )
-
     elif button == "🌍 Погода":
         await update.message.reply_text(
-            "🌍 <b>Погода</b>\n\n"
-            "Используй: /weather [город]\n"
-            "Пример: /weather London",
-            parse_mode=ParseMode.HTML
+            "🌍 <b>Погода</b>\n\nИспользуй: /weather [город]\nПример: /weather London", parse_mode=ParseMode.HTML
         )
-
     elif button == "⏰ Время":
         await update.message.reply_text(
-            "⏰ <b>Текущее время</b>\n\n"
-            "Используй: /time [город]\n"
-            "Пример: /time Tokyo",
-            parse_mode=ParseMode.HTML
+            "⏰ <b>Текущее время</b>\n\nИспользуй: /time [город]\nПример: /time Tokyo", parse_mode=ParseMode.HTML
         )
-
     elif button == "🎲 Развлечения":
         keyboard = [
-            [InlineKeyboardButton("🎲 Кубик", callback_data="game_dice"),
-             InlineKeyboardButton("🪙 Монета", callback_data="game_coin")],
-            [InlineKeyboardButton("😄 Шутка", callback_data="game_joke"),
-             InlineKeyboardButton("💭 Цитата", callback_data="game_quote")],
+            [InlineKeyboardButton("🎲 Кубик", callback_data="game_dice"), InlineKeyboardButton("🪙 Монета", callback_data="game_coin")],
+            [InlineKeyboardButton("😄 Шутка", callback_data="game_joke"), InlineKeyboardButton("💭 Цитата", callback_data="game_quote")],
             [InlineKeyboardButton("🔬 Факт", callback_data="game_fact")]
         ]
-        await update.message.reply_text(
-            "🎲 <b>Развлечения</b>\n\nВыбери что-нибудь:",
-            parse_mode=ParseMode.HTML,
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        )
-
+        await update.message.reply_text("🎲 <b>Развлечения</b>\n\nВыбери что-нибудь:", parse_mode=ParseMode.HTML, reply_markup=InlineKeyboardMarkup(keyboard))
     elif button == "ℹ️ Инфо":
         await info_command(update, context)
-
     elif button == "💎 VIP Меню":
         if storage.is_vip(user_id):
             keyboard = [
                 [InlineKeyboardButton("⏰ Напоминания", callback_data="vip_reminders")],
                 [InlineKeyboardButton("📊 Статистика", callback_data="vip_stats")]
             ]
-            await update.message.reply_text(
-                "💎 <b>VIP Меню</b>",
-                parse_mode=ParseMode.HTML,
-                reply_markup=InlineKeyboardMarkup(keyboard)
-            )
+            await update.message.reply_text("💎 <b>VIP Меню</b>", parse_mode=ParseMode.HTML, reply_markup=InlineKeyboardMarkup(keyboard))
         else:
             await vip_command(update, context)
-
     elif button == "👑 Админ Панель":
         if is_creator(user_id):
             keyboard = [
@@ -1273,65 +1052,45 @@ async def handle_menu_button(update: Update, context: ContextTypes.DEFAULT_TYPE,
                 [InlineKeyboardButton("📊 Статистика", callback_data="admin_stats")],
                 [InlineKeyboardButton("📢 Рассылка", callback_data="admin_broadcast")]
             ]
-            await update.message.reply_text(
-                "👑 <b>Админ Панель</b>",
-                parse_mode=ParseMode.HTML,
-                reply_markup=InlineKeyboardMarkup(keyboard)
-            )
+            await update.message.reply_text("👑 <b>Админ Панель</b>", parse_mode=ParseMode.HTML, reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-
     data = query.data
     identify_creator(query.from_user)
-
     if data == "note_create":
         await query.message.reply_text(
-            "➕ <b>Создание заметки</b>\n\n"
-            "Используй: /note [текст]\n"
-            "Пример: /note Купить хлеб",
-            parse_mode=ParseMode.HTML
+            "➕ <b>Создание заметки</b>\n\nИспользуй: /note [текст]\nПример: /note Купить хлеб", parse_mode=ParseMode.HTML
         )
-
     elif data == "note_list":
         user_id = query.from_user.id
         user = storage.get_user(user_id)
-        
         if not user['notes']:
             await query.message.reply_text("📭 У вас пока нет заметок.")
             return
-        
         notes_text = f"📝 <b>Ваши заметки ({len(user['notes'])}):</b>\n\n"
-        
         for i, note in enumerate(user['notes'], 1):
             created = datetime.fromisoformat(note['created'])
-            notes_text += f"<b>#{i}</b> ({created.strftime('%d.%m.%Y %H:%M')})\n"
-            notes_text += f"{note['text']}\n\n"
-        
+            notes_text += f"<b>#{i}</b> ({created.strftime('%d.%m.%Y %H:%M')})\n{note['text']}\n\n"
         await query.message.reply_text(notes_text, parse_mode=ParseMode.HTML)
-
     elif data == "game_dice":
         result = random.randint(1, 6)
         dice_emoji = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'][result - 1]
         await query.message.reply_text(f"🎲 {dice_emoji} Выпало: <b>{result}</b>", parse_mode=ParseMode.HTML)
-
     elif data == "game_coin":
         result = random.choice(['Орёл', 'Решка'])
         emoji = '🦅' if result == 'Орёл' else '💰'
         await query.message.reply_text(f"🪙 {emoji} Выпало: <b>{result}</b>", parse_mode=ParseMode.HTML)
-
     elif data == "game_joke":
         jokes = [
             "Программист ложится спать. Жена говорит: — Дорогой, закрой окно, на улице холодно! Программист: — И что, если я закрою окно, на улице станет тепло? 😄",
             "— Почему программисты путают Хэллоуин и Рождество? — Потому что 31 OCT = 25 DEC! 🎃🎄",
             "Зачем программисту очки? Чтобы лучше C++! 👓",
-            "Искусственный интеллект никогда не заменит человека. Он слишком умный для этого! 🤖",
-            "— Сколько программистов нужно, чтобы вкрутить лампочку? — Ни одного, это аппаратная проблема! 💡"
+            "Искусственный интеллект никогда не заменит человека. Он слишком умный для этого! 🤖"
         ]
         joke = random.choice(jokes)
         await query.message.reply_text(f"😄 <b>Шутка:</b>\n\n{joke}", parse_mode=ParseMode.HTML)
-
     elif data == "game_quote":
         quotes = [
             "Единственный способ сделать великую работу — любить то, что вы делаете. — Стив Джобс",
@@ -1341,7 +1100,6 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
         quote = random.choice(quotes)
         await query.message.reply_text(f"💭 <b>Цитата:</b>\n\n<i>{quote}</i>", parse_mode=ParseMode.HTML)
-
     elif data == "game_fact":
         facts = [
             "🌍 Земля — единственная планета Солнечной системы, названная не в честь бога.",
@@ -1351,173 +1109,139 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
         fact = random.choice(facts)
         await query.message.reply_text(f"🔬 <b>Факт:</b>\n\n{fact}", parse_mode=ParseMode.HTML)
-
     elif data == "vip_reminders":
         user_id = query.from_user.id
         user = storage.get_user(user_id)
-        
         if not user['reminders']:
             await query.message.reply_text("📭 У вас нет активных напоминаний.")
             return
-        
         reminders_text = f"⏰ <b>Ваши напоминания ({len(user['reminders'])}):</b>\n\n"
-        
         for i, reminder in enumerate(user['reminders'], 1):
             remind_time = datetime.fromisoformat(reminder['time'])
-            reminders_text += f"<b>#{i}</b> {remind_time.strftime('%d.%m %H:%M')}\n"
-            reminders_text += f"📝 {reminder['text']}\n\n"
-        
+            reminders_text += f"<b>#{i}</b> {remind_time.strftime('%d.%m %H:%M')}\n📝 {reminder['text']}\n\n"
         await query.message.reply_text(reminders_text, parse_mode=ParseMode.HTML)
-
     elif data == "vip_stats":
         user_id = query.from_user.id
         user = storage.get_user(user_id)
-        
         profile_text = format_user_info(user)
-        profile_text += f"\n📝 <b>Заметок:</b> {len(user['notes'])}\n"
-        profile_text += f"🧠 <b>Записей в памяти:</b> {len(user['memory'])}\n"
-        profile_text += f"⏰ <b>Напоминаний:</b> {len(user['reminders'])}\n"
-        
+        profile_text += f"\n📝 <b>Заметок:</b> {len(user['notes'])}\n🧠 <b>Записей в памяти:</b> {len(user['memory'])}\n⏰ <b>Напоминаний:</b> {len(user['reminders'])}\n"
         await query.message.reply_text(profile_text, parse_mode=ParseMode.HTML)
-
     elif data == "admin_users":
         if not is_creator(query.from_user.id):
             await query.message.reply_text("❌ Доступ запрещён.")
             return
-        
         users_text = f"👥 <b>СПИСОК ПОЛЬЗОВАТЕЛЕЙ ({len(storage.users)}):</b>\n\n"
-        
         for user_id, user in list(storage.users.items())[:20]:
             vip_badge = "💎" if user['vip'] else ""
             users_text += f"{vip_badge} <code>{user_id}</code> - {user.get('first_name', 'Unknown')}\n"
             if user.get('username'):
                 users_text += f"   @{user['username']}\n"
-        
         if len(storage.users) > 20:
             users_text += f"\n<i>... и ещё {len(storage.users) - 20} пользователей</i>"
-        
         await query.message.reply_text(users_text, parse_mode=ParseMode.HTML)
-
     elif data == "admin_stats":
         if not is_creator(query.from_user.id):
             await query.message.reply_text("❌ Доступ запрещён.")
             return
-        
         stats = storage.stats
         total_users = len(storage.users)
         vip_users = sum(1 for u in storage.users.values() if u['vip'])
         active_users = sum(1 for u in storage.users.values() 
                           if (datetime.now() - datetime.fromisoformat(u['last_active'])).days < 7)
-        
         total_notes = sum(len(u['notes']) for u in storage.users.values())
         total_memory = sum(len(u['memory']) for u in storage.users.values())
-        
         stats_text = f"""
 📊 <b>ПОЛНАЯ СТАТИСТИКА</b>
-
 <b>👥 Пользователи:</b>
 • Всего: {total_users}
 • VIP: {vip_users}
 • Активных (7 дней): {active_users}
-
 <b>📈 Активность:</b>
 • Сообщений: {stats.get('total_messages', 0)}
 • Команд: {stats.get('total_commands', 0)}
 • AI запросов: {stats.get('ai_requests', 0)}
-
 <b>📝 Данные:</b>
 • Заметок: {total_notes}
 • Записей в памяти: {total_memory}
-
 <b>📅 Запущен:</b> {stats.get('start_date', 'N/A')[:10]}
 """
-
         await query.message.reply_text(stats_text, parse_mode=ParseMode.HTML)
-
     elif data == "admin_broadcast":
         if not is_creator(query.from_user.id):
             await query.message.reply_text("❌ Доступ запрещён.")
             return
-        
         await query.message.reply_text(
-            "📢 <b>Рассылка</b>\n\n"
-            "Используй: /broadcast [текст]\n"
-            "Пример: /broadcast Привет всем!",
-            parse_mode=ParseMode.HTML
+            "📢 <b>Рассылка</b>\n\nИспользуй: /broadcast [текст]\nПример: /broadcast Привет всем!", parse_mode=ParseMode.HTML
         )
 
 async def main():
+    global application
     if not BOT_TOKEN or not GEMINI_API_KEY:
         logger.error("Error: BOT_TOKEN or GEMINI_API_KEY not set!")
         return
-
-    flask_thread = Thread(target=run_flask, daemon=True)
-    flask_thread.start()
-    logger.info(f"Flask server started on port {PORT}")
-
-    # To prevent sleep, self-ping if APP_URL is set (but this may not work if the whole instance sleeps; better use external pinger like UptimeRobot)
-    if APP_URL:
-        def keep_awake():
-            try:
-                requests.get(APP_URL + '/health')
-                logger.info("Sent keep-awake ping")
-            except Exception as e:
-                logger.error(f"Keep-awake error: {e}")
-        
-        scheduler.add_job(keep_awake, 'interval', minutes=5)
+    if not APP_URL:
+        logger.error("Error: APP_URL not set! Webhook requires a public URL.")
+        return
 
     application = Application.builder().token(BOT_TOKEN).build()
 
+    # Register handlers
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("info", info_command))
     application.add_handler(CommandHandler("status", status_command))
     application.add_handler(CommandHandler("profile", profile_command))
     application.add_handler(CommandHandler("uptime", uptime_command))
-
     application.add_handler(CommandHandler("ai", ai_command))
     application.add_handler(CommandHandler("clear", clear_command))
-
     application.add_handler(CommandHandler("memorysave", memory_save_command))
     application.add_handler(CommandHandler("memoryget", memory_get_command))
     application.add_handler(CommandHandler("memorylist", memory_list_command))
     application.add_handler(CommandHandler("memorydel", memory_del_command))
-
     application.add_handler(CommandHandler("note", note_command))
     application.add_handler(CommandHandler("notes", notes_command))
     application.add_handler(CommandHandler("delnote", delnote_command))
-
     application.add_handler(CommandHandler("time", time_command))
     application.add_handler(CommandHandler("weather", weather_command))
     application.add_handler(CommandHandler("translate", translate_command))
-
     application.add_handler(CommandHandler("random", random_command))
     application.add_handler(CommandHandler("dice", dice_command))
     application.add_handler(CommandHandler("coin", coin_command))
     application.add_handler(CommandHandler("joke", joke_command))
     application.add_handler(CommandHandler("quote", quote_command))
     application.add_handler(CommandHandler("fact", fact_command))
-
     application.add_handler(CommandHandler("vip", vip_command))
     application.add_handler(CommandHandler("remind", remind_command))
     application.add_handler(CommandHandler("reminders", reminders_command))
-
     application.add_handler(CommandHandler("grant_vip", grant_vip_command))
     application.add_handler(CommandHandler("revoke_vip", revoke_vip_command))
     application.add_handler(CommandHandler("users", users_command))
     application.add_handler(CommandHandler("broadcast", broadcast_command))
     application.add_handler(CommandHandler("stats", stats_command))
     application.add_handler(CommandHandler("backup", backup_command))
-
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     application.add_handler(CallbackQueryHandler(handle_callback))
 
+    # Start scheduler
     scheduler.start()
+    logger.info("Scheduler started")
 
+    # Initialize application
     await application.initialize()
     await application.bot.delete_webhook(drop_pending_updates=True)
-    logger.info("Bot started successfully!")
-    application.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
+    
+    # Set webhook
+    webhook_url = f"{APP_URL}/webhook/{BOT_TOKEN}"
+    try:
+        await application.bot.set_webhook(url=webhook_url)
+        logger.info(f"Webhook set to {webhook_url}")
+    except TelegramError as e:
+        logger.error(f"Failed to set webhook: {e}")
+        return
+
+    # Start Flask server
+    flask_app.run(host='0.0.0.0', port=PORT)
+    logger.info(f"Flask server running on port {PORT}")
 
 if __name__ == '__main__':
     asyncio.run(main())
