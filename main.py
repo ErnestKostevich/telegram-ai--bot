@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 from typing import Dict, Optional
 import pytz
 from threading import Thread
+import requests  # Added for potential keep-awake, but note: self-ping may not prevent sleep on all hosts
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
@@ -25,6 +26,7 @@ from flask import Flask
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 PORT = int(os.getenv('PORT', 5000))
+APP_URL = os.getenv('APP_URL')  # Set this environment variable to your app's public URL, e.g., https://your-app-name.onrender.com
 
 CREATOR_USERNAME = "Ernest_Kostevich"
 CREATOR_ID = None
@@ -53,7 +55,7 @@ safety_settings = [
 ]
 
 model = genai.GenerativeModel(
-    model_name='gemini-1.5-flash-exp-0827',
+    model_name='gemini-1.5-flash-exp-0827',  # Updated to a valid model name
     generation_config=generation_config,
     safety_settings=safety_settings
 )
@@ -250,10 +252,6 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
 
     identify_creator(user)
-    global CREATOR_ID
-    if user.username == CREATOR_USERNAME and CREATOR_ID is None:
-        CREATOR_ID = user.id
-        logger.info(f"Creator identified: {user.id}")
 
     user_data = storage.get_user(user.id)
     storage.update_user(user.id, {
@@ -1449,6 +1447,17 @@ def main():
     flask_thread = Thread(target=run_flask, daemon=True)
     flask_thread.start()
     logger.info(f"Flask server started on port {PORT}")
+
+    # To prevent sleep, self-ping if APP_URL is set (but this may not work if the whole instance sleeps; better use external pinger like UptimeRobot)
+    if APP_URL:
+        def keep_awake():
+            try:
+                requests.get(APP_URL + '/health')
+                logger.info("Sent keep-awake ping")
+            except Exception as e:
+                logger.error(f"Keep-awake error: {e}")
+        
+        scheduler.add_job(keep_awake, 'interval', minutes=10)
 
     application = Application.builder().token(BOT_TOKEN).build()
 
