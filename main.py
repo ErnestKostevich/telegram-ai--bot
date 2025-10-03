@@ -1384,4 +1384,131 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             vip_badge = "💎" if user['vip'] else ""
             users_text += f"{vip_badge} <code>{user_id}</code> - {user.get('first_name', 'Unknown')}\n"
             if user.get('username'):
-                users_text += f"   @{user['username
+                users_text += f"   @{user['username']}\n"
+        
+        if len(storage.users) > 20:
+            users_text += f"\n<i>... и ещё {len(storage.users) - 20} пользователей</i>"
+        
+        await query.message.reply_text(users_text, parse_mode=ParseMode.HTML)
+
+    elif data == "admin_stats":
+        if not is_creator(query.from_user.id):
+            await query.message.reply_text("❌ Доступ запрещён.")
+            return
+        
+        stats = storage.stats
+        total_users = len(storage.users)
+        vip_users = sum(1 for u in storage.users.values() if u['vip'])
+        active_users = sum(1 for u in storage.users.values() 
+                          if (datetime.now() - datetime.fromisoformat(u['last_active'])).days < 7)
+        
+        total_notes = sum(len(u['notes']) for u in storage.users.values())
+        total_memory = sum(len(u['memory']) for u in storage.users.values())
+        
+        stats_text = f"""
+📊 <b>ПОЛНАЯ СТАТИСТИКА</b>
+
+<b>👥 Пользователи:</b>
+• Всего: {total_users}
+• VIP: {vip_users}
+• Активных (7 дней): {active_users}
+
+<b>📈 Активность:</b>
+• Сообщений: {stats.get('total_messages', 0)}
+• Команд: {stats.get('total_commands', 0)}
+• AI запросов: {stats.get('ai_requests', 0)}
+
+<b>📝 Данные:</b>
+• Заметок: {total_notes}
+• Записей в памяти: {total_memory}
+
+<b>📅 Запущен:</b> {stats.get('start_date', 'N/A')[:10]}
+"""
+
+        await query.message.reply_text(stats_text, parse_mode=ParseMode.HTML)
+
+    elif data == "admin_broadcast":
+        if not is_creator(query.from_user.id):
+            await query.message.reply_text("❌ Доступ запрещён.")
+            return
+        
+        await query.message.reply_text(
+            "📢 <b>Рассылка</b>\n\n"
+            "Используй: /broadcast [текст]\n"
+            "Пример: /broadcast Привет всем!",
+            parse_mode=ParseMode.HTML
+        )
+
+def main():
+    if not BOT_TOKEN or not GEMINI_API_KEY:
+        logger.error("Error: BOT_TOKEN or GEMINI_API_KEY not set!")
+        return
+
+    flask_thread = Thread(target=run_flask, daemon=True)
+    flask_thread.start()
+    logger.info(f"Flask server started on port {PORT}")
+
+    # To prevent sleep, self-ping if APP_URL is set (but this may not work if the whole instance sleeps; better use external pinger like UptimeRobot)
+    if APP_URL:
+        def keep_awake():
+            try:
+                requests.get(APP_URL + '/health')
+                logger.info("Sent keep-awake ping")
+            except Exception as e:
+                logger.error(f"Keep-awake error: {e}")
+        
+        scheduler.add_job(keep_awake, 'interval', minutes=10)
+
+    application = Application.builder().token(BOT_TOKEN).build()
+
+    application.add_handler(CommandHandler("start", start_command))
+    application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("info", info_command))
+    application.add_handler(CommandHandler("status", status_command))
+    application.add_handler(CommandHandler("profile", profile_command))
+    application.add_handler(CommandHandler("uptime", uptime_command))
+
+    application.add_handler(CommandHandler("ai", ai_command))
+    application.add_handler(CommandHandler("clear", clear_command))
+
+    application.add_handler(CommandHandler("memorysave", memory_save_command))
+    application.add_handler(CommandHandler("memoryget", memory_get_command))
+    application.add_handler(CommandHandler("memorylist", memory_list_command))
+    application.add_handler(CommandHandler("memorydel", memory_del_command))
+
+    application.add_handler(CommandHandler("note", note_command))
+    application.add_handler(CommandHandler("notes", notes_command))
+    application.add_handler(CommandHandler("delnote", delnote_command))
+
+    application.add_handler(CommandHandler("time", time_command))
+    application.add_handler(CommandHandler("weather", weather_command))
+    application.add_handler(CommandHandler("translate", translate_command))
+
+    application.add_handler(CommandHandler("random", random_command))
+    application.add_handler(CommandHandler("dice", dice_command))
+    application.add_handler(CommandHandler("coin", coin_command))
+    application.add_handler(CommandHandler("joke", joke_command))
+    application.add_handler(CommandHandler("quote", quote_command))
+    application.add_handler(CommandHandler("fact", fact_command))
+
+    application.add_handler(CommandHandler("vip", vip_command))
+    application.add_handler(CommandHandler("remind", remind_command))
+    application.add_handler(CommandHandler("reminders", reminders_command))
+
+    application.add_handler(CommandHandler("grant_vip", grant_vip_command))
+    application.add_handler(CommandHandler("revoke_vip", revoke_vip_command))
+    application.add_handler(CommandHandler("users", users_command))
+    application.add_handler(CommandHandler("broadcast", broadcast_command))
+    application.add_handler(CommandHandler("stats", stats_command))
+    application.add_handler(CommandHandler("backup", backup_command))
+
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    application.add_handler(CallbackQueryHandler(handle_callback))
+
+    scheduler.start()
+
+    logger.info("Bot started successfully!")
+    application.run_polling(allowed_updates=Update.ALL_TYPES)
+
+if __name__ == '__main__':
+    main()
