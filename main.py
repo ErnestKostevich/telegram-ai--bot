@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 from typing import Dict, Optional
 import pytz
 from threading import Thread
-import requests  # Added for potential keep-awake, but note: self-ping may not prevent sleep on all hosts
+import requests
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
@@ -26,7 +26,7 @@ from flask import Flask
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 PORT = int(os.getenv('PORT', 5000))
-APP_URL = os.getenv('APP_URL')  # Set this environment variable to your app's public URL, e.g., https://your-app-name.onrender.com
+APP_URL = os.getenv('APP_URL')
 
 CREATOR_USERNAME = "Ernest_Kostevich"
 CREATOR_ID = None
@@ -55,7 +55,7 @@ safety_settings = [
 ]
 
 model = genai.GenerativeModel(
-    model_name='gemini-1.5-flash',  # Updated to Gemini 2.5 Flash
+    model_name='gemini-2.5-flash',
     generation_config=generation_config,
     safety_settings=safety_settings,
     system_instruction="You are AI DISCO BOT, a friendly and helpful AI assistant built with Gemini 2.5. Respond in a friendly, engaging manner with emojis where appropriate. Your creator is @Ernest_Kostevich."
@@ -63,16 +63,34 @@ model = genai.GenerativeModel(
 
 flask_app = Flask(__name__)
 
+# Глобальная переменная для отслеживания активности
+last_activity = datetime.now()
+
 @flask_app.route('/')
 def health_check():
-    return 'OK', 200
+    global last_activity
+    last_activity = datetime.now()
+    uptime = datetime.now() - BOT_START_TIME
+    return {
+        'status': 'OK',
+        'uptime_seconds': int(uptime.total_seconds()),
+        'last_activity': last_activity.isoformat()
+    }, 200
 
 @flask_app.route('/health')
 def health():
+    global last_activity
+    last_activity = datetime.now()
     return 'Healthy', 200
 
+@flask_app.route('/ping')
+def ping():
+    global last_activity
+    last_activity = datetime.now()
+    return 'pong', 200
+
 def run_flask():
-    flask_app.run(host='0.0.0.0', port=PORT)
+    flask_app.run(host='0.0.0.0', port=PORT, threaded=True)
 
 class DataStorage:
     def __init__(self):
@@ -89,10 +107,7 @@ class DataStorage:
             if os.path.exists(self.users_file):
                 with open(self.users_file, 'r', encoding='utf-8') as f:
                     data = json.load(f)
-                    if isinstance(data, list):
-                        logger.warning("users.json is a list; converting to dictionary")
-                        return {str(user['id']): user for user in data if 'id' in user}
-                    return {str(k): v for k, v in data.items()}
+                    return {int(k): v for k, v in data.items()}
             return {}
         except Exception as e:
             logger.error(f"Error loading users: {e}")
@@ -133,7 +148,7 @@ class DataStorage:
         for user_id, user_data in self.users.items():
             username = user_data.get('username')
             if username:
-                self.username_to_id[username.lower()] = int(user_id)
+                self.username_to_id[username.lower()] = user_id
 
     def get_user_id_by_identifier(self, identifier: str) -> Optional[int]:
         identifier = identifier.strip()
@@ -146,9 +161,8 @@ class DataStorage:
         return self.username_to_id.get(identifier.lower())
 
     def get_user(self, user_id: int) -> Dict:
-        user_id_str = str(user_id)
-        if user_id_str not in self.users:
-            self.users[user_id_str] = {
+        if user_id not in self.users:
+            self.users[user_id] = {
                 'id': user_id,
                 'username': '',
                 'first_name': '',
@@ -163,7 +177,7 @@ class DataStorage:
                 'commands_count': 0
             }
             self.save_users()
-        return self.users[user_id_str]
+        return self.users[user_id]
 
     def update_user(self, user_id: int, data: Dict):
         user = self.get_user(user_id)
@@ -186,15 +200,13 @@ class DataStorage:
         return True
 
     def get_chat_session(self, user_id: int):
-        user_id_str = str(user_id)
-        if user_id_str not in self.chat_sessions:
-            self.chat_sessions[user_id_str] = model.start_chat(history=[])
-        return self.chat_sessions[user_id_str]
+        if user_id not in self.chat_sessions:
+            self.chat_sessions[user_id] = model.start_chat(history=[])
+        return self.chat_sessions[user_id]
 
     def clear_chat_session(self, user_id: int):
-        user_id_str = str(user_id)
-        if user_id_str in self.chat_sessions:
-            del self.chat_sessions[user_id_str]
+        if user_id in self.chat_sessions:
+            del self.chat_sessions[user_id]
 
 storage = DataStorage()
 scheduler = AsyncIOScheduler()
@@ -254,6 +266,17 @@ async def get_weather_data(city: str) -> Optional[Dict]:
     except Exception as e:
         logger.error(f"Weather error: {e}")
         return None
+
+# Keep-alive функция
+def keep_awake():
+    global last_activity
+    try:
+        if APP_URL:
+            response = requests.get(f"{APP_URL}/health", timeout=5)
+            logger.info(f"Keep-alive ping sent. Status: {response.status_code}")
+            last_activity = datetime.now()
+    except Exception as e:
+        logger.error(f"Keep-awake error: {e}")
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
@@ -1323,7 +1346,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif data == "game_joke":
         jokes = [
-            "Программист ложится спать. Жена говорит: — Дорогой, закрой окно, на улице холодно! Программист: — И что, если я закрой окно, на улице станет тепло? 😄",
+            "Программист ложится спать. Жена говорит: — Дорогой, закрой окно, на улице холодно! Программист: — И что, если я закрою окно, на улице станет тепло? 😄",
             "— Почему программисты путают Хэллоуин и Рождество? — Потому что 31 OCT = 25 DEC! 🎃🎄",
             "Зачем программисту очки? Чтобы лучше C++! 👓",
             "Искусственный интеллект никогда не заменит человека. Он слишком умный для этого! 🤖",
@@ -1451,23 +1474,19 @@ def main():
         logger.error("Error: BOT_TOKEN or GEMINI_API_KEY not set!")
         return
 
+    # Запуск Flask в отдельном потоке
     flask_thread = Thread(target=run_flask, daemon=True)
     flask_thread.start()
     logger.info(f"Flask server started on port {PORT}")
 
-    # To prevent sleep, self-ping if APP_URL is set (but this may not work if the whole instance sleeps; better use external pinger like UptimeRobot)
+    # Настройка keep-alive пингов каждые 5 минут
     if APP_URL:
-        def keep_awake():
-            try:
-                requests.get(APP_URL + '/health')
-                logger.info("Sent keep-awake ping")
-            except Exception as e:
-                logger.error(f"Keep-awake error: {e}")
-        
         scheduler.add_job(keep_awake, 'interval', minutes=5)
+        logger.info("Keep-alive scheduler configured")
 
     application = Application.builder().token(BOT_TOKEN).build()
 
+    # Регистрация всех handlers
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("info", info_command))
@@ -1512,9 +1531,14 @@ def main():
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     application.add_handler(CallbackQueryHandler(handle_callback))
 
+    # Запуск scheduler
     scheduler.start()
 
     logger.info("Bot started successfully!")
+    logger.info("=" * 50)
+    logger.info("AI DISCO BOT is now running!")
+    logger.info("=" * 50)
+    
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == '__main__':
