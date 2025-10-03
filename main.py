@@ -25,8 +25,8 @@ from flask import Flask
 
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
-PORT = int(os.getenv('PORT', 10000))
-APP_URL = os.getenv('APP_URL')  # e.g., https://your-bot.onrender.com
+PORT = int(os.getenv('PORT', 5000))
+APP_URL = os.getenv('APP_URL')  # Set this environment variable to your app's public URL, e.g., https://your-app-name.onrender.com
 
 CREATOR_USERNAME = "Ernest_Kostevich"
 CREATOR_ID = None
@@ -55,10 +55,10 @@ safety_settings = [
 ]
 
 model = genai.GenerativeModel(
-    model_name='gemini-1.5-flash',
+    model_name='gemini-2.5-flash',  # Confirmed available as of October 2025
     generation_config=generation_config,
     safety_settings=safety_settings,
-    system_instruction="You are AI DISCO BOT, a friendly and helpful AI assistant built with Gemini. Respond in a friendly, engaging manner with emojis where appropriate. Your creator is @Ernest_Kostevich."
+    system_instruction="You are AI DISCO BOT, a friendly and helpful AI assistant built with Gemini 2.5. Respond in a friendly, engaging manner with emojis where appropriate. Your creator is @Ernest_Kostevich."
 )
 
 flask_app = Flask(__name__)
@@ -139,8 +139,10 @@ class DataStorage:
         identifier = identifier.strip()
         if identifier.startswith('@'):
             identifier = identifier[1:]
+        
         if identifier.isdigit():
             return int(identifier)
+        
         return self.username_to_id.get(identifier.lower())
 
     def get_user(self, user_id: int) -> Dict:
@@ -213,10 +215,13 @@ def get_main_keyboard(user_id: int) -> ReplyKeyboardMarkup:
         [KeyboardButton("🌍 Погода"), KeyboardButton("⏰ Время")],
         [KeyboardButton("🎲 Развлечения"), KeyboardButton("ℹ️ Инфо")]
     ]
+
     if storage.is_vip(user_id):
         keyboard.append([KeyboardButton("💎 VIP Меню")])
+
     if is_creator(user_id):
         keyboard.append([KeyboardButton("👑 Админ Панель")])
+
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
 def format_user_info(user: Dict) -> str:
@@ -224,15 +229,18 @@ def format_user_info(user: Dict) -> str:
     info += f"🆔 <b>ID:</b> <code>{user['id']}</code>\n"
     if user.get('username'):
         info += f"📱 <b>Username:</b> @{user['username']}\n"
+
     info += f"📅 <b>Зарегистрирован:</b> {user['registered'][:10]}\n"
     info += f"📊 <b>Сообщений:</b> {user['messages_count']}\n"
     info += f"🎯 <b>Команд:</b> {user['commands_count']}\n"
+
     if user['vip']:
         if user['vip_until']:
             vip_until = datetime.fromisoformat(user['vip_until'])
             info += f"💎 <b>VIP до:</b> {vip_until.strftime('%d.%m.%Y %H:%M')}\n"
         else:
             info += f"💎 <b>VIP:</b> Навсегда ♾️\n"
+
     return info
 
 async def get_weather_data(city: str) -> Optional[Dict]:
@@ -256,30 +264,44 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         'first_name': user.first_name or '',
         'commands_count': user_data['commands_count'] + 1
     })
+
     welcome_text = f"""
 🤖 <b>Добро пожаловать в AI DISCO BOT!</b>
+
 Привет, {user.first_name}! Я многофункциональный бот с искусственным интеллектом на базе <b>Google Gemini</b>.
+
 <b>🎯 Основные возможности:</b>
 💬 Умный AI-чат с контекстом
 📝 Система заметок
 🌍 Погода и время
 🎲 Развлечения и игры
 💎 VIP функции
+
 <b>⚡ Быстрый старт:</b>
 • Напиши мне что угодно - я отвечу!
 • Используй /help для списка команд
 • Нажми на кнопки меню ниже
+
 <b>👨‍💻 Создатель:</b> @{CREATOR_USERNAME}
 """
-    await update.message.reply_text(welcome_text, parse_mode=ParseMode.HTML, reply_markup=get_main_keyboard(user.id))
+
+    await update.message.reply_text(
+        welcome_text,
+        parse_mode=ParseMode.HTML,
+        reply_markup=get_main_keyboard(user.id)
+    )
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     identify_creator(update.effective_user)
     user_id = update.effective_user.id
     user_data = storage.get_user(user_id)
-    storage.update_user(user_id, {'commands_count': user_data['commands_count'] + 1})
+    storage.update_user(user_id, {
+        'commands_count': user_data['commands_count'] + 1
+    })
+
     help_text = """
 📚 <b>СПИСОК КОМАНД</b>
+
 <b>🏠 Основные:</b>
 /start - Запуск бота
 /help - Эта справка
@@ -287,6 +309,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /status - Статус системы
 /profile - Твой профиль
 /uptime - Время работы бота
+
 <b>💬 AI и Память:</b>
 /ai [вопрос] - Задать вопрос AI
 /clear - Очистить контекст чата
@@ -294,14 +317,17 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /memoryget [ключ] - Получить из памяти
 /memorylist - Показать всю память
 /memorydel [ключ] - Удалить из памяти
+
 <b>📝 Заметки:</b>
 /note [текст] - Создать заметку
 /notes - Показать все заметки
 /delnote [номер] - Удалить заметку
+
 <b>🌍 Утилиты:</b>
 /time [город] - Текущее время
 /weather [город] - Погода
 /translate [язык] [текст] - Перевод
+
 <b>🎲 Развлечения:</b>
 /random [min] [max] - Случайное число
 /dice - Бросить кубик
@@ -309,11 +335,13 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /joke - Случайная шутка
 /quote - Мудрая цитата
 /fact - Интересный факт
+
 <b>💎 VIP Команды:</b>
 /vip - Твой VIP статус
 /remind [минуты] [текст] - Напоминание
 /reminders - Список напоминаний
 """
+
     if is_creator(user_id):
         help_text += """
 <b>👑 Команды Создателя:</b>
@@ -324,17 +352,22 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /stats - Полная статистика
 /backup - Резервная копия
 """
+
     help_text += "\n<i>💡 Просто напиши мне что-нибудь - я отвечу!</i>"
+
     await update.message.reply_text(help_text, parse_mode=ParseMode.HTML)
 
 async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     info_text = """
 🤖 <b>AI DISCO BOT</b>
+
 <b>Версия:</b> 2.1
 <b>AI Модель:</b> Google Gemini
 <b>Создатель:</b> @Ernest_Kostevich
+
 <b>🎯 О боте:</b>
 Многофункциональный бот с искусственным интеллектом для Telegram. Умеет общаться, помогать, развлекать и многое другое!
+
 <b>⚡ Особенности:</b>
 • Контекстный AI-диалог
 • Система памяти
@@ -342,42 +375,55 @@ async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 • Напоминания
 • Игры и развлечения
 • Погода и время
+
 <b>🔒 Приватность:</b>
 Все данные хранятся безопасно. Мы не передаём вашу информацию третьим лицам.
+
 <b>💬 Поддержка:</b>
 По всем вопросам: @Ernest_Kostevich
 """
+
     await update.message.reply_text(info_text, parse_mode=ParseMode.HTML)
 
 async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     stats = storage.stats
     total_users = len(storage.users)
     vip_users = sum(1 for u in storage.users.values() if u['vip'])
+
     uptime = datetime.now() - datetime.fromisoformat(stats.get('start_date', datetime.now().isoformat()))
     uptime_str = f"{uptime.days}д {uptime.seconds // 3600}ч {(uptime.seconds % 3600) // 60}м"
+
     status_text = f"""
 📊 <b>СТАТУС СИСТЕМЫ</b>
+
 <b>👥 Пользователи:</b>
 • Всего: {total_users}
 • VIP: {vip_users}
+
 <b>📈 Активность:</b>
 • Сообщений: {stats.get('total_messages', 0)}
 • Команд: {stats.get('total_commands', 0)}
 • AI запросов: {stats.get('ai_requests', 0)}
+
 <b>⏱ Время работы:</b> {uptime_str}
+
 <b>✅ Статус:</b> Онлайн
 <b>🤖 AI:</b> Gemini ✓
 """
+
     await update.message.reply_text(status_text, parse_mode=ParseMode.HTML)
 
 async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     user = storage.get_user(user_id)
+
     profile_text = format_user_info(user)
     profile_text += f"\n📝 <b>Заметок:</b> {len(user['notes'])}\n"
     profile_text += f"🧠 <b>Записей в памяти:</b> {len(user['memory'])}\n"
+
     if storage.is_vip(user_id):
         profile_text += f"⏰ <b>Напоминаний:</b> {len(user['reminders'])}\n"
+
     await update.message.reply_text(profile_text, parse_mode=ParseMode.HTML)
 
 async def uptime_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -386,28 +432,38 @@ async def uptime_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     hours = uptime.seconds // 3600
     minutes = (uptime.seconds % 3600) // 60
     seconds = uptime.seconds % 60
+
     uptime_text = f"""
 ⏱ <b>ВРЕМЯ РАБОТЫ БОТА</b>
+
 🕐 <b>Запущен:</b> {BOT_START_TIME.strftime('%d.%m.%Y %H:%M:%S')}
 ⏰ <b>Работает:</b> {days}д {hours}ч {minutes}м {seconds}с
+
 <b>✅ Статус:</b> Онлайн и стабильно работает!
 """
+
     await update.message.reply_text(uptime_text, parse_mode=ParseMode.HTML)
 
 async def ai_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
+
     if not context.args:
         await update.message.reply_text(
-            "❓ Использование: /ai [ваш вопрос]\n\nПример: /ai Расскажи интересный факт"
+            "❓ Использование: /ai [ваш вопрос]\n\n"
+            "Пример: /ai Расскажи интересный факт"
         )
         return
+
     question = ' '.join(context.args)
     await process_ai_message(update, question, user_id)
 
 async def clear_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     storage.clear_chat_session(user_id)
-    await update.message.reply_text("🧹 Контекст диалога очищен! Начнём с чистого листа.")
+
+    await update.message.reply_text(
+        "🧹 Контекст диалога очищен! Начнём с чистого листа."
+    )
 
 async def process_ai_message(update: Update, text: str, user_id: int):
     try:
@@ -419,20 +475,25 @@ async def process_ai_message(update: Update, text: str, user_id: int):
         await update.message.reply_text(response.text, parse_mode=ParseMode.HTML)
     except Exception as e:
         logger.error(f"AI error: {e}")
-        await update.message.reply_text("😔 Извините, произошла ошибка при обработке вашего запроса. Попробуйте ещё раз.")
+        await update.message.reply_text(
+            "😔 Извините, произошла ошибка при обработке вашего запроса. Попробуйте ещё раз."
+        )
 
 async def memory_save_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if len(context.args) < 2:
         await update.message.reply_text(
-            "❓ Использование: /memorysave [ключ] [значение]\n\nПример: /memorysave любимый_цвет синий"
+            "❓ Использование: /memorysave [ключ] [значение]\n\n"
+            "Пример: /memorysave любимый_цвет синий"
         )
         return
+
     key = context.args[0]
     value = ' '.join(context.args[1:])
     user = storage.get_user(user_id)
     user['memory'][key] = value
     storage.save_users()
+
     await update.message.reply_text(
         f"✅ Сохранено в память:\n🔑 <b>{key}</b> = <code>{value}</code>",
         parse_mode=ParseMode.HTML
@@ -442,9 +503,11 @@ async def memory_get_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     user_id = update.effective_user.id
     if not context.args:
         await update.message.reply_text(
-            "❓ Использование: /memoryget [ключ]\n\nПример: /memoryget любимый_цвет"
+            "❓ Использование: /memoryget [ключ]\n\n"
+            "Пример: /memoryget любимый_цвет"
         )
         return
+
     key = context.args[0]
     user = storage.get_user(user_id)
     if key in user['memory']:
@@ -461,6 +524,7 @@ async def memory_list_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     if not user['memory']:
         await update.message.reply_text("📭 Ваша память пуста.")
         return
+
     memory_text = "🧠 <b>Ваша память:</b>\n\n"
     for key, value in user['memory'].items():
         memory_text += f"🔑 <b>{key}</b>: <code>{value}</code>\n"
@@ -470,9 +534,11 @@ async def memory_del_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     user_id = update.effective_user.id
     if not context.args:
         await update.message.reply_text(
-            "❓ Использование: /memorydel [ключ]\n\nПример: /memorydel любимый_цвет"
+            "❓ Использование: /memorydel [ключ]\n\n"
+            "Пример: /memorydel любимый_цвет"
         )
         return
+
     key = context.args[0]
     user = storage.get_user(user_id)
     if key in user['memory']:
@@ -486,14 +552,17 @@ async def note_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if not context.args:
         await update.message.reply_text(
-            "❓ Использование: /note [текст заметки]\n\nПример: /note Купить молоко"
+            "❓ Использование: /note [текст заметки]\n\n"
+            "Пример: /note Купить молоко"
         )
         return
+
     note_text = ' '.join(context.args)
     user = storage.get_user(user_id)
     note = {'text': note_text, 'created': datetime.now().isoformat()}
     user['notes'].append(note)
     storage.save_users()
+
     await update.message.reply_text(
         f"✅ Заметка #{len(user['notes'])} сохранена!\n\n📝 {note_text}"
     )
@@ -504,6 +573,7 @@ async def notes_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not user['notes']:
         await update.message.reply_text("📭 У вас пока нет заметок.")
         return
+
     notes_text = f"📝 <b>Ваши заметки ({len(user['notes'])}):</b>\n\n"
     for i, note in enumerate(user['notes'], 1):
         created = datetime.fromisoformat(note['created'])
@@ -514,9 +584,11 @@ async def delnote_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if not context.args:
         await update.message.reply_text(
-            "❓ Использование: /delnote [номер]\n\nПример: /delnote 1"
+            "❓ Использование: /delnote [номер]\n\n"
+            "Пример: /delnote 1"
         )
         return
+
     try:
         note_num = int(context.args[0])
         user = storage.get_user(user_id)
@@ -541,6 +613,7 @@ async def time_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     }
     city_lower = city.lower()
     tz_name = timezones.get(city_lower, 'Europe/Moscow')
+
     try:
         tz = pytz.timezone(tz_name)
         current_time = datetime.now(tz)
@@ -570,9 +643,12 @@ async def weather_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             humidity = current['humidity']
             wind_speed = current['windspeedKmph']
             weather_emojis = {
-                'Sunny': '☀️', 'Clear': '🌙', 'Partly cloudy': '⛅', 'Cloudy': '☁️', 'Overcast': '☁️', 'Mist': '🌫️',
-                'Patchy rain possible': '🌦️', 'Light rain': '🌧️', 'Moderate rain': '🌧️', 'Heavy rain': '⛈️',
-                'Patchy snow possible': '🌨️', 'Light snow': '❄️', 'Moderate snow': '❄️', 'Heavy snow': '❄️'
+                'Sunny': '☀️', 'Clear': '🌙', 'Partly cloudy': '⛅',
+                'Cloudy': '☁️', 'Overcast': '☁️', 'Mist': '🌫️',
+                'Patchy rain possible': '🌦️', 'Light rain': '🌧️',
+                'Moderate rain': '🌧️', 'Heavy rain': '⛈️',
+                'Patchy snow possible': '🌨️', 'Light snow': '❄️',
+                'Moderate snow': '❄️', 'Heavy snow': '❄️'
             }
             emoji = weather_emojis.get(description, '🌤️')
             weather_text = f"""
@@ -593,9 +669,11 @@ async def weather_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def translate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if len(context.args) < 2:
         await update.message.reply_text(
-            "❓ Использование: /translate [язык] [текст]\n\nПример: /translate en Привет, как дела?"
+            "❓ Использование: /translate [язык] [текст]\n\n"
+            "Пример: /translate en Привет, как дела?"
         )
         return
+
     target_lang = context.args[0]
     text = ' '.join(context.args[1:])
     try:
@@ -701,11 +779,13 @@ async def remind_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "💎 Эта команда доступна только VIP пользователям.\nСвяжитесь с @Ernest_Kostevich для получения VIP."
         )
         return
+
     if len(context.args) < 2:
         await update.message.reply_text(
             "❓ Использование: /remind [минуты] [текст]\n\nПример: /remind 30 Проверить почту"
         )
         return
+
     try:
         minutes = int(context.args[0])
         text = ' '.join(context.args[1:])
@@ -731,10 +811,12 @@ async def reminders_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not storage.is_vip(user_id):
         await update.message.reply_text("💎 Эта команда доступна только VIP пользователям.")
         return
+
     user = storage.get_user(user_id)
     if not user['reminders']:
         await update.message.reply_text("📭 У вас нет активных напоминаний.")
         return
+
     reminders_text = f"⏰ <b>Ваши напоминания ({len(user['reminders'])}):</b>\n\n"
     for i, reminder in enumerate(user['reminders'], 1):
         remind_time = datetime.fromisoformat(reminder['time'])
@@ -759,11 +841,13 @@ async def grant_vip_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_creator(update.effective_user.id):
         await update.message.reply_text("❌ Эта команда доступна только создателю.")
         return
+
     if len(context.args) < 2:
         await update.message.reply_text(
             "❓ Использование: /grant_vip [id/@username] [срок]\n\nСроки: week, month, year, forever\nПример: /grant_vip @username month\nПример: /grant_vip 123456789 forever"
         )
         return
+
     try:
         identifier = context.args[0]
         duration = context.args[1].lower()
@@ -771,10 +855,12 @@ async def grant_vip_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not target_id:
             await update.message.reply_text(f"❌ Пользователь '{identifier}' не найден.")
             return
+
         durations = {'week': timedelta(weeks=1), 'month': timedelta(days=30), 'year': timedelta(days=365), 'forever': None}
         if duration not in durations:
             await update.message.reply_text("❌ Неверный срок. Используйте: week, month, year, forever")
             return
+
         user = storage.get_user(target_id)
         user['vip'] = True
         if durations[duration]:
@@ -807,24 +893,27 @@ async def revoke_vip_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if not is_creator(update.effective_user.id):
         await update.message.reply_text("❌ Эта команда доступна только создателю.")
         return
+
     if not context.args:
         await update.message.reply_text(
             "❓ Использование: /revoke_vip [id/@username]\n\nПример: /revoke_vip @username\nПример: /revoke_vip 123456789"
         )
         return
+
     try:
         identifier = context.args[0]
         target_id = storage.get_user_id_by_identifier(identifier)
         if not target_id:
             await update.message.reply_text(f"❌ Пользователь '{identifier}' не найден.")
             return
+
         user = storage.get_user(target_id)
         user['vip'] = False
         user['vip_until'] = None
         storage.save_users()
         username_info = f"@{user['username']}" if user.get('username') else ""
         await update.message.reply_text(
-            f"✅ VIP статус отозван!\n\n👤 {user.get('first_name', 'Unknown')} {username_info}\n�ID: <code>{target_id}</code>",
+            f"✅ VIP статус отозван!\n\n👤 {user.get('first_name', 'Unknown')} {username_info}\n🆔 ID: <code>{target_id}</code>",
             parse_mode=ParseMode.HTML
         )
     except Exception as e:
@@ -836,6 +925,7 @@ async def users_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_creator(update.effective_user.id):
         await update.message.reply_text("❌ Эта команда доступна только создателю.")
         return
+
     users_text = f"👥 <b>СПИСОК ПОЛЬЗОВАТЕЛЕЙ ({len(storage.users)}):</b>\n\n"
     for user_id, user in list(storage.users.items())[:20]:
         vip_badge = "💎" if user['vip'] else ""
@@ -851,11 +941,13 @@ async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_creator(update.effective_user.id):
         await update.message.reply_text("❌ Эта команда доступна только создателю.")
         return
+
     if not context.args:
         await update.message.reply_text(
             "❓ Использование: /broadcast [текст сообщения]\n\nПример: /broadcast Привет всем!"
         )
         return
+
     message_text = ' '.join(context.args)
     success = 0
     failed = 0
@@ -879,10 +971,12 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_creator(update.effective_user.id):
         await update.message.reply_text("❌ Эта команда доступна только создателю.")
         return
+
     stats = storage.stats
     total_users = len(storage.users)
     vip_users = sum(1 for u in storage.users.values() if u['vip'])
-    active_users = sum(1 for u in storage.users.values() if (datetime.now() - datetime.fromisoformat(u['last_active'])).days < 7)
+    active_users = sum(1 for u in storage.users.values() 
+                      if (datetime.now() - datetime.fromisoformat(u['last_active'])).days < 7)
     total_notes = sum(len(u['notes']) for u in storage.users.values())
     total_memory = sum(len(u['memory']) for u in storage.users.values())
     stats_text = f"""
@@ -907,6 +1001,7 @@ async def backup_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_creator(update.effective_user.id):
         await update.message.reply_text("❌ Эта команда доступна только создателю.")
         return
+
     try:
         backup_data = {'users': storage.users, 'stats': storage.stats, 'backup_date': datetime.now().isoformat()}
         backup_filename = f"backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
@@ -934,14 +1029,17 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     })
     storage.stats['total_messages'] = storage.stats.get('total_messages', 0) + 1
     storage.save_stats()
+
     if text in ["💬 AI Чат", "📝 Заметки", "🌍 Погода", "⏰ Время", "🎲 Развлечения", "ℹ️ Инфо", "💎 VIP Меню", "👑 Админ Панель"]:
         await handle_menu_button(update, context, text)
         return
+
     if chat_type in ['group', 'supergroup']:
         bot_username = context.bot.username
         if f"@{bot_username}" not in text:
             return
         text = text.replace(f"@{bot_username}", "").strip()
+
     if text:
         await process_ai_message(update, text, user_id)
 
@@ -974,9 +1072,7 @@ async def handle_menu_button(update: Update, context: ContextTypes.DEFAULT_TYPE,
             [InlineKeyboardButton("😄 Шутка", callback_data="game_joke"), InlineKeyboardButton("💭 Цитата", callback_data="game_quote")],
             [InlineKeyboardButton("🔬 Факт", callback_data="game_fact")]
         ]
-        await update.message.reply_text(
-            "🎲 <b>Развлечения</b>\n\nВыбери что-нибудь:", parse_mode=ParseMode.HTML, reply_markup=InlineKeyboardMarkup(keyboard)
-        )
+        await update.message.reply_text("🎲 <b>Развлечения</b>\n\nВыбери что-нибудь:", parse_mode=ParseMode.HTML, reply_markup=InlineKeyboardMarkup(keyboard))
     elif button == "ℹ️ Инфо":
         await info_command(update, context)
     elif button == "💎 VIP Меню":
@@ -985,9 +1081,7 @@ async def handle_menu_button(update: Update, context: ContextTypes.DEFAULT_TYPE,
                 [InlineKeyboardButton("⏰ Напоминания", callback_data="vip_reminders")],
                 [InlineKeyboardButton("📊 Статистика", callback_data="vip_stats")]
             ]
-            await update.message.reply_text(
-                "💎 <b>VIP Меню</b>", parse_mode=ParseMode.HTML, reply_markup=InlineKeyboardMarkup(keyboard)
-            )
+            await update.message.reply_text("💎 <b>VIP Меню</b>", parse_mode=ParseMode.HTML, reply_markup=InlineKeyboardMarkup(keyboard))
         else:
             await vip_command(update, context)
     elif button == "👑 Админ Панель":
@@ -997,9 +1091,7 @@ async def handle_menu_button(update: Update, context: ContextTypes.DEFAULT_TYPE,
                 [InlineKeyboardButton("📊 Статистика", callback_data="admin_stats")],
                 [InlineKeyboardButton("📢 Рассылка", callback_data="admin_broadcast")]
             ]
-            await update.message.reply_text(
-                "👑 <b>Админ Панель</b>", parse_mode=ParseMode.HTML, reply_markup=InlineKeyboardMarkup(keyboard)
-            )
+            await update.message.reply_text("👑 <b>Админ Панель</b>", parse_mode=ParseMode.HTML, reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -1031,7 +1123,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.reply_text(f"🪙 {emoji} Выпало: <b>{result}</b>", parse_mode=ParseMode.HTML)
     elif data == "game_joke":
         jokes = [
-            "Программист ложится спать. Жена говорит: — Дорогой, закрой окно, на улице холодно! Программист: — И что, если я закрою окно, на улице станет тепло? 😄",
+            "Программист ложится спать. Жена говорит: — Дорогой, закрой окно, на улице холодно! Программист: — И что, если я закрой окно, на улице станет тепло? 😄",
             "— Почему программисты путают Хэллоуин и Рождество? — Потому что 31 OCT = 25 DEC! 🎃🎄",
             "Зачем программисту очки? Чтобы лучше C++! 👓",
             "Искусственный интеллект никогда не заменит человека. Он слишком умный для этого! 🤖",
@@ -1094,7 +1186,8 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         stats = storage.stats
         total_users = len(storage.users)
         vip_users = sum(1 for u in storage.users.values() if u['vip'])
-        active_users = sum(1 for u in storage.users.values() if (datetime.now() - datetime.fromisoformat(u['last_active'])).days < 7)
+        active_users = sum(1 for u in storage.users.values() 
+                          if (datetime.now() - datetime.fromisoformat(u['last_active'])).days < 7)
         total_notes = sum(len(u['notes']) for u in storage.users.values())
         total_memory = sum(len(u['memory']) for u in storage.users.values())
         stats_text = f"""
@@ -1178,8 +1271,13 @@ def main():
     application.add_handler(CallbackQueryHandler(handle_callback))
 
     scheduler.start()
-    logger.info("Bot started successfully!")
+    logger.info("Scheduler started")
 
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(application.initialize())  # Initialize the application
+    loop.run_until_complete(application.bot.delete_webhook(drop_pending_updates=True))  # Clear any existing webhooks
+    loop.run_until_complete(application.start())
+    logger.info("Bot started successfully!")
     application.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
 if __name__ == '__main__':
