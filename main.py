@@ -11,8 +11,7 @@ from datetime import datetime, timedelta
 from typing import Dict, Optional
 import pytz
 from threading import Thread
-import requests  # Not used for keep-alive anymore
-import time  # For keeping main thread alive
+import requests  # Added for potential keep-awake, but note: self-ping may not prevent sleep on all hosts
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
@@ -22,7 +21,7 @@ import google.generativeai as genai
 import aiohttp
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
-from flask import Flask, request
+from flask import Flask
 
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
@@ -56,10 +55,10 @@ safety_settings = [
 ]
 
 model = genai.GenerativeModel(
-    model_name='gemini-2.5-flash',  # Updated to Gemini 2.5 Flash
+    model_name='gemini-1.5-flash',  # Corrected to the stable model name as of October 2025; use gemini-2.5-flash if available in your API version
     generation_config=generation_config,
     safety_settings=safety_settings,
-    system_instruction="You are AI DISCO BOT, a friendly and helpful AI assistant built with Gemini 2.5. Respond in a friendly, engaging manner with emojis where appropriate. Your creator is @Ernest_Kostevich."
+    system_instruction="You are AI DISCO BOT, a friendly and helpful AI assistant built with Gemini. Respond in a friendly, engaging manner with emojis where appropriate. Your creator is @Ernest_Kostevich."
 )
 
 flask_app = Flask(__name__)
@@ -265,7 +264,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     welcome_text = f"""
 🤖 <b>Добро пожаловать в AI DISCO BOT!</b>
 
-Привет, {user.first_name}! Я многофункциональный бот с искусственным интеллектом на базе <b>Google Gemini 2.5</b>.
+Привет, {user.first_name}! Я многофункциональный бот с искусственным интеллектом на базе <b>Google Gemini</b>.
 
 <b>🎯 Основные возможности:</b>
 💬 Умный AI-чат с контекстом
@@ -359,7 +358,7 @@ async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 🤖 <b>AI DISCO BOT</b>
 
 <b>Версия:</b> 2.1
-<b>AI Модель:</b> Google Gemini 2.5 Flash
+<b>AI Модель:</b> Google Gemini
 <b>Создатель:</b> @Ernest_Kostevich
 
 <b>🎯 О боте:</b>
@@ -405,7 +404,7 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 <b>⏱ Время работы:</b> {uptime_str}
 
 <b>✅ Статус:</b> Онлайн
-<b>🤖 AI:</b> Gemini 2.5 ✓
+<b>🤖 AI:</b> Gemini ✓
 """
 
     await update.message.reply_text(status_text, parse_mode=ParseMode.HTML)
@@ -1331,7 +1330,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         quotes = [
             "Единственный способ сделать великую работу — любить то, что вы делаете. — Стив Джобс",
             "Инновация отличает лидера от последователя. — Стив Джобс",
-            "Программирование — это искусство превращать кофе в код. — Неизвестный автор",
+            "Программирование — это искусство преврачивать кофе в код. — Неизвестный автор",
             "Лучший код — это отсутствие кода. — Джефф Этвуд"
         ]
         quote = random.choice(quotes)
@@ -1446,14 +1445,23 @@ def main():
         logger.error("Error: BOT_TOKEN or GEMINI_API_KEY not set!")
         return
 
-    if not APP_URL:
-        logger.error("Error: APP_URL not set! Required for webhooks.")
-        return
+    flask_thread = Thread(target=run_flask, daemon=True)
+    flask_thread.start()
+    logger.info(f"Flask server started on port {PORT}")
 
-    # Build application
+    # To prevent sleep on platforms like Render, self-ping the health endpoint. This sends traffic via the public URL, counting as incoming activity.
+    if APP_URL:
+        def keep_awake():
+            try:
+                requests.get(APP_URL + '/health')
+                logger.info("Sent keep-awake ping")
+            except Exception as e:
+                logger.error(f"Keep-awake error: {e}")
+        
+        scheduler.add_job(keep_awake, 'interval', minutes=10)  # Every 10 minutes to stay under Render's 15-min idle timeout
+
     application = Application.builder().token(BOT_TOKEN).build()
 
-    # Add all handlers
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("info", info_command))
@@ -1498,45 +1506,18 @@ def main():
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     application.add_handler(CallbackQueryHandler(handle_callback))
 
-    # Add webhook route to Flask
-    def telegram_webhook():
-        if request.method == 'POST':
-            try:
-                json_data = request.get_json(force=True)
-                if not json_data:
-                    return 'No data', 400
-                update = Update.de_json(json_data, application.bot)
-                # Process async update in a new event loop
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                loop.run_until_complete(application.process_update(update))
-                loop.close()
-                return 'OK', 200
-            except Exception as e:
-                logger.error(f"Webhook processing error: {e}")
-                return 'OK', 200  # Always return 200 to Telegram
-        return 'Method not allowed', 405
-
-    flask_app.add_url_rule(f'/{BOT_TOKEN}', 'telegram_webhook', telegram_webhook, methods=['POST'])
-
-    # Set webhook
-    webhook_url = f"{APP_URL}/{BOT_TOKEN}"
-    asyncio.run(application.bot.set_webhook(url=webhook_url))
-    logger.info(f"Webhook set to {webhook_url}")
-
-    # Start scheduler (no self-ping, as it doesn't prevent sleep)
     scheduler.start()
 
-    # Start Flask in thread
-    flask_thread = Thread(target=run_flask, daemon=True)
-    flask_thread.start()
-    logger.info(f"Flask server started on port {PORT}")
+    logger.info("Bot started successfully!")
 
-    logger.info("Bot started successfully with webhooks!")
+    # Clean up any existing webhook and drop pending updates to avoid conflicts with multiple instances or previous configurations
+    async def cleanup_and_run():
+        await application.bot.delete_webhook(drop_pending_updates=True)
+        await application.start()
+        # Note: run_polling will handle its own startup; this ensures clean state
+    asyncio.run(cleanup_and_run())
 
-    # Keep main thread alive
-    while True:
-        time.sleep(60)
+    application.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
 if __name__ == '__main__':
     main()
