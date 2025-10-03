@@ -55,7 +55,7 @@ safety_settings = [
 ]
 
 model = genai.GenerativeModel(
-    model_name='gemini-1.5-flash',  # Updated to a stable, available model
+    model_name='gemini-2.5-flash',  # Updated to Gemini 2.5 Flash
     generation_config=generation_config,
     safety_settings=safety_settings
 )
@@ -263,7 +263,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     welcome_text = f"""
 🤖 <b>Добро пожаловать в AI DISCO BOT!</b>
 
-Привет, {user.first_name}! Я многофункциональный бот с искусственным интеллектом на базе <b>Google Gemini 2.0</b>.
+Привет, {user.first_name}! Я многофункциональный бот с искусственным интеллектом на базе <b>Google Gemini 2.5</b>.
 
 <b>🎯 Основные возможности:</b>
 💬 Умный AI-чат с контекстом
@@ -357,7 +357,7 @@ async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 🤖 <b>AI DISCO BOT</b>
 
 <b>Версия:</b> 2.1
-<b>AI Модель:</b> Google Gemini 2.0 Flash
+<b>AI Модель:</b> Google Gemini 2.5 Flash
 <b>Создатель:</b> @Ernest_Kostevich
 
 <b>🎯 О боте:</b>
@@ -403,7 +403,7 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 <b>⏱ Время работы:</b> {uptime_str}
 
 <b>✅ Статус:</b> Онлайн
-<b>🤖 AI:</b> Gemini 2.0 ✓
+<b>🤖 AI:</b> Gemini 2.5 ✓
 """
 
     await update.message.reply_text(status_text, parse_mode=ParseMode.HTML)
