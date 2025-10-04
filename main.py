@@ -12,7 +12,6 @@ from typing import Dict, Optional
 import pytz
 from threading import Thread
 import requests
-import time
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
@@ -23,14 +22,14 @@ import aiohttp
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from flask import Flask
-from github import Github
 
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
-PORT = int(os.getenv('PORT', 5000))
-APP_URL = os.getenv('APP_URL')  # e.g., https://your-app-name.onrender.com
-GITHUB_TOKEN = os.getenv('GITHUB_TOKEN')
-GITHUB_REPO = os.getenv('GITHUB_REPO')  # e.g., "username/repo"
+RENDER_URL = os.getenv('RENDER_URL')  # Для keep-alive пинга
+
+if not RENDER_URL:
+    logging.warning("RENDER_URL not set! Using default for testing.")
+    RENDER_URL = "https://your-bot.onrender.com"  # Замените на ваш реальный URL
 
 CREATOR_USERNAME = "Ernest_Kostevich"
 CREATOR_ID = None
@@ -59,91 +58,100 @@ safety_settings = [
 ]
 
 model = genai.GenerativeModel(
-    model_name='gemini-1.5-flash',
+    model_name='gemini-2.5-flash',
     generation_config=generation_config,
     safety_settings=safety_settings,
-    system_instruction="You are AI DISCO BOT, a friendly and helpful AI assistant built with Gemini 1.5. Respond in a friendly, engaging manner with emojis where appropriate. Your creator is @Ernest_Kostevich."
+    system_instruction="You are AI DISCO BOT, a friendly and helpful AI assistant built with Gemini 2.5. Respond in a friendly, engaging manner with emojis where appropriate. Your creator is @Ernest_Kostevich."
 )
 
 flask_app = Flask(__name__)
 
+# Глобальная переменная для отслеживания активности
+last_activity = datetime.now()
+
 @flask_app.route('/')
 def health_check():
-    return 'OK', 200
+    global last_activity
+    last_activity = datetime.now()
+    uptime = datetime.now() - BOT_START_TIME
+    return {
+        'status': 'OK',
+        'uptime_seconds': int(uptime.total_seconds()),
+        'last_activity': last_activity.isoformat()
+    }, 200
 
 @flask_app.route('/health')
 def health():
+    global last_activity
+    last_activity = datetime.now()
     return 'Healthy', 200
 
+@flask_app.route('/ping')
+def ping():
+    global last_activity
+    last_activity = datetime.now()
+    return 'pong', 200
+
 def run_flask():
-    flask_app.run(host='0.0.0.0', port=PORT)
+    flask_app.run(host='0.0.0.0', port=int(os.getenv('PORT', 5000)), threaded=True)
 
 class DataStorage:
     def __init__(self):
-        self.g = None
-        self.repo = None
         self.users_file = 'users.json'
         self.stats_file = 'statistics.json'
-        self.logs_file = 'logs.json'
-        if GITHUB_TOKEN:
-            try:
-                self.g = Github(GITHUB_TOKEN)
-                self.repo = self.g.get_repo(GITHUB_REPO)
-                logger.info("GitHub connected")
-            except Exception as e:
-                logger.error(f"GitHub connection error: {e}")
-        self.users = self.load_data(self.users_file, {})
-        self.stats = self.load_data(self.stats_file, {
-            'total_messages': 0,
-            'total_commands': 0,
-            'ai_requests': 0,
-            'start_date': datetime.now().isoformat()
-        })
-        self.logs = self.load_data(self.logs_file, [])
+        self.users = self.load_users()
+        self.stats = self.load_stats()
         self.chat_sessions = {}
         self.username_to_id = {}
         self.update_username_mapping()
 
-    def load_data(self, path, default) -> Dict:
-        if not self.repo:
-            return default
+    def load_users(self) -> Dict:
         try:
-            file = self.repo.get_contents(path)
-            content = file.decoded_content.decode('utf-8')
-            return json.loads(content)
+            if os.path.exists(self.users_file):
+                with open(self.users_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    return {int(k): v for k, v in data.items()}
+            return {}
         except Exception as e:
-            logger.error(f"Error loading {path}: {e}")
-            return default
-
-    def save_data(self, path, data):
-        if not self.repo:
-            return
-        try:
-            content = json.dumps(data, ensure_ascii=False, indent=2)
-            try:
-                file = self.repo.get_contents(path)
-                self.repo.update_file(path, f"Update {path}", content, file.sha)
-            except:
-                self.repo.create_file(path, f"Create {path}", content)
-        except Exception as e:
-            logger.error(f"Error saving {path}: {e}")
+            logger.error(f"Error loading users: {e}")
+            return {}
 
     def save_users(self):
-        self.save_data(self.users_file, self.users)
-        self.update_username_mapping()
+        try:
+            with open(self.users_file, 'w', encoding='utf-8') as f:
+                json.dump(self.users, f, ensure_ascii=False, indent=2)
+            self.update_username_mapping()
+        except Exception as e:
+            logger.error(f"Error saving users: {e}")
+
+    def load_stats(self) -> Dict:
+        try:
+            if os.path.exists(self.stats_file):
+                with open(self.stats_file, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            return {
+                'total_messages': 0,
+                'total_commands': 0,
+                'ai_requests': 0,
+                'start_date': datetime.now().isoformat()
+            }
+        except Exception as e:
+            logger.error(f"Error loading stats: {e}")
+            return {}
 
     def save_stats(self):
-        self.save_data(self.stats_file, self.stats)
-
-    def save_logs(self):
-        self.save_data(self.logs_file, self.logs)
+        try:
+            with open(self.stats_file, 'w', encoding='utf-8') as f:
+                json.dump(self.stats, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            logger.error(f"Error saving stats: {e}")
 
     def update_username_mapping(self):
         self.username_to_id = {}
         for user_id, user_data in self.users.items():
             username = user_data.get('username')
             if username:
-                self.username_to_id[username.lower()] = int(user_id)
+                self.username_to_id[username.lower()] = user_id
 
     def get_user_id_by_identifier(self, identifier: str) -> Optional[int]:
         identifier = identifier.strip()
@@ -156,9 +164,8 @@ class DataStorage:
         return self.username_to_id.get(identifier.lower())
 
     def get_user(self, user_id: int) -> Dict:
-        str_id = str(user_id)
-        if str_id not in self.users:
-            self.users[str_id] = {
+        if user_id not in self.users:
+            self.users[user_id] = {
                 'id': user_id,
                 'username': '',
                 'first_name': '',
@@ -173,7 +180,7 @@ class DataStorage:
                 'commands_count': 0
             }
             self.save_users()
-        return self.users[str_id]
+        return self.users[user_id]
 
     def update_user(self, user_id: int, data: Dict):
         user = self.get_user(user_id)
@@ -204,17 +211,6 @@ class DataStorage:
         if user_id in self.chat_sessions:
             del self.chat_sessions[user_id]
 
-    def log_command(self, user_id: int, command: str):
-        log_entry = {
-            'user_id': user_id,
-            'command': command,
-            'timestamp': datetime.now().isoformat()
-        }
-        self.logs.append(log_entry)
-        if len(self.logs) > 1000:
-            self.logs = self.logs[-1000:]
-        self.save_logs()
-
 storage = DataStorage()
 scheduler = AsyncIOScheduler()
 
@@ -232,7 +228,8 @@ def get_main_keyboard(user_id: int) -> ReplyKeyboardMarkup:
     keyboard = [
         [KeyboardButton("💬 AI Чат"), KeyboardButton("📝 Заметки")],
         [KeyboardButton("🌍 Погода"), KeyboardButton("⏰ Время")],
-        [KeyboardButton("🎲 Развлечения"), KeyboardButton("ℹ️ Инфо")]
+        [KeyboardButton("🎲 Развлечения"), KeyboardButton("ℹ️ Инфо")],
+        [KeyboardButton("💰 Валюта"), KeyboardButton("🌐 Перевод")]
     ]
 
     if storage.is_vip(user_id):
@@ -274,19 +271,32 @@ async def get_weather_data(city: str) -> Optional[Dict]:
         logger.error(f"Weather error: {e}")
         return None
 
+# Keep-alive функция (улучшена)
+def keep_awake():
+    global last_activity
+    try:
+        response = requests.get(f"{RENDER_URL}/health", timeout=5)
+        logger.info(f"Keep-alive ping sent. Status: {response.status_code}")
+        last_activity = datetime.now()
+    except Exception as e:
+        logger.error(f"Keep-awake error: {e}")
+
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
 
     identify_creator(user)
 
     user_data = storage.get_user(user.id)
-    user_data['commands_count'] += 1
-    storage.update_user(user.id, user_data)
+    storage.update_user(user.id, {
+        'username': user.username or '',
+        'first_name': user.first_name or '',
+        'commands_count': user_data['commands_count'] + 1
+    })
 
     welcome_text = f"""
 🤖 <b>Добро пожаловать в AI DISCO BOT!</b>
 
-Привет, {user.first_name}! Я многофункциональный бот с искусственным интеллектом на базе <b>Google Gemini 1.5</b>.
+Привет, {user.first_name}! Я многофункциональный бот с искусственным интеллектом на базе <b>Google Gemini 2.5</b>.
 
 <b>🎯 Основные возможности:</b>
 💬 Умный AI-чат с контекстом
@@ -313,8 +323,9 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     identify_creator(update.effective_user)
     user_id = update.effective_user.id
     user_data = storage.get_user(user_id)
-    user_data['commands_count'] += 1
-    storage.update_user(user_id, user_data)
+    storage.update_user(user_id, {
+        'commands_count': user_data['commands_count'] + 1
+    })
 
     help_text = """
 📚 <b>СПИСОК КОМАНД</b>
@@ -326,7 +337,6 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /status - Статус системы
 /profile - Твой профиль
 /uptime - Время работы бота
-/ping - Проверка соединения
 
 <b>💬 AI и Память:</b>
 /ai [вопрос] - Задать вопрос AI
@@ -345,6 +355,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /time [город] - Текущее время
 /weather [город] - Погода
 /translate [язык] [текст] - Перевод
+/currency [из] [в] [сумма] - Конвертер валют
 
 <b>🎲 Развлечения:</b>
 /random [min] [max] - Случайное число
@@ -353,12 +364,19 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /joke - Случайная шутка
 /quote - Мудрая цитата
 /fact - Интересный факт
+/8ball [вопрос] - Магический шар
 
 <b>💎 VIP Команды:</b>
 /vip - Твой VIP статус
 /remind [минуты] [текст] - Напоминание
 /reminders - Список напоминаний
-"""
+/delreminder [номер] - Удалить напоминание
+/nickname [имя] - Установить никнейм
+
+<b>📊 Профиль:</b>
+/rank - Твой уровень
+/profile - Полный профиль
+    """
 
     if is_creator(user_id):
         help_text += """
@@ -369,7 +387,9 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /broadcast [текст] - Рассылка
 /stats - Полная статистика
 /backup - Резервная копия
-"""
+/maintenance [on/off] - Режим обслуживания
+/cleanup - Очистка неактивных
+        """
 
     help_text += "\n<i>💡 Просто напиши мне что-нибудь - я отвечу!</i>"
 
@@ -379,8 +399,8 @@ async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     info_text = """
 🤖 <b>AI DISCO BOT</b>
 
-<b>Версия:</b> 2.1
-<b>AI Модель:</b> Google Gemini 1.5 Flash
+<b>Версия:</b> 2.2 (обновленная)
+<b>AI Модель:</b> Google Gemini 2.5 Flash
 <b>Создатель:</b> @Ernest_Kostevich
 
 <b>🎯 О боте:</b>
@@ -393,9 +413,11 @@ async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 • Напоминания
 • Игры и развлечения
 • Погода и время
+• Конвертер валют
+• Переводы
 
 <b>🔒 Приватность:</b>
-Все данные хранятся безопасно на GitHub. Мы не передаём вашу информацию третьим лицам.
+Все данные хранятся безопасно. Мы не передаём вашу информацию третьим лицам.
 
 <b>💬 Поддержка:</b>
 По всем вопросам: @Ernest_Kostevich
@@ -426,7 +448,7 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 <b>⏱ Время работы:</b> {uptime_str}
 
 <b>✅ Статус:</b> Онлайн
-<b>🤖 AI:</b> Gemini 1.5 ✓
+<b>🤖 AI:</b> Gemini 2.5 ✓
 """
 
     await update.message.reply_text(status_text, parse_mode=ParseMode.HTML)
@@ -462,17 +484,6 @@ async def uptime_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(uptime_text, parse_mode=ParseMode.HTML)
 
-async def ping_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    storage.log_command(user_id, "/ping")
-    
-    start_time = time.time()
-    sent_msg = await update.message.reply_text("🏓 Pong!")
-    end_time = time.time()
-    
-    latency = round((end_time - start_time) * 1000, 2)
-    await sent_msg.edit_text(f"🏓 Pong! Задержка: {latency}ms")
-
 async def ai_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
 
@@ -501,7 +512,7 @@ async def process_ai_message(update: Update, text: str, user_id: int):
         chat = storage.get_chat_session(user_id)
         response = chat.send_message(text)
         
-        storage.stats['ai_requests'] += 1
+        storage.stats['ai_requests'] = storage.stats.get('ai_requests', 0) + 1
         storage.save_stats()
         
         await update.message.reply_text(
@@ -530,7 +541,7 @@ async def memory_save_command(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     user = storage.get_user(user_id)
     user['memory'][key] = value
-    storage.update_user(user_id, user)
+    storage.save_users()
 
     await update.message.reply_text(
         f"✅ Сохранено в память:\n"
@@ -589,7 +600,7 @@ async def memory_del_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     if key in user['memory']:
         del user['memory'][key]
-        storage.update_user(user_id, user)
+        storage.save_users()
         await update.message.reply_text(f"✅ Ключ '{key}' удалён из памяти.")
     else:
         await update.message.reply_text(f"❌ Ключ '{key}' не найден в памяти.")
@@ -613,7 +624,7 @@ async def note_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     }
 
     user['notes'].append(note)
-    storage.update_user(user_id, user)
+    storage.save_users()
 
     await update.message.reply_text(
         f"✅ Заметка #{len(user['notes'])} сохранена!\n\n"
@@ -653,7 +664,7 @@ async def delnote_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if 1 <= note_num <= len(user['notes']):
             deleted_note = user['notes'].pop(note_num - 1)
-            storage.update_user(user_id, user)
+            storage.save_users()
             await update.message.reply_text(
                 f"✅ Заметка #{note_num} удалена:\n\n"
                 f"📝 {deleted_note['text']}"
@@ -768,6 +779,30 @@ async def translate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Translation error: {e}")
         await update.message.reply_text("❌ Ошибка при переводе текста.")
 
+async def currency_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if len(context.args) < 3:
+        await update.message.reply_text(
+            "❓ Использование: /currency [из] [в] [сумма]\n\n"
+            "Пример: /currency USD EUR 100"
+        )
+        return
+
+    from_cur = context.args[0].upper()
+    to_cur = context.args[1].upper()
+    amount = float(context.args[2])
+
+    try:
+        url = f"https://api.exchangerate-api.com/v4/latest/{from_cur}"
+        response = requests.get(url).json()
+        rate = response['rates'][to_cur]
+        result = amount * rate
+        await update.message.reply_text(
+            f"💰 {amount} {from_cur} = {result:.2f} {to_cur}"
+        )
+    except Exception as e:
+        logger.error(f"Currency error: {e}")
+        await update.message.reply_text("❌ Ошибка при конвертации валюты.")
+
 async def random_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         if len(context.args) >= 2:
@@ -849,6 +884,18 @@ async def fact_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     fact = random.choice(facts)
     await update.message.reply_text(f"🔬 <b>Интересный факт:</b>\n\n{fact}", parse_mode=ParseMode.HTML)
 
+async def eightball_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.args:
+        await update.message.reply_text("❓ Задайте вопрос после /8ball!\nПример: /8ball Будет ли завтра дождь?")
+        return
+
+    answers = [
+        "Да", "Нет", "Возможно", "Определённо да", "Определённо нет",
+        "Спроси позже", "Лучше не знать", "Да, но осторожно"
+    ]
+    answer = random.choice(answers)
+    await update.message.reply_text(f"🔮 {answer}")
+
 async def vip_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     user = storage.get_user(user_id)
@@ -906,7 +953,7 @@ async def remind_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         }
         
         user['reminders'].append(reminder)
-        storage.update_user(user_id, user)
+        storage.save_users()
         
         scheduler.add_job(
             send_reminder,
@@ -947,6 +994,60 @@ async def reminders_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(reminders_text, parse_mode=ParseMode.HTML)
 
+async def delreminder_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+
+    if not storage.is_vip(user_id):
+        await update.message.reply_text(
+            "💎 Эта команда доступна только VIP пользователям."
+        )
+        return
+
+    if not context.args:
+        await update.message.reply_text(
+            "❓ Использование: /delreminder [номер]\n\n"
+            "Пример: /delreminder 1"
+        )
+        return
+
+    try:
+        rem_num = int(context.args[0])
+        user = storage.get_user(user_id)
+        
+        if 1 <= rem_num <= len(user['reminders']):
+            deleted_rem = user['reminders'].pop(rem_num - 1)
+            storage.save_users()
+            await update.message.reply_text(
+                f"✅ Напоминание #{rem_num} удалено:\n\n"
+                f"📝 {deleted_rem['text']}"
+            )
+        else:
+            await update.message.reply_text(f"❌ Напоминание #{rem_num} не найдено.")
+    except ValueError:
+        await update.message.reply_text("❌ Укажите корректный номер напоминания.")
+
+async def nickname_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+
+    if not storage.is_vip(user_id):
+        await update.message.reply_text(
+            "💎 Эта команда доступна только VIP пользователям."
+        )
+        return
+
+    if not context.args:
+        await update.message.reply_text(
+            "❓ Использование: /nickname [новый никнейм]\n\n"
+            "Пример: /nickname SuperUser"
+        )
+        return
+
+    new_nick = ' '.join(context.args)
+    user = storage.get_user(user_id)
+    user['nickname'] = new_nick
+    storage.save_users()
+    await update.message.reply_text(f"✅ Никнейм изменён на '{new_nick}'.")
+
 async def send_reminder(bot, user_id: int, text: str):
     try:
         await bot.send_message(
@@ -957,7 +1058,7 @@ async def send_reminder(bot, user_id: int, text: str):
 
         user = storage.get_user(user_id)
         user['reminders'] = [r for r in user['reminders'] if r['text'] != text]
-        storage.update_user(user_id, user)
+        storage.save_users()
     except Exception as e:
         logger.error(f"Reminder error: {e}")
 
@@ -1008,7 +1109,7 @@ async def grant_vip_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             user['vip_until'] = None
             duration_text = "навсегда"
         
-        storage.update_user(target_id, user)
+        storage.save_users()
         
         username_info = f"@{user['username']}" if user.get('username') else ""
         
@@ -1058,7 +1159,7 @@ async def revoke_vip_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         user = storage.get_user(target_id)
         user['vip'] = False
         user['vip_until'] = None
-        storage.update_user(target_id, user)
+        storage.save_users()
         
         username_info = f"@{user['username']}" if user.get('username') else ""
         
@@ -1111,8 +1212,7 @@ async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     status_msg = await update.message.reply_text("📤 Начинаю рассылку...")
 
-    for user_id_str in storage.users.keys():
-        user_id = int(user_id_str)
+    for user_id in storage.users.keys():
         try:
             await context.bot.send_message(
                 chat_id=user_id,
@@ -1178,7 +1278,6 @@ async def backup_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         backup_data = {
             'users': storage.users,
             'stats': storage.stats,
-            'logs': storage.logs,
             'backup_date': datetime.now().isoformat()
         }
         
@@ -1198,6 +1297,55 @@ async def backup_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Backup error: {e}")
         await update.message.reply_text("❌ Ошибка при создании резервной копии.")
 
+async def maintenance_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    identify_creator(update.effective_user)
+    if not is_creator(update.effective_user.id):
+        await update.message.reply_text("❌ Эта команда доступна только создателю.")
+        return
+
+    if not context.args:
+        await update.message.reply_text(
+            "❓ Использование: /maintenance [on/off]"
+        )
+        return
+
+    mode = context.args[0].lower()
+    global MAINTENANCE_MODE
+    if mode == 'on':
+        MAINTENANCE_MODE = True
+        await update.message.reply_text("🛠 Режим обслуживания включён.")
+    elif mode == 'off':
+        MAINTENANCE_MODE = False
+        await update.message.reply_text("✅ Режим обслуживания выключён.")
+    else:
+        await update.message.reply_text("❌ Неверный параметр. Используйте on или off.")
+
+async def cleanup_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    identify_creator(update.effective_user)
+    if not is_creator(update.effective_user.id):
+        await update.message.reply_text("❌ Эта команда доступна только создателю.")
+        return
+
+    threshold = datetime.now() - timedelta(days=30)
+    removed = 0
+    for user_id in list(storage.users.keys()):
+        user = storage.get_user(user_id)
+        last_active = datetime.fromisoformat(user['last_active'])
+        if last_active < threshold:
+            del storage.users[user_id]
+            removed += 1
+
+    storage.save_users()
+    await update.message.reply_text(f"✅ Очищено {removed} неактивных пользователей.")
+
+async def rank_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    user = storage.get_user(user_id)
+    await update.message.reply_text(
+        f"🏆 <b>Ваш уровень:</b> {user.get('level', 1)}\n"
+        f"📈 <b>Опыт:</b> {user.get('experience', 0)} / {user.get('level', 1) * 100}"
+    )
+
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     identify_creator(update.effective_user)
     user_id = update.effective_user.id
@@ -1205,12 +1353,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
 
     user = storage.get_user(user_id)
-    user['messages_count'] += 1
-    storage.update_user(user_id, user)
-    storage.stats['total_messages'] += 1
+    storage.update_user(user_id, {
+        'messages_count': user['messages_count'] + 1,
+        'username': update.effective_user.username or '',
+        'first_name': update.effective_user.first_name or ''
+    })
+    storage.stats['total_messages'] = storage.stats.get('total_messages', 0) + 1
     storage.save_stats()
 
-    if text in ["💬 AI Чат", "📝 Заметки", "🌍 Погода", "⏰ Время", "🎲 Развлечения", "ℹ️ Инфо", "💎 VIP Меню", "👑 Админ Панель"]:
+    if text in ["💬 AI Чат", "📝 Заметки", "🌍 Погода", "⏰ Время", "🎲 Развлечения", "ℹ️ Инфо", "💎 VIP Меню", "👑 Админ Панель", "💰 Валюта", "🌐 Перевод"]:
         await handle_menu_button(update, context, text)
         return
 
@@ -1267,7 +1418,8 @@ async def handle_menu_button(update: Update, context: ContextTypes.DEFAULT_TYPE,
              InlineKeyboardButton("🪙 Монета", callback_data="game_coin")],
             [InlineKeyboardButton("😄 Шутка", callback_data="game_joke"),
              InlineKeyboardButton("💭 Цитата", callback_data="game_quote")],
-            [InlineKeyboardButton("🔬 Факт", callback_data="game_fact")]
+            [InlineKeyboardButton("🔬 Факт", callback_data="game_fact"),
+             InlineKeyboardButton("🔮 8ball", callback_data="game_8ball")]
         ]
         await update.message.reply_text(
             "🎲 <b>Развлечения</b>\n\nВыбери что-нибудь:",
@@ -1278,11 +1430,28 @@ async def handle_menu_button(update: Update, context: ContextTypes.DEFAULT_TYPE,
     elif button == "ℹ️ Инфо":
         await info_command(update, context)
 
+    elif button == "💰 Валюта":
+        await update.message.reply_text(
+            "💰 <b>Конвертер валют</b>\n\n"
+            "Используй: /currency [из] [в] [сумма]\n"
+            "Пример: /currency USD RUB 100",
+            parse_mode=ParseMode.HTML
+        )
+
+    elif button == "🌐 Перевод":
+        await update.message.reply_text(
+            "🌐 <b>Переводчик</b>\n\n"
+            "Используй: /translate [язык] [текст]\n"
+            "Пример: /translate en Hello world",
+            parse_mode=ParseMode.HTML
+        )
+
     elif button == "💎 VIP Меню":
         if storage.is_vip(user_id):
             keyboard = [
                 [InlineKeyboardButton("⏰ Напоминания", callback_data="vip_reminders")],
-                [InlineKeyboardButton("📊 Статистика", callback_data="vip_stats")]
+                [InlineKeyboardButton("📊 Статистика", callback_data="vip_stats")],
+                [InlineKeyboardButton("🆔 Никнейм", callback_data="vip_nickname")]
             ]
             await update.message.reply_text(
                 "💎 <b>VIP Меню</b>",
@@ -1297,7 +1466,8 @@ async def handle_menu_button(update: Update, context: ContextTypes.DEFAULT_TYPE,
             keyboard = [
                 [InlineKeyboardButton("👥 Пользователи", callback_data="admin_users")],
                 [InlineKeyboardButton("📊 Статистика", callback_data="admin_stats")],
-                [InlineKeyboardButton("📢 Рассылка", callback_data="admin_broadcast")]
+                [InlineKeyboardButton("📢 Рассылка", callback_data="admin_broadcast")],
+                [InlineKeyboardButton("🛠 Обслуживание", callback_data="admin_maintenance")]
             ]
             await update.message.reply_text(
                 "👑 <b>Админ Панель</b>",
@@ -1378,6 +1548,9 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         fact = random.choice(facts)
         await query.message.reply_text(f"🔬 <b>Факт:</b>\n\n{fact}", parse_mode=ParseMode.HTML)
 
+    elif data == "game_8ball":
+        await query.message.reply_text("🔮 Задайте вопрос: /8ball [вопрос]")
+
     elif data == "vip_reminders":
         user_id = query.from_user.id
         user = storage.get_user(user_id)
@@ -1406,6 +1579,12 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         await query.message.reply_text(profile_text, parse_mode=ParseMode.HTML)
 
+    elif data == "vip_nickname":
+        await query.message.reply_text(
+            "🆔 <b>Изменить никнейм</b>\n\n"
+            "Используй: /nickname [новый ник]"
+        )
+
     elif data == "admin_users":
         if not is_creator(query.from_user.id):
             await query.message.reply_text("❌ Доступ запрещён.")
@@ -1413,9 +1592,9 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         users_text = f"👥 <b>СПИСОК ПОЛЬЗОВАТЕЛЕЙ ({len(storage.users)}):</b>\n\n"
         
-        for user_id_str, user in list(storage.users.items())[:20]:
+        for user_id, user in list(storage.users.items())[:20]:
             vip_badge = "💎" if user['vip'] else ""
-            users_text += f"{vip_badge} <code>{user_id_str}</code> - {user.get('first_name', 'Unknown')}\n"
+            users_text += f"{vip_badge} <code>{user_id}</code> - {user.get('first_name', 'Unknown')}\n"
             if user.get('username'):
                 users_text += f"   @{user['username']}\n"
         
@@ -1472,34 +1651,40 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode=ParseMode.HTML
         )
 
+    elif data == "admin_maintenance":
+        if not is_creator(query.from_user.id):
+            await query.message.reply_text("❌ Доступ запрещён.")
+            return
+        
+        await query.message.reply_text(
+            "🛠 <b>Режим обслуживания</b>\n\n"
+            "Используй: /maintenance [on/off]"
+        )
+
 def main():
     if not BOT_TOKEN or not GEMINI_API_KEY:
         logger.error("Error: BOT_TOKEN or GEMINI_API_KEY not set!")
         return
 
+    # Запуск Flask в отдельном потоке
     flask_thread = Thread(target=run_flask, daemon=True)
     flask_thread.start()
-    logger.info(f"Flask server started on port {PORT}")
+    logger.info(f"Flask server started on port {os.getenv('PORT', 5000)}")
 
-    if APP_URL:
-        def keep_awake():
-            try:
-                requests.get(APP_URL + '/health')
-                logger.info("Sent keep-awake ping")
-            except Exception as e:
-                logger.error(f"Keep-awake error: {e}")
-        
+    # Настройка keep-alive пингов каждые 5 минут
+    if RENDER_URL:
         scheduler.add_job(keep_awake, 'interval', minutes=5)
+        logger.info("Keep-alive scheduler configured")
 
     application = Application.builder().token(BOT_TOKEN).build()
 
+    # Регистрация всех handlers
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("info", info_command))
     application.add_handler(CommandHandler("status", status_command))
     application.add_handler(CommandHandler("profile", profile_command))
     application.add_handler(CommandHandler("uptime", uptime_command))
-    application.add_handler(CommandHandler("ping", ping_command))
 
     application.add_handler(CommandHandler("ai", ai_command))
     application.add_handler(CommandHandler("clear", clear_command))
@@ -1516,6 +1701,7 @@ def main():
     application.add_handler(CommandHandler("time", time_command))
     application.add_handler(CommandHandler("weather", weather_command))
     application.add_handler(CommandHandler("translate", translate_command))
+    application.add_handler(CommandHandler("currency", currency_command))
 
     application.add_handler(CommandHandler("random", random_command))
     application.add_handler(CommandHandler("dice", dice_command))
@@ -1523,10 +1709,14 @@ def main():
     application.add_handler(CommandHandler("joke", joke_command))
     application.add_handler(CommandHandler("quote", quote_command))
     application.add_handler(CommandHandler("fact", fact_command))
+    application.add_handler(CommandHandler("8ball", eightball_command))
 
     application.add_handler(CommandHandler("vip", vip_command))
     application.add_handler(CommandHandler("remind", remind_command))
     application.add_handler(CommandHandler("reminders", reminders_command))
+    application.add_handler(CommandHandler("delreminder", delreminder_command))
+    application.add_handler(CommandHandler("nickname", nickname_command))
+    application.add_handler(CommandHandler("rank", rank_command))
 
     application.add_handler(CommandHandler("grant_vip", grant_vip_command))
     application.add_handler(CommandHandler("revoke_vip", revoke_vip_command))
@@ -1534,13 +1724,20 @@ def main():
     application.add_handler(CommandHandler("broadcast", broadcast_command))
     application.add_handler(CommandHandler("stats", stats_command))
     application.add_handler(CommandHandler("backup", backup_command))
+    application.add_handler(CommandHandler("maintenance", maintenance_command))
+    application.add_handler(CommandHandler("cleanup", cleanup_command))
 
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     application.add_handler(CallbackQueryHandler(handle_callback))
 
+    # Запуск scheduler
     scheduler.start()
 
     logger.info("Bot started successfully!")
+    logger.info("=" * 50)
+    logger.info("AI DISCO BOT is now running!")
+    logger.info("=" * 50)
+    
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == '__main__':
