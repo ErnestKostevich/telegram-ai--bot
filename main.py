@@ -362,6 +362,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /analyze [url] - Анализатор ссылок
 /password [длина] - Генератор паролей
 /base64 encode/decode [текст] - Base64 кодировка
+/qrcode [текст/url] - Генератор QR-кода
 
 <b>🎲 Развлечения:</b>
 /random [min] [max] - Случайное число
@@ -401,7 +402,7 @@ async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     info_text = """
 🤖 <b>AI DISCO BOT</b>
 
-<b>Версия:</b> 2.3
+<b>Версия:</b> 2.4
 <b>AI Модель:</b> Google Gemini 2.5 Flash
 <b>Создатель:</b> @Ernest_Kostevich
 
@@ -415,7 +416,7 @@ async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 • Напоминания
 • Игры и развлечения
 • Погода и время
-• Корректор текста, калькулятор, конвертер, органайзер задач, анализатор ссылок, генератор паролей, base64
+• Корректор текста, калькулятор, конвертер, органайзер задач, анализатор ссылок, генератор паролей, base64, QR-коды
 
 <b>🔒 Приватность:</b>
 Все данные хранятся безопасно. Мы не передаём вашу информацию третьим лицам.
@@ -970,6 +971,23 @@ async def base64_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Base64 error: {e}")
         await update.message.reply_text("❌ Ошибка при обработке. Убедитесь, что текст корректен для выбранного режима.")
+
+async def qrcode_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.args:
+        await update.message.reply_text(
+            "❓ Использование: /qrcode [текст или URL]\n\n"
+            "Пример: /qrcode https://example.com"
+        )
+        return
+
+    text = ' '.join(context.args)
+    qr_url = f"https://api.qrserver.com/v1/create-qr-code/?data={requests.utils.quote(text)}&size=200x200"
+
+    await update.message.reply_photo(
+        photo=qr_url,
+        caption=f"🔳 <b>QR-код для:</b> {text}\n\nСканируйте камерой телефона!",
+        parse_mode=ParseMode.HTML
+    )
 
 async def random_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
@@ -1728,6 +1746,7 @@ def main():
     application.add_handler(CommandHandler("analyze", analyze_command))
     application.add_handler(CommandHandler("password", password_command))
     application.add_handler(CommandHandler("base64", base64_command))
+    application.add_handler(CommandHandler("qrcode", qrcode_command))
 
     application.add_handler(CommandHandler("random", random_command))
     application.add_handler(CommandHandler("dice", dice_command))
