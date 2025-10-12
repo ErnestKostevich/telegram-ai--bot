@@ -26,9 +26,6 @@ from flask import Flask
 
 from bs4 import BeautifulSoup
 
-import firebase_admin
-from firebase_admin import credentials, db
-
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 PORT = int(os.getenv('PORT', 5000))
@@ -100,22 +97,8 @@ def run_flask():
 
 class DataStorage:
     def __init__(self):
-        cred_json = os.getenv('FIREBASE_CREDENTIALS')
-        if cred_json:
-            try:
-                cred_obj = json.loads(cred_json)
-                cred = credentials.Certificate(cred_obj)
-                firebase_admin.initialize_app(cred, {'databaseURL': 'https://ai2011bot-default-rtdb.firebaseio.com/'})
-                logger.info("Firebase initialized successfully")
-            except Exception as e:
-                logger.error(f"Failed to initialize Firebase: {e}")
-                raise
-        else:
-            logger.error("FIREBASE_CREDENTIALS environment variable not set")
-            raise ValueError("Firebase credentials not provided")
-
-        self.users_ref = db.reference('/users')
-        self.stats_ref = db.reference('/stats')
+        self.users_file = 'users.json'
+        self.stats_file = 'statistics.json'
         self.users = self.load_users()
         self.stats = self.load_stats()
         self.chat_sessions = {}
@@ -124,26 +107,28 @@ class DataStorage:
 
     def load_users(self) -> Dict:
         try:
-            data = self.users_ref.get()
-            if data:
-                return {int(k): v for k, v in data.items()}
+            if os.path.exists(self.users_file):
+                with open(self.users_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    return {int(k): v for k, v in data.items()}
             return {}
         except Exception as e:
-            logger.error(f"Error loading users from Firebase: {e}")
+            logger.error(f"Error loading users: {e}")
             return {}
 
     def save_users(self):
         try:
-            self.users_ref.set({str(k): v for k, v in self.users.items()})
+            with open(self.users_file, 'w', encoding='utf-8') as f:
+                json.dump(self.users, f, ensure_ascii=False, indent=2)
             self.update_username_mapping()
         except Exception as e:
-            logger.error(f"Error saving users to Firebase: {e}")
+            logger.error(f"Error saving users: {e}")
 
     def load_stats(self) -> Dict:
         try:
-            data = self.stats_ref.get()
-            if data:
-                return data
+            if os.path.exists(self.stats_file):
+                with open(self.stats_file, 'r', encoding='utf-8') as f:
+                    return json.load(f)
             return {
                 'total_messages': 0,
                 'total_commands': 0,
@@ -151,14 +136,15 @@ class DataStorage:
                 'start_date': datetime.now().isoformat()
             }
         except Exception as e:
-            logger.error(f"Error loading stats from Firebase: {e}")
+            logger.error(f"Error loading stats: {e}")
             return {}
 
     def save_stats(self):
         try:
-            self.stats_ref.set(self.stats)
+            with open(self.stats_file, 'w', encoding='utf-8') as f:
+                json.dump(self.stats, f, ensure_ascii=False, indent=2)
         except Exception as e:
-            logger.error(f"Error saving stats to Firebase: {e}")
+            logger.error(f"Error saving stats: {e}")
 
     def update_username_mapping(self):
         self.username_to_id = {}
