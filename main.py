@@ -23,6 +23,8 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from flask import Flask
 
+from bs4 import BeautifulSoup
+
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 PORT = int(os.getenv('PORT', 5000))
@@ -169,6 +171,7 @@ class DataStorage:
                 'vip': False,
                 'vip_until': None,
                 'notes': [],
+                'todos': [],
                 'memory': {},
                 'reminders': [],
                 'registered': datetime.now().isoformat(),
@@ -255,13 +258,13 @@ def format_user_info(user: Dict) -> str:
 
     return info
 
-async def get_weather_data(city: str) -> Optional[Dict]:
+async def get_weather_data(city: str) -> Optional[str]:
     try:
         async with aiohttp.ClientSession() as session:
-            url = f"https://wttr.in/{city}?format=j1"
+            url = f"https://wttr.in/{city}?0&T"  # ?0 for short version, &T for plain text without ANSI
             async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
                 if resp.status == 200:
-                    return await resp.json()
+                    return await resp.text()
                 return None
     except Exception as e:
         logger.error(f"Weather error: {e}")
@@ -352,6 +355,10 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /time [город] - Текущее время
 /weather [город] - Погода
 /translate [язык] [текст] - Перевод
+/fixtext [текст] - Корректор текста
+/calc [выражение] - Калькулятор
+/convert [значение] [из] to [в] - Конвертер
+/analyze [url] - Анализатор ссылок
 
 <b>🎲 Развлечения:</b>
 /random [min] [max] - Случайное число
@@ -360,6 +367,11 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /joke - Случайная шутка
 /quote - Мудрая цитата
 /fact - Интересный факт
+
+<b>📋 Задачи:</b>
+/todo add [текст] - Добавить задачу
+/todo list - Показать задачи
+/todo del [номер] - Удалить задачу
 
 <b>💎 VIP Команды:</b>
 /vip - Твой VIP статус
@@ -386,7 +398,7 @@ async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     info_text = """
 🤖 <b>AI DISCO BOT</b>
 
-<b>Версия:</b> 2.1
+<b>Версия:</b> 2.2
 <b>AI Модель:</b> Google Gemini 2.5 Flash
 <b>Создатель:</b> @Ernest_Kostevich
 
@@ -400,6 +412,7 @@ async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 • Напоминания
 • Игры и развлечения
 • Погода и время
+• Корректор текста, калькулятор, конвертер, органайзер задач, анализатор ссылок
 
 <b>🔒 Приватность:</b>
 Все данные хранятся безопасно. Мы не передаём вашу информацию третьим лицам.
@@ -444,6 +457,7 @@ async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     profile_text = format_user_info(user)
     profile_text += f"\n📝 <b>Заметок:</b> {len(user['notes'])}\n"
+    profile_text += f"📋 <b>Задач:</b> {len(user['todos'])}\n"
     profile_text += f"🧠 <b>Записей в памяти:</b> {len(user['memory'])}\n"
 
     if storage.is_vip(user_id):
@@ -660,7 +674,7 @@ async def delnote_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Укажите корректный номер заметки.")
 
 async def time_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    city = ' '.join(context.args) if context.args else 'Moscow'
+    city = ' '.join(context.args).lower() if context.args else 'moscow'
 
     timezones = {
         'moscow': 'Europe/Moscow',
@@ -672,11 +686,15 @@ async def time_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         'dubai': 'Asia/Dubai',
         'sydney': 'Australia/Sydney',
         'los angeles': 'America/Los_Angeles',
-        'beijing': 'Asia/Shanghai'
+        'beijing': 'Asia/Shanghai',
+        'washington': 'America/New_York',
+        'shanghai': 'Asia/Shanghai',
+        'italy': 'Europe/Rome',
+        'france': 'Europe/Paris',
+        'rome': 'Europe/Rome'
     }
 
-    city_lower = city.lower()
-    tz_name = timezones.get(city_lower, 'Europe/Moscow')
+    tz_name = timezones.get(city, 'Europe/Moscow')
 
     try:
         tz = pytz.timezone(tz_name)
@@ -685,7 +703,7 @@ async def time_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         time_text = f"""
 ⏰ <b>Текущее время</b>
 
-📍 <b>Город:</b> {city.title()}
+📍 <b>Город/Страна:</b> {city.title()}
 🕐 <b>Время:</b> {current_time.strftime('%H:%M:%S')}
 📅 <b>Дата:</b> {current_time.strftime('%d.%m.%Y')}
 🌍 <b>Часовой пояс:</b> {tz_name}
@@ -694,46 +712,22 @@ async def time_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Time error: {e}")
         await update.message.reply_text(
-            f"❌ Не удалось получить время для города '{city}'.\n"
-            f"Доступные города: Moscow, London, New York, Tokyo, Paris, Berlin, Dubai, Sydney, Los Angeles, Beijing"
+            f"❌ Не удалось получить время для '{city}'.\n"
+            f"Доступные: Moscow, London, New York, Tokyo, Paris, Berlin, Dubai, Sydney, Los Angeles, Beijing, Washington, Shanghai, Italy, France, Rome"
         )
 
 async def weather_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     city = ' '.join(context.args) if context.args else 'Moscow'
 
     try:
-        weather_data = await get_weather_data(city)
+        weather_text = await get_weather_data(city)
         
-        if weather_data and 'current_condition' in weather_data:
-            current = weather_data['current_condition'][0]
-            
-            temp_c = current['temp_C']
-            feels_like = current['FeelsLikeC']
-            description = current['weatherDesc'][0]['value']
-            humidity = current['humidity']
-            wind_speed = current['windspeedKmph']
-            
-            weather_emojis = {
-                'Sunny': '☀️', 'Clear': '🌙', 'Partly cloudy': '⛅',
-                'Cloudy': '☁️', 'Overcast': '☁️', 'Mist': '🌫️',
-                'Patchy rain possible': '🌦️', 'Light rain': '🌧️',
-                'Moderate rain': '🌧️', 'Heavy rain': '⛈️',
-                'Patchy snow possible': '🌨️', 'Light snow': '❄️',
-                'Moderate snow': '❄️', 'Heavy snow': '❄️'
-            }
-            
-            emoji = weather_emojis.get(description, '🌤️')
-            
-            weather_text = f"""
-{emoji} <b>Погода в {city.title()}</b>
-
-🌡 <b>Температура:</b> {temp_c}°C
-🤔 <b>Ощущается как:</b> {feels_like}°C
-☁️ <b>Описание:</b> {description}
-💧 <b>Влажность:</b> {humidity}%
-💨 <b>Ветер:</b> {wind_speed} км/ч
-"""
-            await update.message.reply_text(weather_text, parse_mode=ParseMode.HTML)
+        if weather_text:
+            await update.message.reply_text(
+                f"🌍 <b>Погода в {city.title()}:</b>\n\n"
+                f"<pre>{weather_text}</pre>",
+                parse_mode=ParseMode.HTML
+            )
         else:
             await update.message.reply_text(f"❌ Город '{city}' не найден.")
     except Exception as e:
@@ -763,6 +757,171 @@ async def translate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Translation error: {e}")
         await update.message.reply_text("❌ Ошибка при переводе текста.")
+
+async def fixtext_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.args:
+        await update.message.reply_text(
+            "❓ Использование: /fixtext [текст]\n\n"
+            "Пример: /fixtext privet kak dela"
+        )
+        return
+
+    text = ' '.join(context.args)
+
+    try:
+        prompt = f"Исправь орфографию, грамматику и пунктуацию в этом тексте: {text}"
+        chat = storage.get_chat_session(update.effective_user.id)
+        response = chat.send_message(prompt)
+        
+        await update.message.reply_text(
+            f"📝 <b>Исправленный текст:</b>\n\n{response.text}",
+            parse_mode=ParseMode.HTML
+        )
+    except Exception as e:
+        logger.error(f"Fixtext error: {e}")
+        await update.message.reply_text("❌ Ошибка при исправлении текста.")
+
+async def calc_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.args:
+        await update.message.reply_text(
+            "❓ Использование: /calc [выражение]\n\n"
+            "Пример: /calc (15 * 3 + 7) / 4"
+        )
+        return
+
+    expression = ' '.join(context.args)
+
+    try:
+        # Безопасный eval с ограниченным globals
+        allowed_names = {"__builtins__": None, "abs": abs, "pow": pow, "round": round}
+        result = eval(expression, {"__builtins__": {}}, allowed_names)
+        
+        await update.message.reply_text(
+            f"🧮 <b>Результат:</b>\n\n{expression} = <b>{result}</b>",
+            parse_mode=ParseMode.HTML
+        )
+    except Exception as e:
+        logger.error(f"Calc error: {e}")
+        await update.message.reply_text("❌ Ошибка при вычислении выражения. Убедитесь, что оно корректно.")
+
+async def convert_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if len(context.args) < 4 or context.args[2].lower() != 'to':
+        await update.message.reply_text(
+            "❓ Использование: /convert [значение] [из] to [в]\n\n"
+            "Пример: /convert 100 USD to EUR\n"
+            "Или: /convert 10 km to miles"
+        )
+        return
+
+    value = context.args[0]
+    from_unit = context.args[1]
+    to_unit = context.args[3]
+
+    try:
+        prompt = f"Конвертируй {value} {from_unit} в {to_unit}. Если это валюта, используй приблизительные текущие курсы."
+        chat = storage.get_chat_session(update.effective_user.id)
+        response = chat.send_message(prompt)
+        
+        await update.message.reply_text(
+            f"📏 <b>Конвертация:</b>\n\n{response.text}",
+            parse_mode=ParseMode.HTML
+        )
+    except Exception as e:
+        logger.error(f"Convert error: {e}")
+        await update.message.reply_text("❌ Ошибка при конвертации.")
+
+async def todo_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    if not context.args:
+        await update.message.reply_text(
+            "❓ Использование: /todo add [текст] | list | del [номер]\n\n"
+            "Пример: /todo add Купить продукты"
+        )
+        return
+
+    subcommand = context.args[0].lower()
+
+    user = storage.get_user(user_id)
+
+    if subcommand == 'add':
+        if len(context.args) < 2:
+            await update.message.reply_text("❓ Укажите текст задачи.")
+            return
+        todo_text = ' '.join(context.args[1:])
+        todo = {
+            'text': todo_text,
+            'created': datetime.now().isoformat()
+        }
+        user['todos'].append(todo)
+        storage.save_users()
+        await update.message.reply_text(
+            f"✅ Задача #{len(user['todos'])} добавлена!\n\n"
+            f"📋 {todo_text}"
+        )
+    elif subcommand == 'list':
+        if not user['todos']:
+            await update.message.reply_text("📭 У вас нет задач.")
+            return
+        todos_text = f"📋 <b>Ваши задачи ({len(user['todos'])}):</b>\n\n"
+        for i, todo in enumerate(user['todos'], 1):
+            created = datetime.fromisoformat(todo['created'])
+            todos_text += f"<b>#{i}</b> ({created.strftime('%d.%m.%Y %H:%M')})\n"
+            todos_text += f"{todo['text']}\n\n"
+        await update.message.reply_text(todos_text, parse_mode=ParseMode.HTML)
+    elif subcommand == 'del':
+        if len(context.args) < 2:
+            await update.message.reply_text("❓ Укажите номер задачи.")
+            return
+        try:
+            todo_num = int(context.args[1])
+            if 1 <= todo_num <= len(user['todos']):
+                deleted_todo = user['todos'].pop(todo_num - 1)
+                storage.save_users()
+                await update.message.reply_text(
+                    f"✅ Задача #{todo_num} удалена:\n\n"
+                    f"📋 {deleted_todo['text']}"
+                )
+            else:
+                await update.message.reply_text(f"❌ Задача #{todo_num} не найдена.")
+        except ValueError:
+            await update.message.reply_text("❌ Укажите корректный номер.")
+    else:
+        await update.message.reply_text("❌ Неизвестная подкоманда. Используйте add, list или del.")
+
+async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.args:
+        await update.message.reply_text(
+            "❓ Использование: /analyze [url]\n\n"
+            "Пример: /analyze https://example.com"
+        )
+        return
+
+    url = context.args[0]
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                if resp.status != 200:
+                    await update.message.reply_text(f"❌ Ошибка: статус {resp.status}")
+                    return
+                html = await resp.text()
+                size_kb = len(html) / 1024
+                soup = BeautifulSoup(html, 'html.parser')
+                title = soup.title.string.strip() if soup.title else 'Нет заголовка'
+                desc_tag = soup.find('meta', attrs={'name': 'description'})
+                description = desc_tag['content'].strip() if desc_tag else 'Нет описания'
+
+        analyze_text = f"""
+🔍 <b>Анализ ссылки:</b> {url}
+
+📝 <b>Заголовок:</b> {title}
+📄 <b>Описание:</b> {description}
+📏 <b>Размер страницы:</b> {size_kb:.2f} KB
+"""
+        await update.message.reply_text(analyze_text, parse_mode=ParseMode.HTML)
+    except Exception as e:
+        logger.error(f"Analyze error: {e}")
+        await update.message.reply_text("❌ Ошибка при анализе ссылки.")
 
 async def random_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
@@ -1139,6 +1298,7 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                       if (datetime.now() - datetime.fromisoformat(u['last_active'])).days < 7)
 
     total_notes = sum(len(u['notes']) for u in storage.users.values())
+    total_todos = sum(len(u['todos']) for u in storage.users.values())
     total_memory = sum(len(u['memory']) for u in storage.users.values())
 
     stats_text = f"""
@@ -1156,6 +1316,7 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 <b>📝 Данные:</b>
 • Заметок: {total_notes}
+• Задач: {total_todos}
 • Записей в памяти: {total_memory}
 
 <b>📅 Запущен:</b> {stats.get('start_date', 'N/A')[:10]}
@@ -1398,6 +1559,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         profile_text = format_user_info(user)
         profile_text += f"\n📝 <b>Заметок:</b> {len(user['notes'])}\n"
+        profile_text += f"📋 <b>Задач:</b> {len(user['todos'])}\n"
         profile_text += f"🧠 <b>Записей в памяти:</b> {len(user['memory'])}\n"
         profile_text += f"⏰ <b>Напоминаний:</b> {len(user['reminders'])}\n"
         
@@ -1433,6 +1595,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                           if (datetime.now() - datetime.fromisoformat(u['last_active'])).days < 7)
         
         total_notes = sum(len(u['notes']) for u in storage.users.values())
+        total_todos = sum(len(u['todos']) for u in storage.users.values())
         total_memory = sum(len(u['memory']) for u in storage.users.values())
         
         stats_text = f"""
@@ -1450,6 +1613,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 <b>📝 Данные:</b>
 • Заметок: {total_notes}
+• Задач: {total_todos}
 • Записей в памяти: {total_memory}
 
 <b>📅 Запущен:</b> {stats.get('start_date', 'N/A')[:10]}
@@ -1509,6 +1673,11 @@ def main():
     application.add_handler(CommandHandler("time", time_command))
     application.add_handler(CommandHandler("weather", weather_command))
     application.add_handler(CommandHandler("translate", translate_command))
+    application.add_handler(CommandHandler("fixtext", fixtext_command))
+    application.add_handler(CommandHandler("calc", calc_command))
+    application.add_handler(CommandHandler("convert", convert_command))
+    application.add_handler(CommandHandler("todo", todo_command))
+    application.add_handler(CommandHandler("analyze", analyze_command))
 
     application.add_handler(CommandHandler("random", random_command))
     application.add_handler(CommandHandler("dice", dice_command))
