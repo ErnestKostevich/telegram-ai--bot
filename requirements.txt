@@ -10,3 +10,4 @@ flask==3.0.3
 pygithub==2.5.0
 psutil==5.9.8
 beautifulsoup4==4.12.3
+firebase-admin
