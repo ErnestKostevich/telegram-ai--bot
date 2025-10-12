@@ -11,4 +11,5 @@ pygithub==2.5.0
 psutil==5.9.8
 beautifulsoup4==4.12.3
 firebase-admin
-psycopg2-binary
+sqlalchemy==2.0.35
+psycopg2-binary==2.9.9
