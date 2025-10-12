@@ -178,7 +178,6 @@ class DataStorage:
         return self.username_to_id.get(identifier.lower())
 
     def get_user(self, user_id: int) -> Dict:
-        user_id_str = str(user_id)
         if user_id not in self.users:
             self.users[user_id] = {
                 'id': user_id,
