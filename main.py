@@ -12,6 +12,7 @@ from typing import Dict, Optional
 import pytz
 from threading import Thread
 import requests
+import base64
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
@@ -359,6 +360,8 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /calc [выражение] - Калькулятор
 /convert [значение] [из] to [в] - Конвертер
 /analyze [url] - Анализатор ссылок
+/password [длина] - Генератор паролей
+/base64 encode/decode [текст] - Base64 кодировка
 
 <b>🎲 Развлечения:</b>
 /random [min] [max] - Случайное число
@@ -398,7 +401,7 @@ async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     info_text = """
 🤖 <b>AI DISCO BOT</b>
 
-<b>Версия:</b> 2.2
+<b>Версия:</b> 2.3
 <b>AI Модель:</b> Google Gemini 2.5 Flash
 <b>Создатель:</b> @Ernest_Kostevich
 
@@ -412,7 +415,7 @@ async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 • Напоминания
 • Игры и развлечения
 • Погода и время
-• Корректор текста, калькулятор, конвертер, органайзер задач, анализатор ссылок
+• Корректор текста, калькулятор, конвертер, органайзер задач, анализатор ссылок, генератор паролей, base64
 
 <b>🔒 Приватность:</b>
 Все данные хранятся безопасно. Мы не передаём вашу информацию третьим лицам.
@@ -922,6 +925,51 @@ async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Analyze error: {e}")
         await update.message.reply_text("❌ Ошибка при анализе ссылки.")
+
+async def password_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        length = 12 if not context.args else int(context.args[0])
+        if length < 8 or length > 50:
+            await update.message.reply_text("❌ Длина должна быть от 8 до 50 символов.")
+            return
+        chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()_-+='
+        password = ''.join(random.choice(chars) for _ in range(length))
+        await update.message.reply_text(
+            f"🔑 <b>Сгенерированный пароль (длина {length}):</b>\n\n<code>{password}</code>\n\n💡 Скопируйте и сохраните в безопасном месте!",
+            parse_mode=ParseMode.HTML
+        )
+    except ValueError:
+        await update.message.reply_text("❌ Укажите корректную длину (число). Пример: /password 16")
+
+async def base64_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if len(context.args) < 2:
+        await update.message.reply_text(
+            "❓ Использование: /base64 encode/decode [текст]\n\n"
+            "Пример: /base64 encode Hello World"
+        )
+        return
+
+    mode = context.args[0].lower()
+    text = ' '.join(context.args[1:])
+
+    try:
+        if mode == 'encode':
+            result = base64.b64encode(text.encode('utf-8')).decode('utf-8')
+            title = "Закодировано в Base64"
+        elif mode == 'decode':
+            result = base64.b64decode(text).decode('utf-8')
+            title = "Декодировано из Base64"
+        else:
+            await update.message.reply_text("❌ Режим должен быть encode или decode.")
+            return
+
+        await update.message.reply_text(
+            f"🔐 <b>{title}:</b>\n\n<code>{result}</code>",
+            parse_mode=ParseMode.HTML
+        )
+    except Exception as e:
+        logger.error(f"Base64 error: {e}")
+        await update.message.reply_text("❌ Ошибка при обработке. Убедитесь, что текст корректен для выбранного режима.")
 
 async def random_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
@@ -1678,6 +1726,8 @@ def main():
     application.add_handler(CommandHandler("convert", convert_command))
     application.add_handler(CommandHandler("todo", todo_command))
     application.add_handler(CommandHandler("analyze", analyze_command))
+    application.add_handler(CommandHandler("password", password_command))
+    application.add_handler(CommandHandler("base64", base64_command))
 
     application.add_handler(CommandHandler("random", random_command))
     application.add_handler(CommandHandler("dice", dice_command))
