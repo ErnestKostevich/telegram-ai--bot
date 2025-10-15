@@ -13,9 +13,6 @@ import pytz
 from threading import Thread
 import requests
 import base64
-import io
-import zipfile
-from urllib.parse import quote as urlquote
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
@@ -29,25 +26,10 @@ from flask import Flask
 
 from bs4 import BeautifulSoup
 
-# Новые импорты для добавленных функций
-import psycopg2
-from sqlalchemy import create_engine, text
-from sqlalchemy.orm import sessionmaker
-import fitz  # PyMuPDF для PDF
-import docx  # python-docx для DOCX
-import chardet  # для определения кодировки
-from PIL import Image
-import torch
-from transformers import BlipProcessor, BlipForConditionalGeneration
-from diffusers import StableDiffusionPipeline
-
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 PORT = int(os.getenv('PORT', 5000))
 APP_URL = os.getenv('APP_URL')
-
-# Параметры подключения к PostgreSQL
-DB_URL = "postgresql://aiernestbot:VoAA5jJYe1P4ggnBPxtXeT3xi4DMcPaX@dpg-d3lv582dbo4c73bf4tcg-a.oregon-postgres.render.com/aibot_e56m"
 
 CREATOR_USERNAME = "Ernest_Kostevich"
 CREATOR_ID = None
@@ -84,34 +66,6 @@ model = genai.GenerativeModel(
 
 flask_app = Flask(__name__)
 
-# Инициализация моделей для новых функций
-device = "cuda" if torch.cuda.is_available() else "cpu"
-logger.info(f"Using device for ML models: {device}")
-
-# BLIP для анализа изображений (VIP only)
-blip_processor = None
-blip_model = None
-try:
-    blip_processor = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-base")
-    blip_model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip-image-captioning-base").to(device)
-    logger.info("BLIP model loaded for image analysis")
-except Exception as e:
-    logger.error(f"Failed to load BLIP model: {e}")
-
-# Stable Diffusion для генерации изображений (VIP only)
-sd_pipeline = None
-try:
-    sd_pipeline = StableDiffusionPipeline.from_pretrained(
-        "runwayml/stable-diffusion-v1-5",
-        torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32
-    ).to(device)
-    sd_pipeline.enable_attention_slicing()
-    logger.info("Stable Diffusion loaded for image generation")
-except Exception as e:
-    logger.error(f"Failed to load Stable Diffusion: {e}")
-    # Fallback to HuggingFace API if token provided
-    HF_API_TOKEN = os.getenv('HF_API_TOKEN')
-
 # Глобальная переменная для отслеживания активности
 last_activity = datetime.now()
 
@@ -141,115 +95,6 @@ def ping():
 def run_flask():
     flask_app.run(host='0.0.0.0', port=PORT, threaded=True)
 
-# Класс для управления PostgreSQL базой данных
-class DatabaseManager:
-    def __init__(self, db_url: str):
-        self.engine = create_engine(db_url, echo=False)
-        self.Session = sessionmaker(bind=self.engine)
-        self.init_database()
-
-    def init_database(self):
-        with self.engine.connect() as conn:
-            conn.execute(text("""
-                CREATE TABLE IF NOT EXISTS users (
-                    id BIGINT PRIMARY KEY,
-                    username VARCHAR(255),
-                    first_name VARCHAR(255),
-                    vip BOOLEAN DEFAULT FALSE,
-                    vip_until TIMESTAMP,
-                    notes JSONB DEFAULT '[]'::JSONB,
-                    todos JSONB DEFAULT '[]'::JSONB,
-                    memory JSONB DEFAULT '{}'::JSONB,
-                    reminders JSONB DEFAULT '[]'::JSONB,
-                    registered TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    last_active TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    messages_count INTEGER DEFAULT 0,
-                    commands_count INTEGER DEFAULT 0
-                );
-                CREATE TABLE IF NOT EXISTS chats (
-                    id SERIAL PRIMARY KEY,
-                    user_id BIGINT REFERENCES users(id),
-                    message TEXT,
-                    response TEXT,
-                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
-                CREATE TABLE IF NOT EXISTS statistics (
-                    key VARCHAR(50) PRIMARY KEY,
-                    value JSONB,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
-            """))
-            conn.commit()
-
-    def get_user(self, user_id: int) -> Dict:
-        session = self.Session()
-        try:
-            user = session.execute(text("SELECT * FROM users WHERE id = :user_id"), {"user_id": user_id}).fetchone()
-            if not user:
-                session.execute(text("INSERT INTO users (id) VALUES (:user_id)"), {"user_id": user_id})
-                session.commit()
-                user = session.execute(text("SELECT * FROM users WHERE id = :user_id"), {"user_id": user_id}).fetchone()
-            user_dict = dict(user._mapping) if user else {}
-            user_dict.setdefault('notes', [])
-            user_dict.setdefault('todos', [])
-            user_dict.setdefault('memory', {})
-            user_dict.setdefault('reminders', [])
-            user_dict.setdefault('registered', datetime.now().isoformat())
-            user_dict.setdefault('last_active', datetime.now().isoformat())
-            user_dict.setdefault('messages_count', 0)
-            user_dict.setdefault('commands_count', 0)
-            return user_dict
-        finally:
-            session.close()
-
-    def update_user(self, user_id: int, data: Dict):
-        session = self.Session()
-        try:
-            # Обновление скалярных полей
-            update_fields = {k: v for k, v in data.items() if k not in ['notes', 'todos', 'memory', 'reminders']}
-            update_fields['last_active'] = datetime.now()
-            if update_fields:
-                set_clause = ', '.join([f"{k} = :{k}" for k in update_fields])
-                session.execute(text(f"UPDATE users SET {set_clause} WHERE id = :user_id"), {**update_fields, "user_id": user_id})
-            # JSON поля
-            for field in ['notes', 'todos', 'memory', 'reminders']:
-                if field in data:
-                    session.execute(
-                        text(f"UPDATE users SET {field} = :{field}::JSONB WHERE id = :user_id"),
-                        {field: json.dumps(data[field]), "user_id": user_id}
-                    )
-            session.commit()
-        finally:
-            session.close()
-
-    def save_chat(self, user_id: int, message: str, response: str):
-        session = self.Session()
-        try:
-            session.execute(
-                text("INSERT INTO chats (user_id, message, response) VALUES (:user_id, :message, :response)"),
-                {"user_id": user_id, "message": message, "response": response}
-            )
-            session.commit()
-        finally:
-            session.close()
-
-    def update_stats(self, key: str, value: Dict):
-        session = self.Session()
-        try:
-            session.execute(
-                text("""
-                    INSERT INTO statistics (key, value) VALUES (:key, :value::JSONB)
-                    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = CURRENT_TIMESTAMP
-                """),
-                {"key": key, "value": json.dumps(value)}
-            )
-            session.commit()
-        finally:
-            session.close()
-
-# Инициализация менеджера БД
-db_manager = DatabaseManager(DB_URL)
-
 class DataStorage:
     def __init__(self):
         self.users_file = 'users.json'
@@ -259,29 +104,6 @@ class DataStorage:
         self.chat_sessions = {}
         self.username_to_id = {}
         self.update_username_mapping()
-        self.sync_from_db()
-
-    def sync_from_db(self):
-        """Синхронизация локальных данных с БД"""
-        try:
-            # Загрузка статистики из БД
-            stats_row = db_manager.engine.execute(text("SELECT value FROM statistics WHERE key = 'global_stats'")).fetchone()
-            if stats_row:
-                self.stats = dict(stats_row[0])
-            else:
-                self.stats = {
-                    'total_messages': 0,
-                    'total_commands': 0,
-                    'ai_requests': 0,
-                    'start_date': datetime.now().isoformat()
-                }
-                db_manager.update_stats('global_stats', self.stats)
-
-            # Обновление маппинга username
-            users = db_manager.engine.execute(text("SELECT id, username FROM users")).fetchall()
-            self.username_to_id = {u.username.lower(): u.id for u in users if u.username}
-        except Exception as e:
-            logger.error(f"Error syncing from DB: {e}")
 
     def load_users(self) -> Dict:
         try:
@@ -321,7 +143,6 @@ class DataStorage:
         try:
             with open(self.stats_file, 'w', encoding='utf-8') as f:
                 json.dump(self.stats, f, ensure_ascii=False, indent=2)
-            db_manager.update_stats('global_stats', self.stats)
         except Exception as e:
             logger.error(f"Error saving stats: {e}")
 
@@ -343,10 +164,22 @@ class DataStorage:
         return self.username_to_id.get(identifier.lower())
 
     def get_user(self, user_id: int) -> Dict:
-        # Проверяем локально, если нет - загружаем из БД
         if user_id not in self.users:
-            user_db = db_manager.get_user(user_id)
-            self.users[user_id] = user_db
+            self.users[user_id] = {
+                'id': user_id,
+                'username': '',
+                'first_name': '',
+                'vip': False,
+                'vip_until': None,
+                'notes': [],
+                'todos': [],
+                'memory': {},
+                'reminders': [],
+                'registered': datetime.now().isoformat(),
+                'last_active': datetime.now().isoformat(),
+                'messages_count': 0,
+                'commands_count': 0
+            }
             self.save_users()
         return self.users[user_id]
 
@@ -355,8 +188,6 @@ class DataStorage:
         user.update(data)
         user['last_active'] = datetime.now().isoformat()
         self.save_users()
-        # Синхронизируем с БД
-        db_manager.update_user(user_id, data)
 
     def is_vip(self, user_id: int) -> bool:
         user = self.get_user(user_id)
@@ -369,7 +200,6 @@ class DataStorage:
             user['vip'] = False
             user['vip_until'] = None
             self.save_users()
-            db_manager.update_user(user_id, {'vip': False, 'vip_until': None})
             return False
         return True
 
@@ -399,9 +229,7 @@ def get_main_keyboard(user_id: int) -> ReplyKeyboardMarkup:
     keyboard = [
         [KeyboardButton("💬 AI Чат"), KeyboardButton("📝 Заметки")],
         [KeyboardButton("🌍 Погода"), KeyboardButton("⏰ Время")],
-        [KeyboardButton("🎲 Развлечения"), KeyboardButton("ℹ️ Инфо")],
-        [KeyboardButton("🖼️ Генерация"), KeyboardButton("📎 Файлы")],
-        [KeyboardButton("🔍 Анализ фото")]
+        [KeyboardButton("🎲 Развлечения"), KeyboardButton("ℹ️ Инфо")]
     ]
 
     if storage.is_vip(user_id):
@@ -454,173 +282,6 @@ def keep_awake():
     except Exception as e:
         logger.error(f"Keep-awake error: {e}")
 
-# Новые функции для обработки файлов и изображений
-async def extract_text_from_file(file_path: str, file_name: str) -> str:
-    """Извлечение текста из различных типов файлов"""
-    try:
-        ext = file_name.lower().split('.')[-1]
-        if ext == 'pdf':
-            doc = fitz.open(file_path)
-            text = ""
-            for page in doc:
-                text += page.get_text()
-            doc.close()
-            return text
-        elif ext == 'docx':
-            doc = docx.Document(file_path)
-            text = "\n".join([para.text for para in doc.paragraphs])
-            return text
-        elif ext == 'txt':
-            with open(file_path, 'rb') as f:
-                raw = f.read()
-                encoding = chardet.detect(raw)['encoding'] or 'utf-8'
-                return raw.decode(encoding)
-        elif ext == 'zip':
-            text = ""
-            with zipfile.ZipFile(file_path, 'r') as zip_ref:
-                for file_info in zip_ref.infolist():
-                    if not file_info.is_dir() and file_info.filename.endswith(('.txt', '.md')):
-                        with zip_ref.open(file_info) as f:
-                            content = f.read().decode('utf-8', errors='ignore')
-                            text += f"\n--- {file_info.filename} ---\n{content}\n"
-            return text
-        else:
-            # Попытка прочитать как текст
-            try:
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    return f.read()
-            except:
-                with open(file_path, 'rb') as f:
-                    raw = f.read()
-                    encoding = chardet.detect(raw)['encoding']
-                    return raw.decode(encoding, errors='ignore')
-    except Exception as e:
-        logger.error(f"Error extracting text from {file_name}: {e}")
-        return f"Ошибка при извлечении текста из файла: {str(e)}"
-
-def analyze_image_with_blip(image_bytes: bytes) -> str:
-    """Анализ изображения с помощью BLIP (только для VIP)"""
-    if blip_model is None or blip_processor is None:
-        return "❌ Модель анализа изображений недоступна"
-    try:
-        image = Image.open(io.BytesIO(image_bytes)).convert('RGB')
-        inputs = blip_processor(image, return_tensors="pt").to(device)
-        with torch.no_grad():
-            out = blip_model.generate(**inputs, max_length=50)
-        description = blip_processor.decode(out[0], skip_special_tokens=True)
-        return description
-    except Exception as e:
-        logger.error(f"BLIP analysis error: {e}")
-        return "❌ Ошибка при анализе изображения"
-
-async def generate_image(prompt: str) -> Optional[io.BytesIO]:
-    """Генерация изображения (только для VIP)"""
-    try:
-        if sd_pipeline:
-            image = sd_pipeline(prompt, num_inference_steps=20, guidance_scale=7.5).images[0]
-            buffer = io.BytesIO()
-            image.save(buffer, format='PNG')
-            buffer.seek(0)
-            return buffer
-        elif HF_API_TOKEN:
-            api_url = "https://api-inference.huggingface.co/models/runwayml/stable-diffusion-v1-5"
-            headers = {"Authorization": f"Bearer {HF_API_TOKEN}"}
-            payload = {"inputs": prompt}
-            response = requests.post(api_url, headers=headers, json=payload)
-            if response.status_code == 200:
-                image = Image.open(io.BytesIO(response.content))
-                buffer = io.BytesIO()
-                image.save(buffer, format='PNG')
-                buffer.seek(0)
-                return buffer
-        return None
-    except Exception as e:
-        logger.error(f"Image generation error: {e}")
-        return None
-
-# Новые команды
-async def generate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Команда генерации изображений (только VIP)"""
-    user_id = update.effective_user.id
-    if not storage.is_vip(user_id):
-        await update.message.reply_text("💎 Генерация изображений доступна только VIP-пользователям.")
-        return
-    if not context.args:
-        await update.message.reply_text("❓ Использование: /generate [описание изображения]\nПример: /generate красивый закат")
-        return
-    prompt = ' '.join(context.args)
-    await update.message.chat.send_action("upload_photo")
-    await update.message.reply_text("🎨 Генерирую изображение...")
-    buffer = await generate_image(prompt)
-    if buffer:
-        await update.message.reply_photo(
-            photo=buffer,
-            caption=f"🖼️ Сгенерировано по запросу: {prompt}\n\n💎 VIP-функция",
-            parse_mode=ParseMode.HTML
-        )
-    else:
-        await update.message.reply_text("❌ Не удалось сгенерировать изображение. Попробуйте другой запрос.")
-
-async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработка загруженных файлов"""
-    user_id = update.effective_user.id
-    document = update.message.document
-    file_name = document.file_name or "unknown_file"
-    file_id = document.file_id
-    await update.message.reply_text("📥 Загружаю и анализирую файл...")
-    try:
-        file_obj = await context.bot.get_file(file_id)
-        file_bytes = await file_obj.download_as_bytearray()
-        temp_path = "temp_file"
-        with open(temp_path, "wb") as f:
-            f.write(file_bytes)
-        extracted_text = await extract_text_from_file(temp_path, file_name)
-        # Сохраняем в БД
-        db_manager.save_chat(user_id, f"Анализ файла {file_name}", extracted_text[:1000] + "..." if len(extracted_text) > 1000 else extracted_text)
-        # Анализ через AI
-        analysis_prompt = f"Проанализируй содержимое файла '{file_name}' и дай краткий обзор или ответ на основе его:\n\n{extracted_text[:4000]}"
-        chat = storage.get_chat_session(user_id)
-        response = chat.send_message(analysis_prompt)
-        await update.message.reply_text(
-            f"📄 <b>Файл: {file_name}</b>\n"
-            f"Тип: {document.mime_type or 'неизвестно'}\n"
-            f"Размер: {document.file_size / 1024:.1f} KB\n\n"
-            f"🤖 <b>Анализ AI:</b>\n\n{response.text}",
-            parse_mode=ParseMode.HTML
-        )
-    except Exception as e:
-        logger.error(f"Document handling error: {e}")
-        await update.message.reply_text(f"❌ Ошибка обработки файла: {str(e)}")
-    finally:
-        if os.path.exists("temp_file"):
-            os.remove("temp_file")
-
-async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Анализ изображений (только VIP)"""
-    user_id = update.effective_user.id
-    if not storage.is_vip(user_id):
-        await update.message.reply_text("💎 Анализ изображений доступен только VIP-пользователям.")
-        return
-    photo = update.message.photo[-1]  # Лучшее качество
-    file_id = photo.file_id
-    await update.message.reply_text("🔍 Анализирую изображение...")
-    try:
-        file_obj = await context.bot.get_file(file_id)
-        file_bytes = await file_obj.download_as_bytearray()
-        blip_desc = analyze_image_with_blip(file_bytes)
-        chat = storage.get_chat_session(user_id)
-        ai_prompt = f"Опиши подробнее изображение на основе: {blip_desc}"
-        response = chat.send_message(ai_prompt)
-        db_manager.save_chat(user_id, "Анализ изображения", f"{blip_desc}\n{response.text}")
-        await update.message.reply_text(
-            f"📸 <b>Описание изображения (BLIP):</b> {blip_desc}\n\n"
-            f"🤖 <b>Подробный анализ AI:</b>\n{response.text}\n\n💎 VIP-функция",
-            parse_mode=ParseMode.HTML
-        )
-    except Exception as e:
-        logger.error(f"Photo analysis error: {e}")
-        await update.message.reply_text("❌ Ошибка анализа изображения.")
-
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
 
@@ -643,15 +304,10 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 📝 Система заметок
 🌍 Погода и время
 🎲 Развлечения и игры
-🖼️ Генерация изображений (VIP)
-📎 Обработка файлов (PDF, TXT, DOCX, ZIP)
-🔍 Анализ изображений (VIP)
 💎 VIP функции
 
 <b>⚡ Быстрый старт:</b>
 • Напиши мне что угодно - я отвечу!
-• Загрузи файл для анализа
-• /generate для изображений (VIP)
 • Используй /help для списка команд
 • Нажми на кнопки меню ниже
 
@@ -674,13 +330,6 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     help_text = """
 📚 <b>СПИСОК КОМАНД</b>
-
-<b>🆕 Новые функции (VIP):</b>
-/generate [описание] - Генерация изображений
-/vipphoto - Анализ фото (или отправь фото)
-
-<b>📎 Файлы:</b>
-Отправь PDF, TXT, DOCX, ZIP - бот извлечет текст и проанализирует
 
 <b>🏠 Основные:</b>
 /start - Запуск бота
@@ -732,10 +381,6 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /vip - Твой VIP статус
 /remind [минуты] [текст] - Напоминание
 /reminders - Список напоминаний
-/generate - Генерация изображений
-/vipphoto - Анализ фото
-
-<i>🆕 Все данные сохраняются в PostgreSQL! 💡 Просто напиши мне что-нибудь - я отвечу!</i>
 """
 
     if is_creator(user_id):
@@ -748,6 +393,8 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /stats - Полная статистика
 /backup - Резервная копия
 """
+
+    help_text += "\n<i>💡 Просто напиши мне что-нибудь - я отвечу!</i>"
 
     await update.message.reply_text(help_text, parse_mode=ParseMode.HTML)
 
@@ -764,15 +411,12 @@ async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 <b>⚡ Особенности:</b>
 • Контекстный AI-диалог
-• Система памяти (PostgreSQL)
+• Система памяти
 • VIP функции
 • Напоминания
 • Игры и развлечения
 • Погода и время
 • Корректор текста, калькулятор, конвертер, органайзер задач, анализатор ссылок, генератор паролей, base64, QR-коды
-• Генерация изображений (VIP, Stable Diffusion)
-• Обработка файлов (PDF, DOCX, TXT, ZIP)
-• Анализ изображений (VIP, BLIP + Gemini)
 
 <b>🔒 Приватность:</b>
 Все данные хранятся безопасно. Мы не передаём вашу информацию третьим лицам.
@@ -807,9 +451,6 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 <b>✅ Статус:</b> Онлайн
 <b>🤖 AI:</b> Gemini 2.5 ✓
-<b>🗄️ БД:</b> PostgreSQL ✓
-<b>🖼️ Генерация:</b> {'Stable Diffusion ✓' if sd_pipeline else 'HF API'}
-<b>🔍 Анализ:</b> {'BLIP ✓' if blip_model else 'Недоступно'}
 """
 
     await update.message.reply_text(status_text, parse_mode=ParseMode.HTML)
@@ -876,8 +517,6 @@ async def process_ai_message(update: Update, text: str, user_id: int):
         
         storage.stats['ai_requests'] = storage.stats.get('ai_requests', 0) + 1
         storage.save_stats()
-        # Сохраняем чат в БД
-        db_manager.save_chat(user_id, text, response.text)
         
         await update.message.reply_text(
             response.text,
@@ -1342,7 +981,7 @@ async def qrcode_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     text = ' '.join(context.args)
-    qr_url = f"https://api.qrserver.com/v1/create-qr-code/?data={urlquote(text)}&size=200x200"
+    qr_url = f"https://api.qrserver.com/v1/create-qr-code/?data={requests.utils.quote(text)}&size=200x200"
 
     await update.message.reply_photo(
         photo=qr_url,
@@ -1448,8 +1087,7 @@ async def vip_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         vip_text += "<b>🎁 Преимущества VIP:</b>\n"
         vip_text += "• ⏰ Система напоминаний\n"
         vip_text += "• 🎯 Приоритетная обработка\n"
-        vip_text += "• 🚀 Генерация изображений\n"
-        vip_text += "• 🔍 Анализ изображений\n"
+        vip_text += "• 🚀 Расширенные возможности\n"
         vip_text += "• 💬 Увеличенный контекст AI\n"
     else:
         vip_text = "💎 <b>VIP СТАТУС</b>\n\n"
@@ -1796,15 +1434,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     storage.stats['total_messages'] = storage.stats.get('total_messages', 0) + 1
     storage.save_stats()
 
-    # Новые обработчики для файлов и фото
-    if update.message.document:
-        await handle_document(update, context)
-        return
-    if update.message.photo and storage.is_vip(user_id):
-        await handle_photo(update, context)
-        return
-
-    if text in ["💬 AI Чат", "📝 Заметки", "🌍 Погода", "⏰ Время", "🎲 Развлечения", "ℹ️ Инфо", "💎 VIP Меню", "👑 Админ Панель", "🖼️ Генерация", "📎 Файлы", "🔍 Анализ фото"]:
+    if text in ["💬 AI Чат", "📝 Заметки", "🌍 Погода", "⏰ Время", "🎲 Развлечения", "ℹ️ Инфо", "💎 VIP Меню", "👑 Админ Панель"]:
         await handle_menu_button(update, context, text)
         return
 
@@ -1819,40 +1449,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_menu_button(update: Update, context: ContextTypes.DEFAULT_TYPE, button: str):
     user_id = update.effective_user.id
-
-    if button == "🖼️ Генерация":
-        if storage.is_vip(user_id):
-            await update.message.reply_text(
-                "🖼️ <b>Генерация изображений (VIP)</b>\n\n"
-                "Используй: /generate [описание]\n"
-                "Пример: /generate футуристический город ночью",
-                parse_mode=ParseMode.HTML
-            )
-        else:
-            await update.message.reply_text("💎 Генерация изображений доступна только VIP-пользователям.")
-    
-    elif button == "📎 Файлы":
-        await update.message.reply_text(
-            "📎 <b>Обработка файлов</b>\n\n"
-            "Поддерживаемые форматы:\n"
-            "• PDF - извлечение текста\n"
-            "• DOCX - чтение документов\n"
-            "• TXT - текстовые файлы\n"
-            "• ZIP - архивы с текстом\n\n"
-            "💡 Просто отправь файл - я проанализирую!",
-            parse_mode=ParseMode.HTML
-        )
-    
-    elif button == "🔍 Анализ фото":
-        if storage.is_vip(user_id):
-            await update.message.reply_text(
-                "🔍 <b>Анализ изображений (VIP)</b>\n\n"
-                "Отправь фото - я опишу, что на нем изображено (BLIP + Gemini).\n"
-                "Или используй /vipphoto",
-                parse_mode=ParseMode.HTML
-            )
-        else:
-            await update.message.reply_text("💎 Анализ изображений доступен только VIP-пользователям.")
 
     if button == "💬 AI Чат":
         await update.message.reply_text(
@@ -2108,15 +1704,6 @@ def main():
         logger.error("Error: BOT_TOKEN or GEMINI_API_KEY not set!")
         return
 
-    # Тестирование подключения к БД
-    try:
-        with db_manager.engine.connect() as conn:
-            conn.execute(text("SELECT 1"))
-        logger.info("✅ PostgreSQL подключен успешно!")
-    except Exception as e:
-        logger.error(f"❌ Ошибка подключения к БД: {e}")
-        return
-
     # Запуск Flask в отдельном потоке
     flask_thread = Thread(target=run_flask, daemon=True)
     flask_thread.start()
@@ -2172,9 +1759,6 @@ def main():
     application.add_handler(CommandHandler("remind", remind_command))
     application.add_handler(CommandHandler("reminders", reminders_command))
 
-    # Новые команды
-    application.add_handler(CommandHandler("generate", generate_command))
-
     application.add_handler(CommandHandler("grant_vip", grant_vip_command))
     application.add_handler(CommandHandler("revoke_vip", revoke_vip_command))
     application.add_handler(CommandHandler("users", users_command))
@@ -2182,10 +1766,7 @@ def main():
     application.add_handler(CommandHandler("stats", stats_command))
     application.add_handler(CommandHandler("backup", backup_command))
 
-    # Обработчики сообщений (текст, файлы, фото)
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    application.add_handler(MessageHandler(filters.Document.ALL, handle_document))
-    application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     application.add_handler(CallbackQueryHandler(handle_callback))
 
     # Запуск scheduler
@@ -2193,7 +1774,7 @@ def main():
 
     logger.info("Bot started successfully!")
     logger.info("=" * 50)
-    logger.info("AI DISCO BOT is now running with new features!")
+    logger.info("AI DISCO BOT is now running!")
     logger.info("=" * 50)
     
     application.run_polling(allowed_updates=Update.ALL_TYPES)
