@@ -13,7 +13,6 @@ import pytz
 from threading import Thread
 import requests
 import base64
-import io
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
@@ -26,13 +25,9 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from flask import Flask
 
 from bs4 import BeautifulSoup
-import psycopg2
-from psycopg2.extras import RealDictCursor
-import fitz  # PyMuPDF for PDF handling
 
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
-DATABASE_URL = os.getenv('DATABASE_URL')  # Для Render PostgreSQL
 PORT = int(os.getenv('PORT', 5000))
 APP_URL = os.getenv('APP_URL')
 
@@ -101,200 +96,59 @@ def run_flask():
     flask_app.run(host='0.0.0.0', port=PORT, threaded=True)
 
 class DataStorage:
-    def __init__(self, db_url: Optional[str] = None):
-        self.db_url = db_url
-        self.conn = None
+    def __init__(self):
+        self.users_file = 'users.json'
+        self.stats_file = 'statistics.json'
+        self.users = self.load_users()
+        self.stats = self.load_stats()
         self.chat_sessions = {}
         self.username_to_id = {}
-        self._users_cache = {}
-        self._stats_cache = {}
-        if self.db_url:
-            self._connect()
-            self._create_tables()
         self.update_username_mapping()
-
-    def _connect(self):
-        try:
-            self.conn = psycopg2.connect(self.db_url, cursor_factory=RealDictCursor)
-            logger.info("Connected to PostgreSQL")
-        except Exception as e:
-            logger.error(f"DB connection error: {e}")
-            raise
-
-    def _create_tables(self):
-        try:
-            with self.conn.cursor() as cur:
-                cur.execute("""
-                    CREATE TABLE IF NOT EXISTS users (
-                        id BIGINT PRIMARY KEY,
-                        username TEXT,
-                        first_name TEXT,
-                        vip BOOLEAN DEFAULT FALSE,
-                        vip_until TIMESTAMP,
-                        notes JSONB DEFAULT '[]'::JSONB,
-                        todos JSONB DEFAULT '[]'::JSONB,
-                        memory JSONB DEFAULT '{}'::JSONB,
-                        reminders JSONB DEFAULT '[]'::JSONB,
-                        registered TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        last_active TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        messages_count INTEGER DEFAULT 0,
-                        commands_count INTEGER DEFAULT 0
-                    );
-                """)
-                cur.execute("""
-                    CREATE TABLE IF NOT EXISTS stats (
-                        id SERIAL PRIMARY KEY,
-                        total_messages INTEGER DEFAULT 0,
-                        total_commands INTEGER DEFAULT 0,
-                        ai_requests INTEGER DEFAULT 0,
-                        start_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    );
-                """)
-                # Вставляем/обновляем глобальную статистику, если не существует
-                cur.execute("""
-                    INSERT INTO stats (id, start_date) 
-                    VALUES (1, CURRENT_TIMESTAMP) 
-                    ON CONFLICT (id) DO NOTHING;
-                """)
-                self.conn.commit()
-        except Exception as e:
-            logger.error(f"Table creation error: {e}")
-            self.conn.rollback()
-
-    def _get_cursor(self):
-        if self.conn:
-            return self.conn.cursor(cursor_factory=RealDictCursor)
-        return None
-
-    def import_from_json(self, users_file: str = 'users.json', stats_file: str = 'statistics.json'):
-        """Опциональный импорт из старых JSON-файлов (вызовите вручную при миграции)"""
-        if not self.db_url:
-            logger.warning("No DB URL, skipping import")
-            return
-        try:
-            # Импорт пользователей
-            if os.path.exists(users_file):
-                with open(users_file, 'r', encoding='utf-8') as f:
-                    users = {int(k): v for k, v in json.load(f).items()}
-                with self._get_cursor() as cur:
-                    for user_id, data in users.items():
-                        cur.execute("""
-                            INSERT INTO users (id, username, first_name, vip, vip_until, notes, todos, memory, reminders, 
-                                               registered, last_active, messages_count, commands_count)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                            ON CONFLICT (id) DO UPDATE SET
-                                username = EXCLUDED.username, first_name = EXCLUDED.first_name,
-                                vip = EXCLUDED.vip, vip_until = EXCLUDED.vip_until,
-                                notes = EXCLUDED.notes, todos = EXCLUDED.todos, memory = EXCLUDED.memory,
-                                reminders = EXCLUDED.reminders, last_active = CURRENT_TIMESTAMP,
-                                messages_count = EXCLUDED.messages_count, commands_count = EXCLUDED.commands_count
-                        """, (user_id, data.get('username'), data.get('first_name'), data.get('vip'), data.get('vip_until'),
-                              json.dumps(data.get('notes', [])), json.dumps(data.get('todos', [])), json.dumps(data.get('memory', {})),
-                              json.dumps(data.get('reminders', [])), data.get('registered'), data.get('last_active'),
-                              data.get('messages_count', 0), data.get('commands_count', 0)))
-                    self.conn.commit()
-
-            # Импорт статистики
-            if os.path.exists(stats_file):
-                with open(stats_file, 'r', encoding='utf-8') as f:
-                    stats = json.load(f)
-                with self._get_cursor() as cur:
-                    cur.execute("""
-                        UPDATE stats SET total_messages = %s, total_commands = %s, ai_requests = %s
-                        WHERE id = 1
-                    """, (stats.get('total_messages', 0), stats.get('total_commands', 0), stats.get('ai_requests', 0)))
-                    self.conn.commit()
-            logger.info("Import from JSON completed")
-        except Exception as e:
-            logger.error(f"Import error: {e}")
 
     def load_users(self) -> Dict:
-        if self.db_url:
-            try:
-                with self._get_cursor() as cur:
-                    cur.execute("SELECT * FROM users")
-                    return {row['id']: dict(row) for row in cur.fetchall()}
-            except Exception as e:
-                logger.error(f"Error loading users from DB: {e}")
-                return {}
-        else:
-            # Fallback to JSON if no DB
-            users_file = 'users.json'
-            try:
-                if os.path.exists(users_file):
-                    with open(users_file, 'r', encoding='utf-8') as f:
-                        data = json.load(f)
-                        return {int(k): v for k, v in data.items()}
-                return {}
-            except Exception as e:
-                logger.error(f"Error loading users from JSON: {e}")
-                return {}
+        try:
+            if os.path.exists(self.users_file):
+                with open(self.users_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    return {int(k): v for k, v in data.items()}
+            return {}
+        except Exception as e:
+            logger.error(f"Error loading users: {e}")
+            return {}
 
     def save_users(self):
-        if self.db_url:
-            # Saves are done per user in update_user, no global save needed
-            pass
-        else:
-            # Fallback JSON save
-            users_file = 'users.json'
-            try:
-                with open(users_file, 'w', encoding='utf-8') as f:
-                    json.dump(self._users_cache, f, ensure_ascii=False, indent=2)
-            except Exception as e:
-                logger.error(f"Error saving users to JSON: {e}")
-        self.update_username_mapping()
+        try:
+            with open(self.users_file, 'w', encoding='utf-8') as f:
+                json.dump(self.users, f, ensure_ascii=False, indent=2)
+            self.update_username_mapping()
+        except Exception as e:
+            logger.error(f"Error saving users: {e}")
 
     def load_stats(self) -> Dict:
-        if self.db_url:
-            try:
-                with self._get_cursor() as cur:
-                    cur.execute("SELECT * FROM stats WHERE id = 1")
-                    row = cur.fetchone()
-                    return dict(row) if row else {}
-            except Exception as e:
-                logger.error(f"Error loading stats from DB: {e}")
-                return {}
-        else:
-            # Fallback JSON
-            stats_file = 'statistics.json'
-            try:
-                if os.path.exists(stats_file):
-                    with open(stats_file, 'r', encoding='utf-8') as f:
-                        return json.load(f)
-                return {
-                    'total_messages': 0,
-                    'total_commands': 0,
-                    'ai_requests': 0,
-                    'start_date': datetime.now().isoformat()
-                }
-            except Exception as e:
-                logger.error(f"Error loading stats from JSON: {e}")
-                return {}
+        try:
+            if os.path.exists(self.stats_file):
+                with open(self.stats_file, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            return {
+                'total_messages': 0,
+                'total_commands': 0,
+                'ai_requests': 0,
+                'start_date': datetime.now().isoformat()
+            }
+        except Exception as e:
+            logger.error(f"Error loading stats: {e}")
+            return {}
 
     def save_stats(self):
-        if self.db_url:
-            try:
-                with self._get_cursor() as cur:
-                    cur.execute("""
-                        UPDATE stats SET total_messages = %s, total_commands = %s, ai_requests = %s
-                        WHERE id = 1
-                    """, (self._stats_cache.get('total_messages', 0), self._stats_cache.get('total_commands', 0), self._stats_cache.get('ai_requests', 0)))
-                    self.conn.commit()
-            except Exception as e:
-                logger.error(f"Error saving stats to DB: {e}")
-        else:
-            # Fallback JSON
-            stats_file = 'statistics.json'
-            try:
-                with open(stats_file, 'w', encoding='utf-8') as f:
-                    json.dump(self._stats_cache, f, ensure_ascii=False, indent=2)
-            except Exception as e:
-                logger.error(f"Error saving stats to JSON: {e}")
+        try:
+            with open(self.stats_file, 'w', encoding='utf-8') as f:
+                json.dump(self.stats, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            logger.error(f"Error saving stats: {e}")
 
     def update_username_mapping(self):
         self.username_to_id = {}
-        users = self.load_users()
-        for user_id, user_data in users.items():
+        for user_id, user_data in self.users.items():
             username = user_data.get('username')
             if username:
                 self.username_to_id[username.lower()] = user_id
@@ -310,100 +164,42 @@ class DataStorage:
         return self.username_to_id.get(identifier.lower())
 
     def get_user(self, user_id: int) -> Dict:
-        if self.db_url:
-            try:
-                with self._get_cursor() as cur:
-                    cur.execute("SELECT * FROM users WHERE id = %s", (user_id,))
-                    row = cur.fetchone()
-                    if row:
-                        return dict(row)
-                    else:
-                        # Create new user
-                        user = {
-                            'id': user_id,
-                            'username': '',
-                            'first_name': '',
-                            'vip': False,
-                            'vip_until': None,
-                            'notes': [],
-                            'todos': [],
-                            'memory': {},
-                            'reminders': [],
-                            'registered': datetime.now().isoformat(),
-                            'last_active': datetime.now().isoformat(),
-                            'messages_count': 0,
-                            'commands_count': 0
-                        }
-                        self.update_user(user_id, user)
-                        return user
-            except Exception as e:
-                logger.error(f"Error getting user from DB: {e}")
-                return {}
-        else:
-            # Fallback JSON
-            if user_id not in self._users_cache:
-                self._users_cache[user_id] = {
-                    'id': user_id,
-                    'username': '',
-                    'first_name': '',
-                    'vip': False,
-                    'vip_until': None,
-                    'notes': [],
-                    'todos': [],
-                    'memory': {},
-                    'reminders': [],
-                    'registered': datetime.now().isoformat(),
-                    'last_active': datetime.now().isoformat(),
-                    'messages_count': 0,
-                    'commands_count': 0
-                }
-                self.save_users()
-            return self._users_cache[user_id]
+        if user_id not in self.users:
+            self.users[user_id] = {
+                'id': user_id,
+                'username': '',
+                'first_name': '',
+                'vip': False,
+                'vip_until': None,
+                'notes': [],
+                'todos': [],
+                'memory': {},
+                'reminders': [],
+                'registered': datetime.now().isoformat(),
+                'last_active': datetime.now().isoformat(),
+                'messages_count': 0,
+                'commands_count': 0
+            }
+            self.save_users()
+        return self.users[user_id]
 
     def update_user(self, user_id: int, data: Dict):
-        if self.db_url:
-            try:
-                user = self.get_user(user_id)
-                update_data = {**user, **data}
-                update_data['last_active'] = datetime.now().isoformat()
-                
-                with self._get_cursor() as cur:
-                    cur.execute("""
-                        INSERT INTO users (id, username, first_name, vip, vip_until, notes, todos, memory, reminders, 
-                                           registered, last_active, messages_count, commands_count)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                        ON CONFLICT (id) DO UPDATE SET
-                            username = EXCLUDED.username, first_name = EXCLUDED.first_name,
-                            vip = EXCLUDED.vip, vip_until = EXCLUDED.vip_until,
-                            notes = EXCLUDED.notes, todos = EXCLUDED.todos, memory = EXCLUDED.memory,
-                            reminders = EXCLUDED.reminders, last_active = EXCLUDED.last_active,
-                            messages_count = EXCLUDED.messages_count, commands_count = EXCLUDED.commands_count
-                    """, (update_data['id'], update_data['username'], update_data['first_name'], update_data['vip'],
-                          update_data['vip_until'], json.dumps(update_data['notes']), json.dumps(update_data['todos']),
-                          json.dumps(update_data['memory']), json.dumps(update_data['reminders']), update_data['registered'],
-                          update_data['last_active'], update_data['messages_count'], update_data['commands_count']))
-                    self.conn.commit()
-                    # Update cache
-                    self._users_cache[user_id] = update_data
-            except Exception as e:
-                logger.error(f"Error updating user in DB: {e}")
-        else:
-            # Fallback JSON
-            user = self.get_user(user_id)
-            user.update(data)
-            user['last_active'] = datetime.now().isoformat()
-            self._users_cache[user_id] = user
-            self.save_users()
+        user = self.get_user(user_id)
+        user.update(data)
+        user['last_active'] = datetime.now().isoformat()
+        self.save_users()
 
     def is_vip(self, user_id: int) -> bool:
         user = self.get_user(user_id)
-        if not user.get('vip', False):
+        if not user['vip']:
             return False
-        if user.get('vip_until') is None:
+        if user['vip_until'] is None:
             return True
         vip_until = datetime.fromisoformat(user['vip_until'])
         if datetime.now() > vip_until:
-            self.update_user(user_id, {'vip': False, 'vip_until': None})
+            user['vip'] = False
+            user['vip_until'] = None
+            self.save_users()
             return False
         return True
 
@@ -416,24 +212,7 @@ class DataStorage:
         if user_id in self.chat_sessions:
             del self.chat_sessions[user_id]
 
-    @property
-    def users(self):
-        self._users_cache = self.load_users()
-        return self._users_cache
-
-    @property
-    def stats(self):
-        self._stats_cache = self.load_stats()
-        if not self._stats_cache:
-            self._stats_cache = {
-                'total_messages': 0,
-                'total_commands': 0,
-                'ai_requests': 0,
-                'start_date': datetime.now().isoformat()
-            }
-        return self._stats_cache
-
-storage = DataStorage(DATABASE_URL)
+storage = DataStorage()
 scheduler = AsyncIOScheduler()
 
 def identify_creator(user):
@@ -602,8 +381,6 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /vip - Твой VIP статус
 /remind [минуты] [текст] - Напоминание
 /reminders - Список напоминаний
-📷 Отправь фото для анализа (автоматически)
-📄 Отправь PDF для анализа (автоматически)
 """
 
     if is_creator(user_id):
@@ -767,7 +544,7 @@ async def memory_save_command(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     user = storage.get_user(user_id)
     user['memory'][key] = value
-    storage.update_user(user_id, {'memory': user['memory']})
+    storage.save_users()
 
     await update.message.reply_text(
         f"✅ Сохранено в память:\n"
@@ -826,7 +603,7 @@ async def memory_del_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     if key in user['memory']:
         del user['memory'][key]
-        storage.update_user(user_id, {'memory': user['memory']})
+        storage.save_users()
         await update.message.reply_text(f"✅ Ключ '{key}' удалён из памяти.")
     else:
         await update.message.reply_text(f"❌ Ключ '{key}' не найден в памяти.")
@@ -850,7 +627,7 @@ async def note_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     }
 
     user['notes'].append(note)
-    storage.update_user(user_id, {'notes': user['notes']})
+    storage.save_users()
 
     await update.message.reply_text(
         f"✅ Заметка #{len(user['notes'])} сохранена!\n\n"
@@ -890,7 +667,7 @@ async def delnote_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if 1 <= note_num <= len(user['notes']):
             deleted_note = user['notes'].pop(note_num - 1)
-            storage.update_user(user_id, {'notes': user['notes']})
+            storage.save_users()
             await update.message.reply_text(
                 f"✅ Заметка #{note_num} удалена:\n\n"
                 f"📝 {deleted_note['text']}"
@@ -1080,7 +857,7 @@ async def todo_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             'created': datetime.now().isoformat()
         }
         user['todos'].append(todo)
-        storage.update_user(user_id, {'todos': user['todos']})
+        storage.save_users()
         await update.message.reply_text(
             f"✅ Задача #{len(user['todos'])} добавлена!\n\n"
             f"📋 {todo_text}"
@@ -1103,7 +880,7 @@ async def todo_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             todo_num = int(context.args[1])
             if 1 <= todo_num <= len(user['todos']):
                 deleted_todo = user['todos'].pop(todo_num - 1)
-                storage.update_user(user_id, {'todos': user['todos']})
+                storage.save_users()
                 await update.message.reply_text(
                     f"✅ Задача #{todo_num} удалена:\n\n"
                     f"📋 {deleted_todo['text']}"
@@ -1312,8 +1089,6 @@ async def vip_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         vip_text += "• 🎯 Приоритетная обработка\n"
         vip_text += "• 🚀 Расширенные возможности\n"
         vip_text += "• 💬 Увеличенный контекст AI\n"
-        vip_text += "• 📷 Анализ изображений\n"
-        vip_text += "• 📄 Анализ PDF"
     else:
         vip_text = "💎 <b>VIP СТАТУС</b>\n\n"
         vip_text += "❌ У вас нет VIP статуса.\n\n"
@@ -1352,7 +1127,7 @@ async def remind_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         }
         
         user['reminders'].append(reminder)
-        storage.update_user(user_id, {'reminders': user['reminders']})
+        storage.save_users()
         
         scheduler.add_job(
             send_reminder,
@@ -1403,7 +1178,7 @@ async def send_reminder(bot, user_id: int, text: str):
 
         user = storage.get_user(user_id)
         user['reminders'] = [r for r in user['reminders'] if r['text'] != text]
-        storage.update_user(user_id, {'reminders': user['reminders']})
+        storage.save_users()
     except Exception as e:
         logger.error(f"Reminder error: {e}")
 
@@ -1454,7 +1229,7 @@ async def grant_vip_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             user['vip_until'] = None
             duration_text = "навсегда"
         
-        storage.update_user(target_id, {'vip': True, 'vip_until': user['vip_until']})
+        storage.save_users()
         
         username_info = f"@{user['username']}" if user.get('username') else ""
         
@@ -1502,7 +1277,9 @@ async def revoke_vip_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
             return
         
         user = storage.get_user(target_id)
-        storage.update_user(target_id, {'vip': False, 'vip_until': None})
+        user['vip'] = False
+        user['vip_until'] = None
+        storage.save_users()
         
         username_info = f"@{user['username']}" if user.get('username') else ""
         
@@ -1641,72 +1418,6 @@ async def backup_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Backup error: {e}")
         await update.message.reply_text("❌ Ошибка при создании резервной копии.")
-
-# VIP функция: Анализ фото
-async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    if not storage.is_vip(user_id):
-        await update.message.reply_text("💎 Эта функция доступна только VIP-пользователям.")
-        return
-
-    try:
-        await update.message.chat.send_action("typing")
-        photo_file = await context.bot.get_file(update.message.photo[-1].file_id)
-        photo_bytes = await photo_file.download_as_bytearray()
-        
-        # Gemini image analysis
-        image_part = {"mime_type": "image/jpeg", "data": photo_bytes}
-        chat = storage.get_chat_session(user_id)
-        response = chat.send_message("Опиши это изображение подробно и интересно. Добавь эмодзи.", image=image_part)
-        
-        storage.stats['ai_requests'] = storage.stats.get('ai_requests', 0) + 1
-        storage.save_stats()
-        
-        await update.message.reply_text(response.text, parse_mode=ParseMode.HTML)
-    except Exception as e:
-        logger.error(f"Photo analysis error: {e}")
-        await update.message.reply_text("😔 Извините, произошла ошибка при анализе изображения. Попробуйте ещё раз.")
-
-# VIP функция: Анализ PDF
-async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    if not storage.is_vip(user_id):
-        await update.message.reply_text("💎 Эта функция доступна только VIP-пользователям.")
-        return
-
-    if not update.message.document.mime_type == 'application/pdf':
-        await update.message.reply_text("❌ Поддерживаются только PDF-файлы.")
-        return
-
-    try:
-        await update.message.chat.send_action("typing")
-        doc_file = await context.bot.get_file(update.message.document.file_id)
-        doc_bytes = await doc_file.download_as_bytearray()
-        
-        # Extract text using PyMuPDF
-        doc = fitz.open(stream=doc_bytes, filetype="pdf")
-        text = ""
-        for page in doc:
-            text += page.get_text() + "\n"
-        doc.close()
-        
-        if not text.strip():
-            await update.message.reply_text("❌ Не удалось извлечь текст из PDF.")
-            return
-        
-        # Limit text for AI
-        text_limited = text[:4000] + "..." if len(text) > 4000 else text
-        
-        chat = storage.get_chat_session(user_id)
-        response = chat.send_message(f"Анализируй этот PDF: суммируй ключевые моменты, дай insights и рекомендации. Текст: {text_limited}")
-        
-        storage.stats['ai_requests'] = storage.stats.get('ai_requests', 0) + 1
-        storage.save_stats()
-        
-        await update.message.reply_text(f"📄 <b>Анализ PDF:</b>\n\n{response.text}", parse_mode=ParseMode.HTML)
-    except Exception as e:
-        logger.error(f"PDF analysis error: {e}")
-        await update.message.reply_text("😔 Извините, произошла ошибка при анализе PDF. Попробуйте ещё раз.")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     identify_creator(update.effective_user)
@@ -1993,12 +1704,6 @@ def main():
         logger.error("Error: BOT_TOKEN or GEMINI_API_KEY not set!")
         return
 
-    if DATABASE_URL:
-        logger.info("Using PostgreSQL for storage")
-        # Optional: storage.import_from_json()  # Uncomment for migration
-    else:
-        logger.warning("No DATABASE_URL, using JSON fallback")
-
     # Запуск Flask в отдельном потоке
     flask_thread = Thread(target=run_flask, daemon=True)
     flask_thread.start()
@@ -2061,10 +1766,6 @@ def main():
     application.add_handler(CommandHandler("stats", stats_command))
     application.add_handler(CommandHandler("backup", backup_command))
 
-    # Добавляем обработчики для VIP-функций
-    application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
-    application.add_handler(MessageHandler(filters.Document.ALL, handle_document))
-
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     application.add_handler(CallbackQueryHandler(handle_callback))
 
@@ -2072,8 +1773,6 @@ def main():
     scheduler.start()
 
     logger.info("Bot started successfully!")
-    if DATABASE_URL:
-        logger.info("Using PostgreSQL storage")
     logger.info("=" * 50)
     logger.info("AI DISCO BOT is now running!")
     logger.info("=" * 50)
