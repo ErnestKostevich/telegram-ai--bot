@@ -472,7 +472,12 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     help_text = """📚 <b>КОМАНДЫ</b>
 
 <b>🏠 Основные:</b>
-/start /help /info /status /profile /uptime
+/start 
+/help 
+/info 
+/status 
+/profile 
+/uptime
 
 <b>💬 AI:</b>
 /ai [вопрос] - Задать вопрос
@@ -484,7 +489,9 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /memorylist /memorydel [ключ]
 
 <b>📝 Заметки:</b>
-/note [текст] /notes /delnote [номер]
+/note [текст] 
+/notes 
+/delnote [номер]
 
 <b>📋 Задачи:</b>
 /todo add [текст]
@@ -507,9 +514,15 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /reminders
 📎 Отправь файл - Анализ (VIP)
 📸 Отправь фото - Анализ (VIP)"""
-    if is_creator(user_id):
-        help_text += "\n\n<b>👑 Админ:</b>\n/grant_vip [id/@username] [срок]\n/revoke_vip [id/@username]\n/users /broadcast [текст] /stats /backup"
-    await update.message.reply_text(help_text, parse_mode=ParseMode.HTML)
+       if is_creator(user_id):
+        help_text += """
+<b>👑 Команды Создателя:</b>
+/grant_vip [id/@username] [срок] - Выдать VIP
+/revoke_vip [id/@username] - Забрать VIP
+/users - Список пользователей
+/broadcast [текст] - Рассылка
+/stats - Полная статистика
+/backup - Резервная копия
 
 async def generate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
