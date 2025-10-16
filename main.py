@@ -6,6 +6,7 @@ import json
 import logging
 import random
 import asyncio
+import signal
 from datetime import datetime, timedelta
 from typing import Dict, Optional
 import pytz
@@ -22,6 +23,8 @@ import aiohttp
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from bs4 import BeautifulSoup
 from PIL import Image
+import fitz  # PyMuPDF
+import docx  # python-docx
 
 from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, JSON, Text, BigInteger
 from sqlalchemy.ext.declarative import declarative_base
@@ -41,6 +44,11 @@ logging.basicConfig(
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
+
+# Проверка переменных окружения
+if not BOT_TOKEN or not GEMINI_API_KEY:
+    logger.error("❌ BOT_TOKEN или GEMINI_API_KEY не установлены!")
+    raise ValueError("Required environment variables missing")
 
 # Настройка Gemini 2.5 Flash (быстрая модель)
 genai.configure(api_key=GEMINI_API_KEY)
@@ -111,15 +119,20 @@ class Statistics(Base):
     updated_at = Column(DateTime, default=datetime.now)
 
 # Инициализация БД
+engine = None
+Session = None
 if DATABASE_URL:
-    engine = create_engine(DATABASE_URL, echo=False, pool_pre_ping=True)
-    Base.metadata.create_all(engine)
-    Session = sessionmaker(bind=engine)
-    logger.info("✅ PostgreSQL подключен!")
+    try:
+        engine = create_engine(DATABASE_URL, echo=False, pool_pre_ping=True)
+        Base.metadata.create_all(engine)
+        Session = sessionmaker(bind=engine)
+        logger.info("✅ PostgreSQL подключен!")
+    except Exception as e:
+        logger.warning(f"⚠️ Ошибка подключения к БД: {e}. Fallback на JSON.")
+        engine = None
+        Session = None
 else:
-    engine = None
-    Session = None
-    logger.warning("⚠️ БД не настроена")
+    logger.warning("⚠️ БД не настроена. Используется JSON.")
 
 class DataStorage:
     def __init__(self):
@@ -145,7 +158,8 @@ class DataStorage:
                         return {}
                     return {int(k): v for k, v in data.items()}
             return {}
-        except:
+        except Exception as e:
+            logger.warning(f"Ошибка загрузки users.json: {e}")
             return {}
 
     def save_users(self):
@@ -155,8 +169,8 @@ class DataStorage:
             with open(self.users_file, 'w', encoding='utf-8') as f:
                 json.dump(self.users, f, ensure_ascii=False, indent=2)
             self.update_username_mapping()
-        except:
-            pass
+        except Exception as e:
+            logger.warning(f"Ошибка сохранения users.json: {e}")
 
     def load_stats(self) -> Dict:
         try:
@@ -166,7 +180,8 @@ class DataStorage:
                     if isinstance(data, dict) and data:
                         return data
             return {'total_messages': 0, 'total_commands': 0, 'ai_requests': 0, 'start_date': datetime.now().isoformat()}
-        except:
+        except Exception as e:
+            logger.warning(f"Ошибка загрузки statistics.json: {e}")
             return {'total_messages': 0, 'total_commands': 0, 'ai_requests': 0, 'start_date': datetime.now().isoformat()}
 
     def save_stats(self):
@@ -175,7 +190,8 @@ class DataStorage:
             try:
                 session.merge(Statistics(key='global', value=self.stats, updated_at=datetime.now()))
                 session.commit()
-            except:
+            except Exception as e:
+                logger.warning(f"Ошибка сохранения stats в БД: {e}")
                 session.rollback()
             finally:
                 session.close()
@@ -183,8 +199,8 @@ class DataStorage:
             try:
                 with open(self.stats_file, 'w', encoding='utf-8') as f:
                     json.dump(self.stats, f, ensure_ascii=False, indent=2)
-            except:
-                pass
+            except Exception as e:
+                logger.warning(f"Ошибка сохранения statistics.json: {e}")
 
     def get_stats_from_db(self) -> Dict:
         if not engine:
@@ -195,7 +211,8 @@ class DataStorage:
             if stat:
                 return stat.value
             return {'total_messages': 0, 'total_commands': 0, 'ai_requests': 0, 'start_date': datetime.now().isoformat()}
-        except:
+        except Exception as e:
+            logger.warning(f"Ошибка загрузки stats из БД: {e}")
             return self.load_stats()
         finally:
             session.close()
@@ -216,7 +233,7 @@ class DataStorage:
         if engine:
             session = Session()
             try:
-                user = session.query(User).filter(User.username.ilike(identifier)).first()
+                user = session.query(User).filter(User.username.ilike(f"%{identifier}%")).first()
                 return user.id if user else None
             finally:
                 session.close()
@@ -273,7 +290,8 @@ class DataStorage:
                     setattr(user, key, value)
                 user.last_active = datetime.now()
                 session.commit()
-            except:
+            except Exception as e:
+                logger.warning(f"Ошибка обновления пользователя в БД: {e}")
                 session.rollback()
             finally:
                 session.close()
@@ -317,8 +335,8 @@ class DataStorage:
             chat = Chat(user_id=user_id, message=message[:1000], response=response[:1000])
             session.add(chat)
             session.commit()
-        except:
-            pass
+        except Exception as e:
+            logger.warning(f"Ошибка сохранения чата: {e}")
         finally:
             session.close()
 
@@ -359,7 +377,8 @@ async def generate_image_pollinations(prompt: str) -> Optional[str]:
     try:
         encoded_prompt = urlquote(prompt)
         return f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&nologo=true"
-    except:
+    except Exception as e:
+        logger.warning(f"Ошибка генерации изображения: {e}")
         return None
 
 async def analyze_image_with_gemini(image_bytes: bytes, prompt: str = "Опиши подробно что изображено") -> str:
@@ -368,6 +387,7 @@ async def analyze_image_with_gemini(image_bytes: bytes, prompt: str = "Опиш�
         response = vision_model.generate_content([prompt, image])
         return response.text
     except Exception as e:
+        logger.warning(f"Ошибка анализа изображения: {e}")
         return f"❌ Ошибка анализа: {str(e)}"
 
 async def extract_text_from_document(file_bytes: bytes, filename: str) -> str:
@@ -379,24 +399,17 @@ async def extract_text_from_document(file_bytes: bytes, filename: str) -> str:
             except:
                 return file_bytes.decode('cp1251', errors='ignore')
         elif ext == 'pdf':
-            try:
-                import fitz
-                doc = fitz.open(stream=io.BytesIO(file_bytes), filetype="pdf")
-                text = "".join([page.get_text() for page in doc])
-                doc.close()
-                return text
-            except:
-                return "⚠️ Ошибка чтения PDF"
+            doc = fitz.open(stream=io.BytesIO(file_bytes), filetype="pdf")
+            text = "".join([page.get_text() for page in doc])
+            doc.close()
+            return text
         elif ext in ['doc', 'docx']:
-            try:
-                import docx
-                doc = docx.Document(io.BytesIO(file_bytes))
-                return "\n".join([para.text for para in doc.paragraphs])
-            except:
-                return "⚠️ Ошибка чтения DOCX"
+            doc = docx.Document(io.BytesIO(file_bytes))
+            return "\n".join([para.text for para in doc.paragraphs])
         else:
             return file_bytes.decode('utf-8', errors='ignore')
     except Exception as e:
+        logger.warning(f"Ошибка извлечения текста: {e}")
         return f"❌ Ошибка: {str(e)}"
 
 async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -420,6 +433,7 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
         storage.save_chat(user_id, f"Файл {file_name}", response.text)
         await update.message.reply_text(f"📄 <b>Файл:</b> {file_name}\n\n🤖 <b>Анализ:</b>\n\n{response.text}", parse_mode=ParseMode.HTML)
     except Exception as e:
+        logger.warning(f"Ошибка обработки документа: {e}")
         await update.message.reply_text(f"❌ Ошибка: {str(e)}")
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -437,6 +451,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         storage.save_chat(user_id, "Анализ фото", analysis)
         await update.message.reply_text(f"📸 <b>Анализ (Gemini Vision):</b>\n\n{analysis}\n\n💎 VIP", parse_mode=ParseMode.HTML)
     except Exception as e:
+        logger.warning(f"Ошибка обработки фото: {e}")
         await update.message.reply_text(f"❌ Ошибка: {str(e)}")
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -514,15 +529,15 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /reminders
 📎 Отправь файл - Анализ (VIP)
 📸 Отправь фото - Анализ (VIP)"""
-       if is_creator(user_id):
-        help_text += """
-<b>👑 Команды Создателя:</b>
-/grant_vip [id/@username] [срок] - Выдать VIP
-/revoke_vip [id/@username] - Забрать VIP
-/users - Список пользователей
-/broadcast [текст] - Рассылка
-/stats - Полная статистика
-/backup - Резервная копия
+    if is_creator(user_id):
+        help_text += "\n\n<b>👑 Команды Создателя:</b>\n/...\n" \
+                     "/grant_vip [id/@username] [срок] - Выдать VIP\n" \
+                     "/revoke_vip [id/@username] - Забрать VIP\n" \
+                     "/users - Список пользователей\n" \
+                     "/broadcast [текст] - Рассылка\n" \
+                     "/stats - Полная статистика\n" \
+                     "/backup - Резервная копия"
+    await update.message.reply_text(help_text, parse_mode=ParseMode.HTML)
 
 async def generate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -541,6 +556,7 @@ async def generate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             await update.message.reply_text("❌ Ошибка генерации")
     except Exception as e:
+        logger.warning(f"Ошибка генерации: {e}")
         await update.message.reply_text(f"❌ Ошибка: {str(e)}")
 
 async def ai_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -800,7 +816,8 @@ async def time_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 🕐 Время: {current_time.strftime('%H:%M:%S')}
 📅 Дата: {current_time.strftime('%d.%m.%Y')}
 🌍 Пояс: {tz_name}""", parse_mode=ParseMode.HTML)
-    except:
+    except Exception as e:
+        logger.warning(f"Ошибка времени: {e}")
         await update.message.reply_text(f"❌ Город '{city}' не найден.")
 
 async def weather_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -827,7 +844,8 @@ async def weather_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     await update.message.reply_text(weather_text, parse_mode=ParseMode.HTML)
                 else:
                     await update.message.reply_text(f"❌ Город '{city}' не найден.")
-    except:
+    except Exception as e:
+        logger.warning(f"Ошибка погоды: {e}")
         await update.message.reply_text("❌ Ошибка получения погоды.")
 
 async def translate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -841,7 +859,8 @@ async def translate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         chat = storage.get_chat_session(update.effective_user.id)
         response = chat.send_message(prompt)
         await update.message.reply_text(f"🌐 <b>Перевод:</b>\n\n{response.text}", parse_mode=ParseMode.HTML)
-    except:
+    except Exception as e:
+        logger.warning(f"Ошибка перевода: {e}")
         await update.message.reply_text("❌ Ошибка перевода.")
 
 async def calc_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -852,7 +871,8 @@ async def calc_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         result = eval(expression, {"__builtins__": {}}, {})
         await update.message.reply_text(f"🧮 <b>Результат:</b>\n\n{expression} = <b>{result}</b>", parse_mode=ParseMode.HTML)
-    except:
+    except Exception as e:
+        logger.warning(f"Ошибка расчета: {e}")
         await update.message.reply_text("❌ Ошибка вычисления.")
 
 async def password_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -963,8 +983,8 @@ async def send_reminder(bot, user_id: int, text: str):
         user = storage.get_user(user_id)
         reminders = [r for r in user.get('reminders', []) if r['text'] != text]
         storage.update_user(user_id, {'reminders': reminders})
-    except:
-        pass
+    except Exception as e:
+        logger.warning(f"Ошибка отправки напоминания: {e}")
 
 async def grant_vip_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     identify_creator(update.effective_user)
@@ -995,9 +1015,10 @@ async def grant_vip_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"✅ VIP выдан!\n\n🆔 <code>{target_id}</code>\n⏰ {duration_text}", parse_mode=ParseMode.HTML)
         try:
             await context.bot.send_message(chat_id=target_id, text=f"🎉 VIP статус выдан {duration_text}!", parse_mode=ParseMode.HTML)
-        except:
-            pass
+        except Exception as e:
+            logger.warning(f"Ошибка уведомления о VIP: {e}")
     except Exception as e:
+        logger.warning(f"Ошибка grant_vip: {e}")
         await update.message.reply_text(f"❌ Ошибка: {str(e)}")
 
 async def revoke_vip_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1017,6 +1038,7 @@ async def revoke_vip_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         storage.update_user(target_id, {'vip': False, 'vip_until': None})
         await update.message.reply_text(f"✅ VIP отозван!\n\n🆔 <code>{target_id}</code>", parse_mode=ParseMode.HTML)
     except Exception as e:
+        logger.warning(f"Ошибка revoke_vip: {e}")
         await update.message.reply_text(f"❌ Ошибка: {str(e)}")
 
 async def users_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1051,7 +1073,8 @@ async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await context.bot.send_message(chat_id=user_id, text=f"📢 <b>От создателя:</b>\n\n{message_text}", parse_mode=ParseMode.HTML)
             success += 1
             await asyncio.sleep(0.05)
-        except:
+        except Exception as e:
+            logger.warning(f"Ошибка рассылки пользователю {user_id}: {e}")
             failed += 1
     await status_msg.edit_text(f"✅ Завершено!\n\n✅ Успешно: {success}\n❌ Ошибок: {failed}")
 
@@ -1086,6 +1109,7 @@ async def backup_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_document(document=open(backup_filename, 'rb'), caption=f"✅ Резервная копия\n\n📅 {datetime.now().strftime('%d.%m.%Y %H:%M')}")
         os.remove(backup_filename)
     except Exception as e:
+        logger.warning(f"Ошибка бэкапа: {e}")
         await update.message.reply_text(f"❌ Ошибка: {str(e)}")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1201,11 +1225,12 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if is_creator(query.from_user.id):
             await query.message.reply_text("📢 <b>Рассылка</b>\n\n/broadcast [текст]\nПример: /broadcast Привет всем!", parse_mode=ParseMode.HTML)
 
+def signal_handler(signum, frame):
+    logger.info("Получен сигнал завершения. Останавливаем бота...")
+    scheduler.shutdown()
+    raise SystemExit
+
 def main():
-    if not BOT_TOKEN or not GEMINI_API_KEY:
-        logger.error("❌ BOT_TOKEN или GEMINI_API_KEY не установлены!")
-        return
-    
     application = Application.builder().token(BOT_TOKEN).build()
     
     # Регистрация команд
@@ -1271,6 +1296,10 @@ def main():
     logger.info("🖼️ Генерация: Pollinations AI")
     logger.info("🔍 Анализ: Gemini Vision")
     logger.info("=" * 50)
+    
+    # Graceful shutdown
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
     
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
