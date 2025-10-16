@@ -514,14 +514,19 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /todo del [номер]
 
 <b>🌍 Утилиты:</b>
-/time [город] /weather [город]
+/time [город] 
+/weather [город]
 /translate [язык] [текст]
 /calc [выражение]
 /password [длина]
 
 <b>🎲 Развлечения:</b>
 /random [min] [max]
-/dice /coin /joke /quote /fact
+/dice 
+/coin 
+/joke 
+/quote 
+/fact
 
 <b>💎 VIP:</b>
 /vip /generate [описание]
