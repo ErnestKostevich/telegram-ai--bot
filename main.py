@@ -373,6 +373,143 @@ def get_main_keyboard(user_id: int) -> ReplyKeyboardMarkup:
         keyboard.append([KeyboardButton("👑 Админ Панель")])
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
+def get_help_keyboard(is_admin: bool = False) -> InlineKeyboardMarkup:
+    keyboard = [
+        [InlineKeyboardButton("🏠 Основные", callback_data="help_basic")],
+        [InlineKeyboardButton("💬 AI", callback_data="help_ai")],
+        [InlineKeyboardButton("🧠 Память", callback_data="help_memory")],
+        [InlineKeyboardButton("📝 Заметки", callback_data="help_notes")],
+        [InlineKeyboardButton("📋 Задачи", callback_data="help_todo")],
+        [InlineKeyboardButton("🌍 Утилиты", callback_data="help_utils")],
+        [InlineKeyboardButton("🎲 Развлечения", callback_data="help_games")],
+        [InlineKeyboardButton("💎 VIP", callback_data="help_vip")]
+    ]
+    if is_admin:
+        keyboard.append([InlineKeyboardButton("👑 Админ", callback_data="help_admin")])
+    keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="help_back")])
+    return InlineKeyboardMarkup(keyboard)
+
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    identify_creator(update.effective_user)
+    user_id = update.effective_user.id
+    user_data = storage.get_user(user_id)
+    storage.update_user(user_id, {'commands_count': user_data.get('commands_count', 0) + 1})
+    is_admin = is_creator(user_id)
+    await update.message.reply_text(
+        "📚 <b>Выберите раздел справки:</b>\n\n"
+        "Нажмите кнопку ниже для просмотра команд по теме.",
+        parse_mode=ParseMode.HTML,
+        reply_markup=get_help_keyboard(is_admin)
+    )
+
+# Callback handlers for help sections
+async def handle_help_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    data = query.data
+    user_id = query.from_user.id
+    is_admin = is_creator(user_id)
+
+    if data == "help_back":
+        await query.edit_message_text(
+            "📚 <b>Выберите раздел справки:</b>\n\n"
+            "Нажмите кнопку ниже для просмотра команд по теме.",
+            parse_mode=ParseMode.HTML,
+            reply_markup=get_help_keyboard(is_admin)
+        )
+        return
+
+    sections = {
+        "help_basic": (
+            "🏠 <b>Основные команды:</b>\n\n"
+            "🚀 /start - Запуск бота и приветствие\n\n"
+            "📖 /help - Полный список команд\n\n"
+            "ℹ️ /info - Информация о боте\n\n"
+            "📊 /status - Текущий статус и статистика\n\n"
+            "👤 /profile - Профиль пользователя\n\n"
+            "⏱ /uptime - Время работы бота",
+            get_help_keyboard(is_admin)
+        ),
+        "help_ai": (
+            "💬 <b>AI команды:</b>\n\n"
+            "🤖 /ai [вопрос] - Задать вопрос AI\n\n"
+            "🧹 /clear - Очистить контекст чата",
+            get_help_keyboard(is_admin)
+        ),
+        "help_memory": (
+            "🧠 <b>Память:</b>\n\n"
+            "💾 /memorysave [ключ] [значение] - Сохранить в память\n\n"
+            "🔍 /memoryget [ключ] - Получить из памяти\n\n"
+            "📋 /memorylist - Список ключей\n\n"
+            "🗑 /memorydel [ключ] - Удалить ключ",
+            get_help_keyboard(is_admin)
+        ),
+        "help_notes": (
+            "📝 <b>Заметки:</b>\n\n"
+            "➕ /note [текст] - Создать заметку\n\n"
+            "📋 /notes - Список заметок\n\n"
+            "🗑 /delnote [номер] - Удалить заметку",
+            get_help_keyboard(is_admin)
+        ),
+        "help_todo": (
+            "📋 <b>Задачи:</b>\n\n"
+            "➕ /todo add [текст] - Добавить задачу\n\n"
+            "📋 /todo list - Список задач\n\n"
+            "🗑 /todo del [номер] - Удалить задачу",
+            get_help_keyboard(is_admin)
+        ),
+        "help_utils": (
+            "🌍 <b>Утилиты:</b>\n\n"
+            "🕐 /time [город] - Текущее время\n\n"
+            "☀️ /weather [город] - Погода\n\n"
+            "🌐 /translate [язык] [текст] - Перевод\n\n"
+            "🧮 /calc [выражение] - Калькулятор\n\n"
+            "🔑 /password [длина] - Генератор пароля",
+            get_help_keyboard(is_admin)
+        ),
+        "help_games": (
+            "🎲 <b>Развлечения:</b>\n\n"
+            "🎲 /random [min] [max] - Случайное число в диапазоне\n\n"
+            "🎯 /dice - Бросок кубика (1-6)\n\n"
+            "🪙 /coin - Подбрасывание монеты (орёл/решка)\n\n"
+            "😄 /joke - Случайная шутка\n\n"
+            "💭 /quote - Мотивационная цитата\n\n"
+            "🔬 /fact - Интересный факт",
+            get_help_keyboard(is_admin)
+        ),
+        "help_vip": (
+            "💎 <b>VIP команды:</b>\n\n"
+            "👑 /vip - Статус VIP\n\n"
+            "🖼️ /generate [описание] - Генерация изображения\n\n"
+            "⏰ /remind [минуты] [текст] - Напоминание\n\n"
+            "📋 /reminders - Список напоминаний\n\n"
+            "📎 Отправь файл - Анализ (VIP)\n\n"
+            "📸 Отправь фото - Анализ (VIP)",
+            get_help_keyboard(is_admin)
+        )
+    }
+
+    if data == "help_admin" and is_admin:
+        text = "👑 <b>Команды Создателя:</b>\n\n" \
+               "🎁 /grant_vip [id/@username] [срок] - Выдать VIP (week/month/year/forever)\n\n" \
+               "❌ /revoke_vip [id/@username] - Забрать VIP\n\n" \
+               "👥 /users - Список пользователей\n\n" \
+               "📢 /broadcast [текст] - Рассылка\n\n" \
+               "📈 /stats - Полная статистика\n\n" \
+               "💾 /backup - Резервная копия"
+        markup = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="help_back")]])
+    elif data in sections:
+        text, markup = sections[data]
+    else:
+        await query.edit_message_text("❌ Раздел не найден.")
+        return
+
+    await query.edit_message_text(
+        text,
+        parse_mode=ParseMode.HTML,
+        reply_markup=markup
+    )
+
 async def generate_image_pollinations(prompt: str) -> Optional[str]:
     try:
         encoded_prompt = urlquote(prompt)
@@ -478,71 +615,6 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 <b>👨‍💻 Создатель:</b> @{CREATOR_USERNAME}"""
     await update.message.reply_text(welcome_text, parse_mode=ParseMode.HTML, reply_markup=get_main_keyboard(user.id))
-
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    identify_creator(update.effective_user)
-    user_id = update.effective_user.id
-    user_data = storage.get_user(user_id)
-    storage.update_user(user_id, {'commands_count': user_data.get('commands_count', 0) + 1})
-    help_text = """📚 <b>КОМАНДЫ</b>
-
-<b>🏠 Основные:</b>
-/start 
-/help 
-/info 
-/status 
-/profile 
-/uptime
-
-<b>💬 AI:</b>
-/ai [вопрос] - Задать вопрос
-/clear - Очистить контекст
-
-<b>🧠 Память:</b>
-/memorysave [ключ] [значение]
-/memoryget [ключ]
-/memorylist /memorydel [ключ]
-
-<b>📝 Заметки:</b>
-/note [текст] 
-/notes 
-/delnote [номер]
-
-<b>📋 Задачи:</b>
-/todo add [текст]
-/todo list
-/todo del [номер]
-
-<b>🌍 Утилиты:</b>
-/time [город] 
-/weather [город]
-/translate [язык] [текст]
-/calc [выражение]
-/password [длина]
-
-<b>🎲 Развлечения:</b>
-/random [min] [max]
-/dice 
-/coin 
-/joke 
-/quote 
-/fact
-
-<b>💎 VIP:</b>
-/vip /generate [описание]
-/remind [минуты] [текст]
-/reminders
-📎 Отправь файл - Анализ (VIP)
-📸 Отправь фото - Анализ (VIP)"""
-    if is_creator(user_id):
-        help_text += "\n\n<b>👑 Команды Создателя:</b>\n\n" \
-                     "/grant_vip [id/@username] [срок] - Выдать VIP\n" \
-                     "/revoke_vip [id/@username] - Забрать VIP\n" \
-                     "/users - Список пользователей\n" \
-                     "/broadcast [текст] - Рассылка\n" \
-                     "/stats - Полная статистика\n" \
-                     "/backup - Резервная копия"
-    await update.message.reply_text(help_text, parse_mode=ParseMode.HTML)
 
 async def generate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -1182,6 +1254,11 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     data = query.data
     identify_creator(query.from_user)
+    
+    # Help callbacks
+    if data.startswith("help_"):
+        await handle_help_callback(update, context)
+        return
     
     if data == "note_create":
         await query.message.reply_text("➕ <b>Создать заметку</b>\n\n/note [текст]\nПример: /note Купить хлеб", parse_mode=ParseMode.HTML)
