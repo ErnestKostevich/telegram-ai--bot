@@ -530,7 +530,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 📎 Отправь файл - Анализ (VIP)
 📸 Отправь фото - Анализ (VIP)"""
     if is_creator(user_id):
-        help_text += "\n\n<b>👑 Команды Создателя:</b>\n/...\n" \
+        help_text += "\n\n<b>👑 Команды Создателя:</b>\n\n" \
                      "/grant_vip [id/@username] [срок] - Выдать VIP\n" \
                      "/revoke_vip [id/@username] - Забрать VIP\n" \
                      "/users - Список пользователей\n" \
