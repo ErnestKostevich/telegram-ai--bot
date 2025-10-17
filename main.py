@@ -1645,7 +1645,7 @@ async def handle_help_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         "help_ai": tr['help_ai'],
         "help_memory": tr['help_memory'],
         "help_notes": tr['help_notes'],
-        "help_todo': tr['help_todo'],
+        "help_todo": tr['help_todo'],
         'help_utils': tr['help_utils'],
         'help_games': tr['help_games'],
         'help_vip': tr['help_vip'],
