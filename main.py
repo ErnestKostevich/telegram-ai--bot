@@ -30,15 +30,10 @@ from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
-from vertexai.preview.vision_models import ImageGenerationModel
-import vertexai
-
 # Переменные окружения
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 DATABASE_URL = os.getenv('DATABASE_URL')
-PROJECT_ID = os.getenv('PROJECT_ID')
-LOCATION = os.getenv('LOCATION', 'us-central1')
 
 CREATOR_USERNAME = "Ernest_Kostevich"
 CREATOR_ID = None
@@ -54,12 +49,6 @@ logger = logging.getLogger(__name__)
 if not BOT_TOKEN or not GEMINI_API_KEY:
     logger.error("❌ BOT_TOKEN или GEMINI_API_KEY не установлены!")
     raise ValueError("Required environment variables missing")
-
-if PROJECT_ID:
-    vertexai.init(project=PROJECT_ID, location=LOCATION)
-    logger.info("✅ Vertex AI инициализирован для генерации изображений.")
-else:
-    logger.warning("⚠️ PROJECT_ID не установлен. Генерация изображений с Gemini недоступна.")
 
 # Настройка Gemini 2.5 Flash (быстрая модель)
 genai.configure(api_key=GEMINI_API_KEY)
@@ -89,6 +78,13 @@ model = genai.GenerativeModel(
 # Модель для Vision (VIP)
 vision_model = genai.GenerativeModel(
     model_name='gemini-2.5-flash',
+    generation_config=generation_config,
+    safety_settings=safety_settings
+)
+
+# Модель для генерации изображений
+image_model = genai.GenerativeModel(
+    model_name='gemini-2.5-flash-image-preview',
     generation_config=generation_config,
     safety_settings=safety_settings
 )
@@ -523,16 +519,18 @@ async def handle_help_callback(update: Update, context: ContextTypes.DEFAULT_TYP
 
 async def generate_image_gemini(prompt: str) -> Optional[bytes]:
     try:
-        model = ImageGenerationModel.from_pretrained("imagegeneration@005")  # Используем последнюю доступную модель Imagen
-        response = model.generate_images(
-            prompt=prompt,
-            number_of_images=1,
-            aspect_ratio="1:1",
-            safety_filter_level="block_low_and_above",
-            person_generation="allow_adult"
+        response = image_model.generate_content(
+            [prompt],
+            generation_config=genai.types.GenerationConfig(
+                response_mime_type="image/png"
+            )
         )
-        image = response.images[0]
-        return image._image_bytes
+        image_uri = response.parts[0].file_data.file_uri
+        image_response = requests.get(image_uri)
+        if image_response.status_code == 200:
+            return image_response.content
+        else:
+            return None
     except Exception as e:
         logger.warning(f"Ошибка генерации изображения с Gemini: {e}")
         return None
@@ -643,9 +641,6 @@ async def generate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
         await update.message.reply_text("❓ /generate [описание]\n\nПример: /generate закат над океаном")
         return
-    if not PROJECT_ID:
-        await update.message.reply_text("❌ Настройка Vertex AI не завершена. Установите PROJECT_ID.")
-        return
     prompt = ' '.join(context.args)
     await update.message.reply_text("🎨 Генерирую с Gemini...")
     try:
@@ -653,7 +648,7 @@ async def generate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if image_bytes:
             buf = io.BytesIO(image_bytes)
             buf.seek(0)
-            await update.message.reply_photo(photo=buf, caption=f"🖼️ <b>{prompt}</b>\n\n💎 VIP | Gemini Imagen", parse_mode=ParseMode.HTML)
+            await update.message.reply_photo(photo=buf, caption=f"🖼️ <b>{prompt}</b>\n\n💎 VIP | Gemini 2.5 Flash Image", parse_mode=ParseMode.HTML)
         else:
             await update.message.reply_text("❌ Ошибка генерации")
     except Exception as e:
@@ -1269,7 +1264,7 @@ async def handle_menu_button(update: Update, context: ContextTypes.DEFAULT_TYPE,
             await update.message.reply_text("👑 <b>Админ Панель</b>", parse_mode=ParseMode.HTML, reply_markup=InlineKeyboardMarkup(keyboard))
     elif button == "🖼️ Генерация":
         if storage.is_vip(user_id):
-            await update.message.reply_text("🖼️ <b>Генерация (VIP)</b>\n\n/generate [описание]\n\nПримеры:\n• /generate закат\n• /generate город\n\n💡 Gemini Imagen", parse_mode=ParseMode.HTML)
+            await update.message.reply_text("🖼️ <b>Генерация (VIP)</b>\n\n/generate [описание]\n\nПримеры:\n• /generate закат\n• /generate город\n\n💡 Gemini 2.5 Flash Image", parse_mode=ParseMode.HTML)
         else:
             await update.message.reply_text("💎 Генерация для VIP")
 
@@ -1399,7 +1394,7 @@ def main():
     logger.info("✅ AI DISCO BOT ЗАПУЩЕН!")
     logger.info("🤖 Модель: Gemini 2.5 Flash")
     logger.info("🗄️ БД: " + ("PostgreSQL ✓" if engine else "Local JSON"))
-    logger.info("🖼️ Генерация: Gemini Imagen (Vertex AI)")
+    logger.info("🖼️ Генерация: Gemini 2.5 Flash Image")
     logger.info("🔍 Анализ: Gemini Vision")
     logger.info("=" * 50)
     
