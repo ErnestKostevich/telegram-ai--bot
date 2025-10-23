@@ -13,6 +13,8 @@ import pytz
 import requests
 import io
 from urllib.parse import quote as urlquote
+import base64
+import mimetypes
 import tempfile
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton, Message
@@ -513,18 +515,52 @@ async def handle_help_callback(update: Update, context: ContextTypes.DEFAULT_TYP
 
 async def generate_image_gemini(prompt: str) -> Optional[str]:
     try:
-        response = model.generate_content(
-            f"Generate an image based on this description using Imagen or similar: {prompt}",
-            tools=['google_search']
+        client = genai.GenerativeModel('gemini-2.5-flash-image')
+        contents = [
+            genai.Content(
+                role="user",
+                parts=[
+                    genai.Part.from_text(text=prompt),
+                ],
+            ),
+        ]
+        generate_content_config = genai.GenerateContentConfig(
+            response_modalities=[
+                "IMAGE",
+                "TEXT",
+            ],
         )
-        # Извлечение URL изображения из ответа
-        # Предполагаем, что ответ содержит URL в text
-        # Адаптируйте по необходимости
-        image_url = response.text.strip() if response.text.startswith('http') else None
-        return image_url
+
+        file_index = 0
+        file_name = None
+        for chunk in client.generate_content_stream(
+            contents=contents,
+            config=generate_content_config,
+        ):
+            if (
+                chunk.candidates is None
+                or chunk.candidates[0].content is None
+                or chunk.candidates[0].content.parts is None
+            ):
+                continue
+            if chunk.candidates[0].content.parts[0].inline_data and chunk.candidates[0].content.parts[0].inline_data.data:
+                file_name = f"generated_image_{file_index}"
+                inline_data = chunk.candidates[0].content.parts[0].inline_data
+                data_buffer = inline_data.data
+                file_extension = mimetypes.guess_extension(inline_data.mime_type)
+                save_binary_file(f"{file_name}{file_extension}", data_buffer)
+                file_index += 1
+            else:
+                logger.info(chunk.text)
+        return file_name + file_extension if file_name else None
     except Exception as e:
         logger.warning(f"Ошибка генерации изображения с Gemini: {e}")
         return None
+
+def save_binary_file(file_name, data):
+    with open(file_name, "wb") as f:
+        f.write(data)
+    logger.info(f"File saved to: {file_name}")
 
 async def analyze_image_with_gemini(image_bytes: bytes, prompt: str = "Опиши подробно что изображено") -> str:
     try:
@@ -537,7 +573,6 @@ async def analyze_image_with_gemini(image_bytes: bytes, prompt: str = "Опиш�
 
 async def transcribe_audio_with_gemini(audio_bytes: bytes) -> str:
     try:
-        # Save to temporary file
         with tempfile.NamedTemporaryFile(suffix='.ogg', delete=False) as temp_file:
             temp_file.write(audio_bytes)
             temp_path = temp_file.name
@@ -666,9 +701,10 @@ async def generate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     prompt = ' '.join(context.args)
     await update.message.reply_text("🎨 Генерирую с Gemini...")
     try:
-        image_url = await generate_image_gemini(prompt)
-        if image_url:
-            await update.message.reply_photo(photo=image_url, caption=f"🖼️ <b>{prompt}</b>\n\n💎 VIP | Gemini Imagen", parse_mode=ParseMode.HTML)
+        image_path = await generate_image_gemini(prompt)
+        if image_path:
+            await update.message.reply_photo(photo=open(image_path, 'rb'), caption=f"🖼️ <b>{prompt}</b>\n\n💎 VIP | Gemini Imagen", parse_mode=ParseMode.HTML)
+            os.remove(image_path)
         else:
             await update.message.reply_text("❌ Ошибка генерации")
     except Exception as e:
@@ -968,7 +1004,7 @@ async def weather_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 💨 Ветер: {wind_speed} км/ч"""
                     await update.message.reply_text(weather_text, parse_mode=ParseMode.HTML)
                 else:
-                    await update.message.reply_text(f"❌ Город '{city}' не найден.")
+                    await update.message.reply_text(f"❌ Город '{city}' не найдена.")
     except Exception as e:
         logger.warning(f"Ошибка погоды: {e}")
         await update.message.reply_text("❌ Ошибка получения погоды.")
