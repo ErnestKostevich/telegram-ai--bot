@@ -4,10 +4,11 @@ aiohttp==3.10.11
 requests==2.32.3
 pytz==2024.2
 apscheduler==3.10.4
-flask==3.0.3
 beautifulsoup4==4.12.3
 sqlalchemy==2.0.35
 psycopg2-binary==2.9.10
 Pillow==10.4.0
 PyMuPDF==1.24.13
 python-docx==1.1.2
+pydub==0.25.1
+python-dotenv==1.0.1
