@@ -13,6 +13,7 @@ import pytz
 import requests
 import io
 from urllib.parse import quote as urlquote
+import tempfile
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton, Message
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
@@ -490,13 +491,13 @@ async def handle_help_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     }
 
     if data == "help_admin" and is_admin:
-        text = """👑 <b>Команды Создателя:</b>\n\n
-🎁 /grant_vip [id/@username] [срок] - Выдать VIP (week/month/year/forever)\n\n
-❌ /revoke_vip [id/@username] - Забрать VIP\n\n
-👥 /users - Список пользователей\n\n
-📢 /broadcast [текст] - Рассылка\n\n
-📈 /stats - Полная статистика\n\n
-💾 /backup - Резервная копия"""
+        text = "👑 <b>Команды Создателя:</b>\n\n" \
+               "🎁 /grant_vip [id/@username] [срок] - Выдать VIP (week/month/year/forever)\n\n" \
+               "❌ /revoke_vip [id/@username] - Забрать VIP\n\n" \
+               "👥 /users - Список пользователей\n\n" \
+               "📢 /broadcast [текст] - Рассылка\n\n" \
+               "📈 /stats - Полная статистика\n\n" \
+               "💾 /backup - Резервная копия"
         markup = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="help_back")]])
     elif data in sections:
         text, markup = sections[data]
@@ -536,9 +537,13 @@ async def analyze_image_with_gemini(image_bytes: bytes, prompt: str = "Опиш�
 
 async def transcribe_audio_with_gemini(audio_bytes: bytes) -> str:
     try:
-        # Gemini может принимать аудио как file
-        uploaded_file = genai.upload_file(data=audio_bytes, mime_type="audio/ogg")
+        # Save to temporary file
+        with tempfile.NamedTemporaryFile(suffix='.ogg', delete=False) as temp_file:
+            temp_file.write(audio_bytes)
+            temp_path = temp_file.name
+        uploaded_file = genai.upload_file(path=temp_path, mime_type="audio/ogg")
         response = model.generate_content(["Транскрибируй это аудио:", uploaded_file])
+        os.remove(temp_path)
         return response.text
     except Exception as e:
         logger.warning(f"Ошибка транскрипции аудио: {e}")
