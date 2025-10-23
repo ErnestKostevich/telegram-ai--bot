@@ -490,13 +490,13 @@ async def handle_help_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     }
 
     if data == "help_admin" and is_admin:
-        text = "👑 <b>Команды Создателя:</b>\n\n" \
-               "🎁 /grant_vip [id/@username] [срок] - Выдать VIP (week/month/year/forever)\n\n" \
-               "❌ /revoke_vip [id/@username] - Забрать VIP\n\n" \
-               "👥 /users - Список пользователей\n\n" \
-               "📢 /broadcast [текст] - Рассылка\n\n"
-               "📈 /stats - Полная статистика\n\n" \
-               "💾 /backup - Резервная копия"
+        text = """👑 <b>Команды Создателя:</b>\n\n
+🎁 /grant_vip [id/@username] [срок] - Выдать VIP (week/month/year/forever)\n\n
+❌ /revoke_vip [id/@username] - Забрать VIP\n\n
+👥 /users - Список пользователей\n\n
+📢 /broadcast [текст] - Рассылка\n\n
+📈 /stats - Полная статистика\n\n
+💾 /backup - Резервная копия"""
         markup = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="help_back")]])
     elif data in sections:
         text, markup = sections[data]
