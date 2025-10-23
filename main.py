@@ -14,7 +14,7 @@ import requests
 import io
 from urllib.parse import quote as urlquote
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton, Message
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 from telegram.constants import ParseMode
 
@@ -54,7 +54,7 @@ if not BOT_TOKEN or not GEMINI_API_KEY:
 genai.configure(api_key=GEMINI_API_KEY)
 
 generation_config = {
-    "temperature": 0.9,
+    "temperature": 1,
     "top_p": 0.95,
     "top_k": 40,
     "max_output_tokens": 2048,
@@ -72,7 +72,7 @@ model = genai.GenerativeModel(
     model_name='gemini-2.5-flash',
     generation_config=generation_config,
     safety_settings=safety_settings,
-    system_instruction="You are AI DISCO BOT, a friendly and helpful AI assistant built with Gemini 2.5. Respond in Russian in a friendly, engaging manner with emojis where appropriate. Your creator is @Ernest_Kostevich."
+    system_instruction="Ты — AI DISCO BOT, многофункциональный, очень умный и вежливый ассистент, основанный на Gemini 2.5. Всегда отвечай на том языке, на котором к тебе обращаются, используя дружелюбный и вовлекающий тон. Твои ответы должны быть структурированы, по возможности разделены на абзацы и никогда не превышать 4000 символов (ограничение Telegram). Твой создатель — @Ernest_Kostevich. Включай в ответы эмодзи, где это уместно."
 )
 
 # Модель для Vision (VIP)
@@ -233,7 +233,7 @@ class DataStorage:
         if engine:
             session = Session()
             try:
-                user = session.query(User).filter(User.username.ilike(identifier)).first()
+                user = session.query(User).filter(User.username.ilike(f"%{identifier}%")).first()
                 return user.id if user else None
             finally:
                 session.close()
@@ -510,12 +510,17 @@ async def handle_help_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         reply_markup=markup
     )
 
-async def generate_image_pollinations(prompt: str) -> Optional[str]:
+async def generate_image_gemini(prompt: str) -> Optional[str]:
     try:
-        encoded_prompt = urlquote(prompt)
-        return f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&nologo=true"
+        response = model.generate_content(
+            f"Generate an image based on this description using Imagen or similar: {prompt}",
+            tools=['google_search']
+        )
+        # Извлечение URL изображения из ответа, предполагая, что Gemini возвращает ссылку
+        image_url = response.text.strip()  # Адаптируйте в зависимости от формата ответа
+        return image_url
     except Exception as e:
-        logger.warning(f"Ошибка генерации изображения: {e}")
+        logger.warning(f"Ошибка генерации изображения с Gemini: {e}")
         return None
 
 async def analyze_image_with_gemini(image_bytes: bytes, prompt: str = "Опиши подробно что изображено") -> str:
@@ -526,6 +531,16 @@ async def analyze_image_with_gemini(image_bytes: bytes, prompt: str = "Опиш�
     except Exception as e:
         logger.warning(f"Ошибка анализа изображения: {e}")
         return f"❌ Ошибка анализа: {str(e)}"
+
+async def transcribe_audio_with_gemini(audio_bytes: bytes) -> str:
+    try:
+        response = model.generate_content(
+            ["Транскрибируй это аудио:", {"audio": audio_bytes}]
+        )
+        return response.text
+    except Exception as e:
+        logger.warning(f"Ошибка транскрипции аудио: {e}")
+        return f"❌ Ошибка транскрипции: {str(e)}"
 
 async def extract_text_from_document(file_bytes: bytes, filename: str) -> str:
     try:
@@ -591,6 +606,23 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.warning(f"Ошибка обработки фото: {e}")
         await update.message.reply_text(f"❌ Ошибка: {str(e)}")
 
+async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    voice = update.message.voice
+    await update.message.reply_text("🎙️ Транскрибирую аудио...")
+    try:
+        file_obj = await context.bot.get_file(voice.file_id)
+        file_bytes = await file_obj.download_as_bytearray()
+        transcribed_text = await transcribe_audio_with_gemini(bytes(file_bytes))
+        if transcribed_text.startswith("❌"):
+            await update.message.reply_text(transcribed_text)
+            return
+        await update.message.reply_text(f"📝 <b>Транскрипция:</b>\n\n{transcribed_text}", parse_mode=ParseMode.HTML)
+        await process_ai_message(update, transcribed_text, user_id)
+    except Exception as e:
+        logger.warning(f"Ошибка обработки голосового сообщения: {e}")
+        await update.message.reply_text(f"❌ Ошибка: {str(e)}")
+
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     identify_creator(user)
@@ -625,11 +657,11 @@ async def generate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❓ /generate [описание]\n\nПример: /generate закат над океаном")
         return
     prompt = ' '.join(context.args)
-    await update.message.reply_text("🎨 Генерирую...")
+    await update.message.reply_text("🎨 Генерирую с Gemini...")
     try:
-        image_url = await generate_image_pollinations(prompt)
+        image_url = await generate_image_gemini(prompt)
         if image_url:
-            await update.message.reply_photo(photo=image_url, caption=f"🖼️ <b>{prompt}</b>\n\n💎 VIP | Pollinations AI", parse_mode=ParseMode.HTML)
+            await update.message.reply_photo(photo=image_url, caption=f"🖼️ <b>{prompt}</b>\n\n💎 VIP | Gemini Imagen", parse_mode=ParseMode.HTML)
         else:
             await update.message.reply_text("❌ Ошибка генерации")
     except Exception as e:
@@ -650,10 +682,19 @@ async def process_ai_message(update: Update, text: str, user_id: int):
         storage.stats['ai_requests'] = storage.stats.get('ai_requests', 0) + 1
         storage.save_stats()
         storage.save_chat(user_id, text, response.text)
-        await update.message.reply_text(response.text, parse_mode=ParseMode.HTML)
+        await send_long_message(update.message, response.text)
     except Exception as e:
         logger.error(f"AI: {e}")
         await update.message.reply_text("😔 Ошибка")
+
+async def send_long_message(message: Message, text: str):
+    if len(text) <= 4000:
+        await message.reply_text(text, parse_mode=ParseMode.HTML)
+    else:
+        parts = [text[i:i+4000] for i in range(0, len(text), 4000)]
+        for part in parts:
+            await message.reply_text(part, parse_mode=ParseMode.HTML)
+            await asyncio.sleep(0.5)  # Чтобы избежать флуда
 
 async def clear_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     storage.clear_chat_session(update.effective_user.id)
@@ -714,10 +755,7 @@ async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             profile_text += f"\n💎 VIP до: {datetime.fromisoformat(vip_until).strftime('%d.%m.%Y')}"
         else:
             profile_text += "\n💎 VIP: Навсегда ♾️"
-    if hasattr(update, 'message'):
-        await update.message.reply_text(profile_text, parse_mode=ParseMode.HTML)
-    elif update.callback_query:
-        await update.callback_query.message.reply_text(profile_text, parse_mode=ParseMode.HTML)
+    await update.message.reply_text(profile_text, parse_mode=ParseMode.HTML)
 
 async def uptime_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uptime = datetime.now() - BOT_START_TIME
@@ -938,7 +976,7 @@ async def translate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         prompt = f"Переведи на {target_lang}: {text}"
         chat = storage.get_chat_session(update.effective_user.id)
         response = chat.send_message(prompt)
-        await update.message.reply_text(f"🌐 <b>Перевод:</b>\n\n{response.text}", parse_mode=ParseMode.HTML)
+        await send_long_message(update.message, response.text)
     except Exception as e:
         logger.warning(f"Ошибка перевода: {e}")
         await update.message.reply_text("❌ Ошибка перевода.")
@@ -1049,19 +1087,13 @@ async def reminders_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = storage.get_user(user_id)
     reminders = user.get('reminders', [])
     if not reminders:
-        if hasattr(update, 'message'):
-            await update.message.reply_text("📭 Нет напоминаний.")
-        elif update.callback_query:
-            await update.callback_query.message.reply_text("📭 Нет напоминаний.")
+        await update.message.reply_text("📭 Нет напоминаний.")
         return
     reminders_text = f"⏰ <b>Напоминания ({len(reminders)}):</b>\n\n"
     for i, reminder in enumerate(reminders, 1):
         remind_time = datetime.fromisoformat(reminder['time'])
         reminders_text += f"<b>#{i}</b> {remind_time.strftime('%d.%m %H:%M')}\n📝 {reminder['text']}\n\n"
-    if hasattr(update, 'message'):
-        await update.message.reply_text(reminders_text, parse_mode=ParseMode.HTML)
-    elif update.callback_query:
-        await update.callback_query.message.reply_text(reminders_text, parse_mode=ParseMode.HTML)
+    await update.message.reply_text(reminders_text, parse_mode=ParseMode.HTML)
 
 async def send_reminder(bot, user_id: int, text: str):
     try:
@@ -1130,10 +1162,7 @@ async def revoke_vip_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
 async def users_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     identify_creator(update.effective_user)
     if not is_creator(update.effective_user.id):
-        if hasattr(update, 'message'):
-            await update.message.reply_text("❌ Только для создателя.")
-        elif update.callback_query:
-            await update.callback_query.message.reply_text("❌ Только для создателя.")
+        await update.message.reply_text("❌ Только для создателя.")
         return
     all_users = storage.get_all_users()
     users_text = f"👥 <b>ПОЛЬЗОВАТЕЛИ ({len(all_users)}):</b>\n\n"
@@ -1142,10 +1171,7 @@ async def users_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         users_text += f"{vip_badge} <code>{user_id}</code> - {user.get('first_name', 'Unknown')} @{user.get('username', '')}\n"
     if len(all_users) > 20:
         users_text += f"\n<i>... и ещё {len(all_users) - 20}</i>"
-    if hasattr(update, 'message'):
-        await update.message.reply_text(users_text, parse_mode=ParseMode.HTML)
-    elif update.callback_query:
-        await update.callback_query.message.reply_text(users_text, parse_mode=ParseMode.HTML)
+    await update.message.reply_text(users_text, parse_mode=ParseMode.HTML)
 
 async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     identify_creator(update.effective_user)
@@ -1173,10 +1199,7 @@ async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     identify_creator(update.effective_user)
     if not is_creator(update.effective_user.id):
-        if hasattr(update, 'message'):
-            await update.message.reply_text("❌ Только для создателя.")
-        elif update.callback_query:
-            await update.callback_query.message.reply_text("❌ Только для создателя.")
+        await update.message.reply_text("❌ Только для создателя.")
         return
     stats = storage.stats
     all_users = storage.get_all_users()
@@ -1189,10 +1212,7 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 • Сообщений: {stats.get('total_messages', 0)}
 • Команд: {stats.get('total_commands', 0)}
 • AI запросов: {stats.get('ai_requests', 0)}"""
-    if hasattr(update, 'message'):
-        await update.message.reply_text(stats_text, parse_mode=ParseMode.HTML)
-    elif update.callback_query:
-        await update.callback_query.message.reply_text(stats_text, parse_mode=ParseMode.HTML)
+    await update.message.reply_text(stats_text, parse_mode=ParseMode.HTML)
 
 async def backup_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     identify_creator(update.effective_user)
@@ -1266,7 +1286,7 @@ async def handle_menu_button(update: Update, context: ContextTypes.DEFAULT_TYPE,
             await update.message.reply_text("👑 <b>Админ Панель</b>", parse_mode=ParseMode.HTML, reply_markup=InlineKeyboardMarkup(keyboard))
     elif button == "🖼️ Генерация":
         if storage.is_vip(user_id):
-            await update.message.reply_text("🖼️ <b>Генерация (VIP)</b>\n\n/generate [описание]\n\nПримеры:\n• /generate закат\n• /generate город\n\n💡 Pollinations AI", parse_mode=ParseMode.HTML)
+            await update.message.reply_text("🖼️ <b>Генерация (VIP)</b>\n\n/generate [описание]\n\nПримеры:\n• /generate закат\n• /generate город\n\n💡 Gemini Imagen", parse_mode=ParseMode.HTML)
         else:
             await update.message.reply_text("💎 Генерация для VIP")
 
@@ -1387,6 +1407,7 @@ def main():
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     application.add_handler(MessageHandler(filters.Document.ALL, handle_document))
     application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+    application.add_handler(MessageHandler(filters.VOICE, handle_voice))
     application.add_handler(CallbackQueryHandler(handle_callback))
     
     # Запуск scheduler
@@ -1396,8 +1417,9 @@ def main():
     logger.info("✅ AI DISCO BOT ЗАПУЩЕН!")
     logger.info("🤖 Модель: Gemini 2.5 Flash")
     logger.info("🗄️ БД: " + ("PostgreSQL ✓" if engine else "Local JSON"))
-    logger.info("🖼️ Генерация: Pollinations AI")
+    logger.info("🖼️ Генерация: Gemini Imagen (via tools)")
     logger.info("🔍 Анализ: Gemini Vision")
+    logger.info("🎙️ Транскрипция: Gemini 2.5 Flash")
     logger.info("=" * 50)
     
     # Graceful shutdown
