@@ -14,7 +14,7 @@ import requests
 import io
 from urllib.parse import quote as urlquote
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton, Message
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 from telegram.constants import ParseMode
 
@@ -78,13 +78,6 @@ model = genai.GenerativeModel(
 # Модель для Vision (VIP)
 vision_model = genai.GenerativeModel(
     model_name='gemini-2.5-flash',
-    generation_config=generation_config,
-    safety_settings=safety_settings
-)
-
-# Модель для генерации изображений
-image_model = genai.GenerativeModel(
-    model_name='gemini-2.5-flash-image-preview',
     generation_config=generation_config,
     safety_settings=safety_settings
 )
@@ -240,7 +233,7 @@ class DataStorage:
         if engine:
             session = Session()
             try:
-                user = session.query(User).filter(User.username.ilike(f"%{identifier}%")).first()
+                user = session.query(User).filter(User.username.ilike(identifier)).first()
                 return user.id if user else None
             finally:
                 session.close()
@@ -517,22 +510,12 @@ async def handle_help_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         reply_markup=markup
     )
 
-async def generate_image_gemini(prompt: str) -> Optional[bytes]:
+async def generate_image_pollinations(prompt: str) -> Optional[str]:
     try:
-        response = image_model.generate_content(
-            [prompt],
-            generation_config=genai.types.GenerationConfig(
-                response_mime_type="image/png"
-            )
-        )
-        image_uri = response.parts[0].file_data.file_uri
-        image_response = requests.get(image_uri)
-        if image_response.status_code == 200:
-            return image_response.content
-        else:
-            return None
+        encoded_prompt = urlquote(prompt)
+        return f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&nologo=true"
     except Exception as e:
-        logger.warning(f"Ошибка генерации изображения с Gemini: {e}")
+        logger.warning(f"Ошибка генерации изображения: {e}")
         return None
 
 async def analyze_image_with_gemini(image_bytes: bytes, prompt: str = "Опиши подробно что изображено") -> str:
@@ -642,13 +625,11 @@ async def generate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❓ /generate [описание]\n\nПример: /generate закат над океаном")
         return
     prompt = ' '.join(context.args)
-    await update.message.reply_text("🎨 Генерирую с Gemini...")
+    await update.message.reply_text("🎨 Генерирую...")
     try:
-        image_bytes = await generate_image_gemini(prompt)
-        if image_bytes:
-            buf = io.BytesIO(image_bytes)
-            buf.seek(0)
-            await update.message.reply_photo(photo=buf, caption=f"🖼️ <b>{prompt}</b>\n\n💎 VIP | Gemini 2.5 Flash Image", parse_mode=ParseMode.HTML)
+        image_url = await generate_image_pollinations(prompt)
+        if image_url:
+            await update.message.reply_photo(photo=image_url, caption=f"🖼️ <b>{prompt}</b>\n\n💎 VIP | Pollinations AI", parse_mode=ParseMode.HTML)
         else:
             await update.message.reply_text("❌ Ошибка генерации")
     except Exception as e:
@@ -733,7 +714,10 @@ async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             profile_text += f"\n💎 VIP до: {datetime.fromisoformat(vip_until).strftime('%d.%m.%Y')}"
         else:
             profile_text += "\n💎 VIP: Навсегда ♾️"
-    await update.message.reply_text(profile_text, parse_mode=ParseMode.HTML)
+    if hasattr(update, 'message'):
+        await update.message.reply_text(profile_text, parse_mode=ParseMode.HTML)
+    elif update.callback_query:
+        await update.callback_query.message.reply_text(profile_text, parse_mode=ParseMode.HTML)
 
 async def uptime_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uptime = datetime.now() - BOT_START_TIME
@@ -1065,13 +1049,19 @@ async def reminders_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = storage.get_user(user_id)
     reminders = user.get('reminders', [])
     if not reminders:
-        await update.message.reply_text("📭 Нет напоминаний.")
+        if hasattr(update, 'message'):
+            await update.message.reply_text("📭 Нет напоминаний.")
+        elif update.callback_query:
+            await update.callback_query.message.reply_text("📭 Нет напоминаний.")
         return
     reminders_text = f"⏰ <b>Напоминания ({len(reminders)}):</b>\n\n"
     for i, reminder in enumerate(reminders, 1):
         remind_time = datetime.fromisoformat(reminder['time'])
         reminders_text += f"<b>#{i}</b> {remind_time.strftime('%d.%m %H:%M')}\n📝 {reminder['text']}\n\n"
-    await update.message.reply_text(reminders_text, parse_mode=ParseMode.HTML)
+    if hasattr(update, 'message'):
+        await update.message.reply_text(reminders_text, parse_mode=ParseMode.HTML)
+    elif update.callback_query:
+        await update.callback_query.message.reply_text(reminders_text, parse_mode=ParseMode.HTML)
 
 async def send_reminder(bot, user_id: int, text: str):
     try:
@@ -1140,16 +1130,22 @@ async def revoke_vip_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
 async def users_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     identify_creator(update.effective_user)
     if not is_creator(update.effective_user.id):
-        await update.message.reply_text("❌ Только для создателя.")
+        if hasattr(update, 'message'):
+            await update.message.reply_text("❌ Только для создателя.")
+        elif update.callback_query:
+            await update.callback_query.message.reply_text("❌ Только для создателя.")
         return
     all_users = storage.get_all_users()
     users_text = f"👥 <b>ПОЛЬЗОВАТЕЛИ ({len(all_users)}):</b>\n\n"
     for user_id, user in list(all_users.items())[:20]:
         vip_badge = "💎" if user.get('vip', False) else ""
-        users_text += f"{vip_badge} <code>{user_id}</code> - {user.get('first_name', 'Unknown')}\n"
+        users_text += f"{vip_badge} <code>{user_id}</code> - {user.get('first_name', 'Unknown')} @{user.get('username', '')}\n"
     if len(all_users) > 20:
         users_text += f"\n<i>... и ещё {len(all_users) - 20}</i>"
-    await update.message.reply_text(users_text, parse_mode=ParseMode.HTML)
+    if hasattr(update, 'message'):
+        await update.message.reply_text(users_text, parse_mode=ParseMode.HTML)
+    elif update.callback_query:
+        await update.callback_query.message.reply_text(users_text, parse_mode=ParseMode.HTML)
 
 async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     identify_creator(update.effective_user)
@@ -1177,7 +1173,10 @@ async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     identify_creator(update.effective_user)
     if not is_creator(update.effective_user.id):
-        await update.message.reply_text("❌ Только для создателя.")
+        if hasattr(update, 'message'):
+            await update.message.reply_text("❌ Только для создателя.")
+        elif update.callback_query:
+            await update.callback_query.message.reply_text("❌ Только для создателя.")
         return
     stats = storage.stats
     all_users = storage.get_all_users()
@@ -1190,7 +1189,10 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 • Сообщений: {stats.get('total_messages', 0)}
 • Команд: {stats.get('total_commands', 0)}
 • AI запросов: {stats.get('ai_requests', 0)}"""
-    await update.message.reply_text(stats_text, parse_mode=ParseMode.HTML)
+    if hasattr(update, 'message'):
+        await update.message.reply_text(stats_text, parse_mode=ParseMode.HTML)
+    elif update.callback_query:
+        await update.callback_query.message.reply_text(stats_text, parse_mode=ParseMode.HTML)
 
 async def backup_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     identify_creator(update.effective_user)
@@ -1264,7 +1266,7 @@ async def handle_menu_button(update: Update, context: ContextTypes.DEFAULT_TYPE,
             await update.message.reply_text("👑 <b>Админ Панель</b>", parse_mode=ParseMode.HTML, reply_markup=InlineKeyboardMarkup(keyboard))
     elif button == "🖼️ Генерация":
         if storage.is_vip(user_id):
-            await update.message.reply_text("🖼️ <b>Генерация (VIP)</b>\n\n/generate [описание]\n\nПримеры:\n• /generate закат\n• /generate город\n\n💡 Gemini 2.5 Flash Image", parse_mode=ParseMode.HTML)
+            await update.message.reply_text("🖼️ <b>Генерация (VIP)</b>\n\n/generate [описание]\n\nПримеры:\n• /generate закат\n• /generate город\n\n💡 Pollinations AI", parse_mode=ParseMode.HTML)
         else:
             await update.message.reply_text("💎 Генерация для VIP")
 
@@ -1394,7 +1396,7 @@ def main():
     logger.info("✅ AI DISCO BOT ЗАПУЩЕН!")
     logger.info("🤖 Модель: Gemini 2.5 Flash")
     logger.info("🗄️ БД: " + ("PostgreSQL ✓" if engine else "Local JSON"))
-    logger.info("🖼️ Генерация: Gemini 2.5 Flash Image")
+    logger.info("🖼️ Генерация: Pollinations AI")
     logger.info("🔍 Анализ: Gemini Vision")
     logger.info("=" * 50)
     
