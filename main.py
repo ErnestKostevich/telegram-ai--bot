@@ -14,7 +14,7 @@ import requests
 import io
 from urllib.parse import quote as urlquote
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton, Message
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 from telegram.constants import ParseMode
 
@@ -494,7 +494,7 @@ async def handle_help_callback(update: Update, context: ContextTypes.DEFAULT_TYP
                "🎁 /grant_vip [id/@username] [срок] - Выдать VIP (week/month/year/forever)\n\n" \
                "❌ /revoke_vip [id/@username] - Забрать VIP\n\n" \
                "👥 /users - Список пользователей\n\n" \
-               "📢 /broadcast [текст] - Рассылка\n\n" \
+               "📢 /broadcast [текст] - Рассылка\n\n"
                "📈 /stats - Полная статистика\n\n" \
                "💾 /backup - Резервная копия"
         markup = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="help_back")]])
@@ -516,8 +516,10 @@ async def generate_image_gemini(prompt: str) -> Optional[str]:
             f"Generate an image based on this description using Imagen or similar: {prompt}",
             tools=['google_search']
         )
-        # Извлечение URL изображения из ответа, предполагая, что Gemini возвращает ссылку
-        image_url = response.text.strip()  # Адаптируйте в зависимости от формата ответа
+        # Извлечение URL изображения из ответа
+        # Предполагаем, что ответ содержит URL в text
+        # Адаптируйте по необходимости
+        image_url = response.text.strip() if response.text.startswith('http') else None
         return image_url
     except Exception as e:
         logger.warning(f"Ошибка генерации изображения с Gemini: {e}")
@@ -534,9 +536,9 @@ async def analyze_image_with_gemini(image_bytes: bytes, prompt: str = "Опиш�
 
 async def transcribe_audio_with_gemini(audio_bytes: bytes) -> str:
     try:
-        response = model.generate_content(
-            ["Транскрибируй это аудио:", {"audio": audio_bytes}]
-        )
+        # Gemini может принимать аудио как file
+        uploaded_file = genai.upload_file(data=audio_bytes, mime_type="audio/ogg")
+        response = model.generate_content(["Транскрибируй это аудио:", uploaded_file])
         return response.text
     except Exception as e:
         logger.warning(f"Ошибка транскрипции аудио: {e}")
