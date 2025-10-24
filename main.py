@@ -515,12 +515,21 @@ async def handle_help_callback(update: Update, context: ContextTypes.DEFAULT_TYP
 
 async def generate_image_gemini(prompt: str) -> Optional[str]:
     try:
+        # === ИСПРАВЛЕНИЕ 1: Используем 'gemini-2.5-flash' ===
+        # (Это было правильно в первом исправлении)
         client = genai.GenerativeModel('gemini-2.5-flash')
         
-        # === ИСПРАВЛЕНИЕ 1: Упрощаем 'contents' ===
-        # Ошибка 'AttributeError: ... no attribute 'Content''
-        # Решение: Передаем промпт напрямую в списке.
-        contents_to_send = [prompt]
+        # === ИСПРАВЛЕНИЕ 2: Возвращаем 'genai.Content' ===
+        # (Это было в твоем оригинальном коде и это ПРАВИЛЬНО 
+        # при УСЛОВИИ обновления библиотеки 'pip install --upgrade google-generativeai')
+        contents = [
+            genai.Content(
+                role="user",
+                parts=[
+                    genai.Part.from_text(text=prompt),
+                ],
+            ),
+        ]
         
         generate_content_config = genai.GenerateContentConfig(
             response_modalities=[
@@ -532,7 +541,7 @@ async def generate_image_gemini(prompt: str) -> Optional[str]:
         file_index = 0
         file_name = None
         for chunk in client.generate_content_stream(
-            contents=contents_to_send,  # Используем упрощенный 'contents'
+            contents=contents, # Используем 'contents' с 'genai.Content'
             config=generate_content_config,
         ):
             if (
@@ -576,9 +585,8 @@ async def transcribe_audio_with_gemini(audio_bytes: bytes) -> str:
             temp_path = temp_file.name
         uploaded_file = genai.upload_file(path=temp_path, mime_type="audio/ogg")
         
-        # === ИСПРАВЛЕНИЕ 2: Меняем промпт для транскрипции ===
-        # "Транскрибируй это аудио:" - это промпт-приглашение к диалогу.
-        # Нужен промпт-команда, требующий *только* текст.
+        # === ИСПРАВЛЕНИЕ 3: Промпт для аудио (остается) ===
+        # Промпт-команда, требующий *только* текст.
         prompt = "Распознай речь в этом аудиофайле. Верни только текст, без приветствий и комментариев."
         
         response = model.generate_content([prompt, uploaded_file])
@@ -665,7 +673,8 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(transcribed_text)
             return
         
-        # Эта строка была закомментирована в прошлый раз, и это ПРАВИЛЬНО.
+        # === ИСПРАВЛЕНИЕ 4: Отправка транскрипции (остается) ===
+        # (Эта строка по-прежнему закомментирована, чтобы не было двойного ответа)
         # await update.message.reply_text(f"📝 <b>Транскрипция:</b>\n\n{transcribed_text}", parse_mode=ParseMode.HTML)
         
         # Сразу отправляем транскрипцию в AI для получения ответа
