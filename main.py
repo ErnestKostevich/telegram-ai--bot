@@ -515,7 +515,8 @@ async def handle_help_callback(update: Update, context: ContextTypes.DEFAULT_TYP
 
 async def generate_image_gemini(prompt: str) -> Optional[str]:
     try:
-        client = genai.GenerativeModel('gemini-2.5-flash-image')
+        # === ИСПРАВЛЕНИЕ 1: Используем правильное имя модели ===
+        client = genai.GenerativeModel('gemini-2.5-flash')
         contents = [
             genai.Content(
                 role="user",
@@ -656,10 +657,15 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         file_obj = await context.bot.get_file(voice.file_id)
         file_bytes = await file_obj.download_as_bytearray()
         transcribed_text = await transcribe_audio_with_gemini(bytes(file_bytes))
+        
         if transcribed_text.startswith("❌"):
             await update.message.reply_text(transcribed_text)
             return
-        await update.message.reply_text(f"📝 <b>Транскрипция:</b>\n\n{transcribed_text}", parse_mode=ParseMode.HTML)
+        
+        # === ИСПРАВЛЕНИЕ 2: Убираем отправку транскрипции, чтобы не было двойного ответа ===
+        # await update.message.reply_text(f"📝 <b>Транскрипция:</b>\n\n{transcribed_text}", parse_mode=ParseMode.HTML)
+        
+        # Сразу отправляем транскрипцию в AI для получения ответа
         await process_ai_message(update, transcribed_text, user_id)
     except Exception as e:
         logger.warning(f"Ошибка обработки голосового сообщения: {e}")
@@ -672,7 +678,8 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     storage.update_user(user.id, {'username': user.username or '', 'first_name': user.first_name or '', 'commands_count': user_data.get('commands_count', 0) + 1})
     welcome_text = f"""🤖 <b>AI DISCO BOT</b>
 
-Привет, {user.first_name}! Я бот на <b>Gemini 2.5 Flash</b>.
+Привет, {user.first_name}!
+Я бот на <b>Gemini 2.5 Flash</b>.
 
 <b>🎯 Возможности:</b>
 💬 AI-чат с контекстом
