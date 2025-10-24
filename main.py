@@ -22,7 +22,6 @@ from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQu
 from telegram.constants import ParseMode
 
 import google.generativeai as genai
-from google.generativeai.types import Content, Part
 import aiohttp
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from bs4 import BeautifulSoup
@@ -516,11 +515,12 @@ async def handle_help_callback(update: Update, context: ContextTypes.DEFAULT_TYP
 
 async def generate_image_gemini(prompt: str) -> Optional[str]:
     try:
+        client = genai.GenerativeModel('gemini-2.5-flash-image')
         contents = [
-            Content(
+            genai.Content(
                 role="user",
                 parts=[
-                    Part.from_text(text=prompt),
+                    genai.Part.from_text(text=prompt),
                 ],
             ),
         ]
@@ -533,7 +533,7 @@ async def generate_image_gemini(prompt: str) -> Optional[str]:
 
         file_index = 0
         file_name = None
-        for chunk in model.generate_content_stream(
+        for chunk in client.generate_content_stream(
             contents=contents,
             config=generate_content_config,
         ):
@@ -548,16 +548,19 @@ async def generate_image_gemini(prompt: str) -> Optional[str]:
                 inline_data = chunk.candidates[0].content.parts[0].inline_data
                 data_buffer = inline_data.data
                 file_extension = mimetypes.guess_extension(inline_data.mime_type)
-                with open(f"{file_name}{file_extension}", "wb") as f:
-                    f.write(data_buffer)
-                logger.info(f"File saved to: {file_name}{file_extension}")
+                save_binary_file(f"{file_name}{file_extension}", data_buffer)
                 file_index += 1
             else:
                 logger.info(chunk.text)
-        return f"{file_name}{file_extension}" if file_name else None
+        return file_name + file_extension if file_name else None
     except Exception as e:
         logger.warning(f"Ошибка генерации изображения с Gemini: {e}")
         return None
+
+def save_binary_file(file_name, data):
+    with open(file_name, "wb") as f:
+        f.write(data)
+    logger.info(f"File saved to: {file_name}")
 
 async def analyze_image_with_gemini(image_bytes: bytes, prompt: str = "Опиши подробно что изображено") -> str:
     try:
@@ -570,14 +573,12 @@ async def analyze_image_with_gemini(image_bytes: bytes, prompt: str = "Опиш�
 
 async def transcribe_audio_with_gemini(audio_bytes: bytes) -> str:
     try:
-        encoded_string = base64.b64encode(audio_bytes).decode('utf-8')
-        response = model.generate_content(
-            contents=[
-                {
-                    'parts': [{'text': f'Here is the content of the audio file: {encoded_string}'}]
-                }
-            ]
-        )
+        with tempfile.NamedTemporaryFile(suffix='.ogg', delete=False) as temp_file:
+            temp_file.write(audio_bytes)
+            temp_path = temp_file.name
+        uploaded_file = genai.upload_file(path=temp_path, mime_type="audio/ogg")
+        response = model.generate_content(["Транскрибируй это аудио:", uploaded_file])
+        os.remove(temp_path)
         return response.text
     except Exception as e:
         logger.warning(f"Ошибка транскрипции аудио: {e}")
@@ -1003,7 +1004,7 @@ async def weather_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 💨 Ветер: {wind_speed} км/ч"""
                     await update.message.reply_text(weather_text, parse_mode=ParseMode.HTML)
                 else:
-                    await update.message.reply_text(f"❌ Город '{city}' не найден.")
+                    await update.message.reply_text(f"❌ Город '{city}' не найдена.")
     except Exception as e:
         logger.warning(f"Ошибка погоды: {e}")
         await update.message.reply_text("❌ Ошибка получения погоды.")
