@@ -30,8 +30,7 @@ import fitz  # PyMuPDF
 import docx  # python-docx
 
 from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, JSON, Text, BigInteger
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import declarative_base, sessionmaker
 
 # Переменные окружения
 BOT_TOKEN = os.getenv('BOT_TOKEN')
