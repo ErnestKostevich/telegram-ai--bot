@@ -29,8 +29,12 @@ from PIL import Image
 import fitz  # PyMuPDF
 import docx  # python-docx
 
-from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, JSON, Text, BigInteger
-from sqlalchemy.orm import sessionmaker, declarative_base # <<< ИСПРАВЛЕННЫЙ ИМПОРТ
+# --- ИСПРАВЛЕННЫЕ ИМПОРТЫ SQLAlchemy ---
+# 1. Добавлены inspect и sa_text
+# 2. declarative_base перенесен в orm
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, JSON, Text, BigInteger, inspect, text as sa_text
+from sqlalchemy.orm import sessionmaker, declarative_base
+# ---------------------------------------
 
 # Переменные окружения
 BOT_TOKEN = os.getenv('BOT_TOKEN')
@@ -52,7 +56,7 @@ if not BOT_TOKEN or not GEMINI_API_KEY:
     logger.error("❌ BOT_TOKEN или GEMINI_API_KEY не установлены!")
     raise ValueError("Required environment variables missing")
 
-# Настройка Gemini
+# Настройка Gemini 2.5 Flash (быстрая модель)
 genai.configure(api_key=GEMINI_API_KEY)
 
 generation_config = {
@@ -69,27 +73,28 @@ safety_settings = [
     {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
 ]
 
-# Модель Gemini Flash
+# Модель Gemini 2.5 Flash (быстрая)
 model = genai.GenerativeModel(
-    model_name='gemini-1.5-flash',
+    model_name='gemini-2.5-flash',
     generation_config=generation_config,
     safety_settings=safety_settings,
-    system_instruction="Ты — AI DISCO BOT, многофункциональный, очень умный и вежливый ассистент, основанный на Gemini. Всегда отвечай на том языке, на котором к тебе обращаются, используя дружелюбный и вовлекающий тон. Твои ответы должны быть структурированы, по возможности разделены на абзацы и никогда не превышать 4000 символов (ограничение Telegram). Твой создатель — @Ernest_Kostevich. Включай в ответы эмодзи, где это уместно."
+    system_instruction="Ты — AI DISCO BOT, многофункциональный, очень умный и вежливый ассистент, основанный на Gemini 2.5. Всегда отвечай на том языке, на котором к тебе обращаются, используя дружелюбный и вовлекающий тон. Твои ответы должны быть структурированы, по возможности разделены на абзацы и никогда не превышать 4000 символов (ограничение Telegram). Твой создатель — @Ernest_Kostevich. Включай в ответы эмодзи, где это уместно."
 )
 
 # Модель для Vision (VIP)
 vision_model = genai.GenerativeModel(
-    model_name='gemini-1.5-flash',
+    model_name='gemini-2.5-flash',
     generation_config=generation_config,
     safety_settings=safety_settings
 )
 
 # --- СТРОКИ ЛОКАЛИЗАЦИИ ---
+# Добавляем все тексты для 3-х языков
 localization_strings = {
     'ru': {
         'welcome': (
             "🤖 <b>AI DISCO BOT</b>\n\n"
-            "Привет, {first_name}! Я бот на <b>Gemini 1.5 Flash</b>.\n\n"
+            "Привет, {first_name}! Я бот на <b>Gemini 2.5 Flash</b>.\n\n"
             "<b>🎯 Возможности:</b>\n"
             "💬 AI-чат с контекстом\n"
             "📝 Заметки и задачи\n"
@@ -156,12 +161,12 @@ localization_strings = {
             'vip': "💎 <b>VIP Меню</b>", 'vip_reminders': "⏰ Напоминания", 'vip_stats': "📊 Статистика",
             'admin': "👑 <b>Админ Панель</b>", 'admin_users': "👥 Пользователи", 'admin_stats': "📊 Статистика",
             'admin_broadcast': "📢 Рассылка",
-            'generate': "🖼️ <b>Генерация (VIP)</b>\n\n/generate [описание]\n\nПримеры:\n• /generate закат\n• /generate город\n\n💡 Imagen 3"
+            'generate': "🖼️ <b>Генерация (VIP)</b>\n\n/generate [описание]\n\nПримеры:\n• /generate закат\n• /generate город\n\n💡 Gemini Imagen"
         },
         'info': (
             "🤖 <b>AI DISCO BOT</b>\n\n"
-            "<b>Версия:</b> 3.2 (Multi-Language)\n"
-            "<b>AI:</b> Gemini 1.5 Flash\n"
+            "<b>Версия:</b> 3.1 (Multi-Language)\n"
+            "<b>AI:</b> Gemini 2.5 Flash\n"
             "<b>Создатель:</b> @Ernest_Kostevich\n\n"
             "<b>⚡ Особенности:</b>\n"
             "• Быстрый AI-чат\n"
@@ -181,7 +186,7 @@ localization_strings = {
             "• AI запросов: {ai_count}\n\n"
             "<b>⏱ Работает:</b> {days}д {hours}ч\n\n"
             "<b>✅ Статус:</b> Онлайн\n"
-            "<b>🤖 AI:</b> Gemini ✓\n"
+            "<b>🤖 AI:</b> Gemini 2.5 ✓\n"
             "<b>🗄️ БД:</b> {db_status}"
         ),
         'profile': (
@@ -196,7 +201,7 @@ localization_strings = {
         'profile_vip': "\n💎 VIP до: {date}",
         'profile_vip_forever': "\n💎 VIP: Навсегда ♾️",
         'uptime': (
-            "⏱ <b>ВРЕМЯ РАБОТЫ</b>\n\n"
+            "⏱ <b>ВРЕМЯ РАБОТИ</b>\n\n"
             "🕐 Запущен: {start_time}\n"
             "⏰ Работает: {days}д {hours}ч {minutes}м\n\n"
             "✅ Онлайн"
@@ -307,7 +312,7 @@ localization_strings = {
     'en': {
         'welcome': (
             "🤖 <b>AI DISCO BOT</b>\n\n"
-            "Hi, {first_name}! I'm a bot powered by <b>Gemini 1.5 Flash</b>.\n\n"
+            "Hi, {first_name}! I'm a bot powered by <b>Gemini 2.5 Flash</b>.\n\n"
             "<b>🎯 Features:</b>\n"
             "💬 AI chat with context\n"
             "📝 Notes and To-Dos\n"
@@ -374,12 +379,12 @@ localization_strings = {
             'vip': "💎 <b>VIP Menu</b>", 'vip_reminders': "⏰ Reminders", 'vip_stats': "📊 Stats",
             'admin': "👑 <b>Admin Panel</b>", 'admin_users': "👥 Users", 'admin_stats': "📊 Stats",
             'admin_broadcast': "📢 Broadcast",
-            'generate': "🖼️ <b>Generation (VIP)</b>\n\n/generate [prompt]\n\nExamples:\n• /generate sunset\n• /generate city\n\n💡 Imagen 3"
+            'generate': "🖼️ <b>Generation (VIP)</b>\n\n/generate [prompt]\n\nExamples:\n• /generate sunset\n• /generate city\n\n💡 Gemini Imagen"
         },
         'info': (
             "🤖 <b>AI DISCO BOT</b>\n\n"
-            "<b>Version:</b> 3.2 (Multi-Language)\n"
-            "<b>AI:</b> Gemini 1.5 Flash\n"
+            "<b>Version:</b> 3.1 (Multi-Language)\n"
+            "<b>AI:</b> Gemini 2.5 Flash\n"
             "<b>Creator:</b> @Ernest_Kostevich\n\n"
             "<b>⚡ Features:</b>\n"
             "• Fast AI Chat\n"
@@ -399,7 +404,7 @@ localization_strings = {
             "• AI Requests: {ai_count}\n\n"
             "<b>⏱ Uptime:</b> {days}d {hours}h\n\n"
             "<b>✅ Status:</b> Online\n"
-            "<b>🤖 AI:</b> Gemini ✓\n"
+            "<b>🤖 AI:</b> Gemini 2.5 ✓\n"
             "<b>🗄️ DB:</b> {db_status}"
         ),
         'profile': (
@@ -525,7 +530,7 @@ localization_strings = {
     'it': {
         'welcome': (
             "🤖 <b>AI DISCO BOT</b>\n\n"
-            "Ciao, {first_name}! Sono un bot basato su <b>Gemini 1.5 Flash</b>.\n\n"
+            "Ciao, {first_name}! Sono un bot basato su <b>Gemini 2.5 Flash</b>.\n\n"
             "<b>🎯 Funzionalità:</b>\n"
             "💬 Chat AI con contesto\n"
             "📝 Note e Impegni\n"
@@ -592,12 +597,12 @@ localization_strings = {
             'vip': "💎 <b>Menu VIP</b>", 'vip_reminders': "⏰ Promemoria", 'vip_stats': "📊 Statistiche",
             'admin': "👑 <b>Pannello Admin</b>", 'admin_users': "👥 Utenti", 'admin_stats': "📊 Statistiche",
             'admin_broadcast': "📢 Broadcast",
-            'generate': "🖼️ <b>Generazione (VIP)</b>\n\n/generate [prompt]\n\nEsempi:\n• /generate tramonto\n• /generate città\n\n💡 Imagen 3"
+            'generate': "🖼️ <b>Generazione (VIP)</b>\n\n/generate [prompt]\n\nEsempi:\n• /generate tramonto\n• /generate città\n\n💡 Gemini Imagen"
         },
         'info': (
             "🤖 <b>AI DISCO BOT</b>\n\n"
-            "<b>Versione:</b> 3.2 (Multi-Language)\n"
-            "<b>AI:</b> Gemini 1.5 Flash\n"
+            "<b>Versione:</b> 3.1 (Multi-Language)\n"
+            "<b>AI:</b> Gemini 2.5 Flash\n"
             "<b>Creatore:</b> @Ernest_Kostevich\n\n"
             "<b>⚡ Caratteristiche:</b>\n"
             "• Chat AI Veloce\n"
@@ -617,7 +622,7 @@ localization_strings = {
             "• Richieste AI: {ai_count}\n\n"
             "<b>⏱ Uptime:</b> {days}g {hours}o\n\n"
             "<b>✅ Stato:</b> Online\n"
-            "<b>🤖 AI:</b> Gemini ✓\n"
+            "<b>🤖 AI:</b> Gemini 2.5 ✓\n"
             "<b>🗄️ DB:</b> {db_status}"
         ),
         'profile': (
@@ -794,7 +799,7 @@ menu_button_map = {
 
 
 # --- База данных PostgreSQL ---
-Base = declarative_base()
+Base = declarative_base() # Используем импорт из orm
 
 class User(Base):
     __tablename__ = 'users'
@@ -812,7 +817,7 @@ class User(Base):
     last_active = Column(DateTime, default=datetime.now)
     messages_count = Column(Integer, default=0)
     commands_count = Column(Integer, default=0)
-    language = Column(String(5), default='ru') # Новое поле для языка
+    language = Column(String(5), default='ru') # Это поле вызывало ошибку
 
 class Chat(Base):
     __tablename__ = 'chats'
@@ -836,7 +841,31 @@ Session = None
 if DATABASE_URL:
     try:
         engine = create_engine(DATABASE_URL, echo=False, pool_pre_ping=True)
-        Base.metadata.create_all(engine)
+        
+        # --- ИСПРАВЛЕНИЕ: Автоматическая миграция (Добавлено) ---
+        # Этот блок проверит, существует ли колонка 'language' и добавит ее, если нет.
+        # Это безопасно для существующих данных.
+        try:
+            inspector = inspect(engine)
+            # Проверяем, существует ли таблица 'users'
+            if inspector.has_table('users'):
+                columns = [col['name'] for col in inspector.get_columns('users')]
+                # Проверяем, отсутствует ли колонка 'language'
+                if 'language' not in columns:
+                    logger.warning("Обнаружена старая схема БД. Добавляю 'language' в 'users'...")
+                    with engine.connect() as conn:
+                        # Используем sa_text() для выполнения raw SQL
+                        conn.execute(sa_text("ALTER TABLE users ADD COLUMN language VARCHAR(5) DEFAULT 'ru'"))
+                        conn.commit() # Применяем изменения
+                    logger.info("✅ Поле 'language' успешно добавлено.")
+            else:
+                logger.info("Таблица 'users' не найдена, будет создана.")
+        except Exception as migration_error:
+            # Логируем ошибку, но не прерываем выполнение, create_all() попробует создать
+            logger.error(f"❌ Ошибка во время проверки миграции: {migration_error}")
+        # --- Конец миграции ---
+
+        Base.metadata.create_all(engine) # Создаем все таблицы (включая users, если ее не было)
         Session = sessionmaker(bind=engine)
         logger.info("✅ PostgreSQL подключен!")
     except Exception as e:
@@ -858,7 +887,7 @@ class DataStorage:
             self.stats = self.load_stats()
             self.update_username_mapping()
         else:
-            self.users = {}
+            self.users = {} # Не используем, т.к. работаем с БД
             self.stats = self.get_stats_from_db()
 
     def load_users(self) -> Dict:
@@ -955,16 +984,13 @@ class DataStorage:
         if engine:
             session = Session()
             try:
+                # Этот запрос падал из-за отсутствия 'language'
                 user = session.query(User).filter_by(id=user_id).first()
                 if not user:
-                    # Если пользователь не найден, создаем нового
-                    user = User(
-                        id=user_id,
-                        language='ru' # Явно устанавливаем язык при создании
-                    )
+                    user = User(id=user_id, language='ru') # Устанавливаем язык по умолчанию
                     session.add(user)
                     session.commit()
-                    # Возвращаем нового пользователя после коммита
+                    # Перезапрашиваем, чтобы получить объект из БД
                     user = session.query(User).filter_by(id=user_id).first()
 
                 return {
@@ -981,25 +1007,24 @@ class DataStorage:
                     'last_active': user.last_active.isoformat() if user.last_active else datetime.now().isoformat(),
                     'messages_count': user.messages_count or 0,
                     'commands_count': user.commands_count or 0,
-                    'language': user.language or 'ru'
+                    'language': user.language or 'ru' # Добавлено
                 }
             except Exception as e:
-                logger.error(f"Ошибка в get_user: {e}")
-                session.rollback()
-                return {'language': 'ru'} # Возвращаем дефолт в случае ошибки
+                logger.error(f"Критическая ошибка get_user (id={user_id}): {e}")
+                # Аварийный фолбэк, чтобы бот не падал в цикле
+                return {'id': user_id, 'language': 'ru'}
             finally:
                 session.close()
-        else: # Логика для JSON
+        else:
             if user_id not in self.users:
                 self.users[user_id] = {
                     'id': user_id, 'username': '', 'first_name': '', 'vip': False, 'vip_until': None,
                     'notes': [], 'todos': [], 'memory': {}, 'reminders': [],
                     'registered': datetime.now().isoformat(), 'last_active': datetime.now().isoformat(),
-                    'messages_count': 0, 'commands_count': 0, 'language': 'ru'
+                    'messages_count': 0, 'commands_count': 0, 'language': 'ru' # Добавлено
                 }
                 self.save_users()
             return self.users[user_id]
-
 
     def update_user(self, user_id: int, data: Dict):
         if engine:
@@ -1016,7 +1041,7 @@ class DataStorage:
                 user.last_active = datetime.now()
                 session.commit()
             except Exception as e:
-                logger.warning(f"Ошибка обновления пользователя в БД: {e}")
+                logger.warning(f"Ошибка обновления пользователя (id={user_id}) в БД: {e}")
                 session.rollback()
             finally:
                 session.close()
@@ -1128,6 +1153,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=get_help_keyboard(lang, is_admin)
     )
 
+# Callback handlers for help sections
 async def handle_help_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -1144,60 +1170,63 @@ async def handle_help_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         )
         return
 
-    help_text_key = f"help_text.{data}"
-    
-    # Проверяем, существует ли такой ключ в локализации
-    try:
-        # Эта проверка вызовет KeyError, если ключа нет
-        _ = get_text(help_text_key, lang)
-        
-        # Специальная обработка для админской секции
-        if data == "help_admin" and not is_admin:
-            await query.edit_message_text(get_text('section_not_found', lang))
-            return
-            
-        text = get_text(help_text_key, lang)
+    # Формируем разделы справки на основе ключей локализации
+    sections = {
+        "help_basic": (get_text('help_text.help_basic', lang), get_help_keyboard(lang, is_admin)),
+        "help_ai": (get_text('help_text.help_ai', lang), get_help_keyboard(lang, is_admin)),
+        "help_memory": (get_text('help_text.help_memory', lang), get_help_keyboard(lang, is_admin)),
+        "help_notes": (get_text('help_text.help_notes', lang), get_help_keyboard(lang, is_admin)),
+        "help_todo": (get_text('help_text.help_todo', lang), get_help_keyboard(lang, is_admin)),
+        "help_utils": (get_text('help_text.help_utils', lang), get_help_keyboard(lang, is_admin)),
+        "help_games": (get_text('help_text.help_games', lang), get_help_keyboard(lang, is_admin)),
+        "help_vip": (get_text('help_text.help_vip', lang), get_help_keyboard(lang, is_admin)),
+    }
+
+    if data == "help_admin" and is_admin:
+        text = get_text('help_text.help_admin', lang)
         markup = InlineKeyboardMarkup([[InlineKeyboardButton(get_text('help_back', lang), callback_data="help_back")]])
-        
-        await query.edit_message_text(
-            text,
-            parse_mode=ParseMode.HTML,
-            reply_markup=markup
-        )
-    except (KeyError, IndexError):
+    elif data in sections:
+        text, markup = sections[data]
+    else:
         await query.edit_message_text(get_text('section_not_found', lang))
+        return
 
+    await query.edit_message_text(
+        text,
+        parse_mode=ParseMode.HTML,
+        reply_markup=markup
+    )
 
-# --- ФУНКЦИЯ ГЕНЕРАЦИИ ИЗОБРАЖЕНИЙ (Imagen 3) ---
+# --- НОВАЯ ФУНКЦИЯ ГЕНЕРАЦИИ ИЗОБРАЖЕНИЙ ---
 async def generate_image_imagen(prompt: str) -> Optional[bytes]:
     """
-    Генерирует изображение с помощью Imagen 3.
+    Генерирует изображение с помощью Imagen 3 (imagen-3.0-generate-002)
     Возвращает байты изображения или None в случае ошибки.
     """
     if not GEMINI_API_KEY:
         logger.error("GEMINI_API_KEY (требуется для Imagen) не установлен.")
         return None
         
-    api_url = f"https://generativelanguage.googleapis.com/v1beta/models/imagen:generateImage?key={GEMINI_API_KEY}"
+    api_url = f"https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key={GEMINI_API_KEY}"
     
     payload = {
-        "prompt": {
-            "text": prompt
-        },
-        "sampleCount": 1,
-        "aspectRatio": "1:1",
-        "quality": "standard"
+        "instances": [
+            {"prompt": prompt}
+        ],
+        "parameters": {
+            "sampleCount": 1
+        }
     }
     
     headers = {'Content-Type': 'application/json'}
     
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.post(api_url, json=payload, headers=headers, timeout=aiohttp.ClientTimeout(total=90)) as response:
+            async with session.post(api_url, json=payload, headers=headers, timeout=aiohttp.ClientTimeout(total=60)) as response:
                 if response.status == 200:
                     result = await response.json()
-                    if result.get("images") and result["images"][0].get("image"):
-                        image_b64 = result["images"][0]["image"]
+                    if result.get("predictions") and result["predictions"][0].get("bytesBase64Encoded"):
+                        image_b64 = result["predictions"][0]["bytesBase64Encoded"]
                         return base64.b64decode(image_b64)
                     else:
                         logger.warning(f"Imagen API: Неожиданный ответ: {result}")
@@ -1210,6 +1239,12 @@ async def generate_image_imagen(prompt: str) -> Optional[bytes]:
         logger.error(f"Imagen API: Исключение при запросе: {e}")
         return None
 
+# Старая, нерабочая функция (оставлена для справки, но не используется)
+async def generate_image_gemini_OLD(prompt: str) -> Optional[str]:
+    # Эта функция была некорректной и заменена на generate_image_imagen
+    pass
+
+# ---
 
 async def analyze_image_with_gemini(image_bytes: bytes, prompt: str = "Опиши подробно что изображено") -> str:
     try:
@@ -1225,28 +1260,12 @@ async def transcribe_audio_with_gemini(audio_bytes: bytes) -> str:
         with tempfile.NamedTemporaryFile(suffix='.ogg', delete=False) as temp_file:
             temp_file.write(audio_bytes)
             temp_path = temp_file.name
-        
-        # Gemini требует, чтобы файл существовал на диске для загрузки
         uploaded_file = genai.upload_file(path=temp_path, mime_type="audio/ogg")
-        
-        # После загрузки файл можно удалить
-        os.remove(temp_path)
-        
         response = model.generate_content(["Транскрибируй это аудио:", uploaded_file])
-        
-        # Удаляем файл из Google Cloud Storage после использования
-        genai.delete_file(uploaded_file.name)
-        
+        os.remove(temp_path)
         return response.text
     except Exception as e:
         logger.warning(f"Ошибка транскрипции аудио: {e}")
-        if 'temp_path' in locals() and os.path.exists(temp_path):
-            os.remove(temp_path)
-        if 'uploaded_file' in locals():
-            try:
-                genai.delete_file(uploaded_file.name)
-            except Exception as delete_e:
-                logger.error(f"Не удалось удалить временный файл из облака: {delete_e}")
         return f"❌ Ошибка транскрипции: {str(e)}"
 
 async def extract_text_from_document(file_bytes: bytes, filename: str) -> str:
@@ -1255,7 +1274,7 @@ async def extract_text_from_document(file_bytes: bytes, filename: str) -> str:
         if ext == 'txt':
             try:
                 return file_bytes.decode('utf-8')
-            except UnicodeDecodeError:
+            except:
                 return file_bytes.decode('cp1251', errors='ignore')
         elif ext == 'pdf':
             doc = fitz.open(stream=io.BytesIO(file_bytes), filetype="pdf")
@@ -1266,7 +1285,7 @@ async def extract_text_from_document(file_bytes: bytes, filename: str) -> str:
             doc = docx.Document(io.BytesIO(file_bytes))
             return "\n".join([para.text for para in doc.paragraphs])
         else:
-            return "⚠️ Неподдерживаемый формат файла. Попробуйте .txt, .pdf, .docx"
+            return file_bytes.decode('utf-8', errors='ignore')
     except Exception as e:
         logger.warning(f"Ошибка извлечения текста: {e}")
         return f"❌ Ошибка: {str(e)}"
@@ -1284,16 +1303,14 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
         file_obj = await context.bot.get_file(document.file_id)
         file_bytes = await file_obj.download_as_bytearray()
         extracted_text = await extract_text_from_document(bytes(file_bytes), file_name)
-        
         if extracted_text.startswith("❌") or extracted_text.startswith("⚠️"):
             await update.message.reply_text(extracted_text)
             return
-            
-        analysis_prompt = f"Проанализируй содержимое файла с именем '{file_name}':\n\n{extracted_text[:4000]}"
+        analysis_prompt = f"Проанализируй файл '{file_name}':\n\n{extracted_text[:4000]}"
         chat = storage.get_chat_session(user_id)
         response = chat.send_message(analysis_prompt)
         storage.save_chat(user_id, f"Файл {file_name}", response.text)
-        await send_long_message(update.message, get_text('file_analyzing', lang, filename=file_name, text=response.text))
+        await update.message.reply_text(get_text('file_analyzing', lang, filename=file_name, text=response.text), parse_mode=ParseMode.HTML)
     except Exception as e:
         logger.warning(f"Ошибка обработки документа: {e}")
         await update.message.reply_text(get_text('file_error', lang, error=str(e)))
@@ -1305,6 +1322,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(get_text('vip_only', lang))
         return
     photo = update.message.photo[-1]
+    # Используем язык пользователя для промпта по умолчанию
     default_prompt = "Опиши что на картинке" if lang == 'ru' else "Describe what's in the picture"
     caption = update.message.caption or default_prompt
     
@@ -1343,18 +1361,20 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     identify_creator(user)
+    # Эта функция (get_user) теперь безопасна, т.к. миграция прошла при запуске
     user_data = storage.get_user(user.id)
     
     storage.update_user(user.id, {
         'username': user.username or '', 
         'first_name': user.first_name or '', 
         'commands_count': user_data.get('commands_count', 0) + 1,
-        'language': user_data.get('language', 'ru')
+        'language': user_data.get('language', 'ru') # Устанавливаем язык
     })
     lang = get_lang(user.id)
     welcome_text = get_text('welcome', lang, first_name=user.first_name, creator=CREATOR_USERNAME)
     await update.message.reply_text(welcome_text, parse_mode=ParseMode.HTML, reply_markup=get_main_keyboard(user.id))
 
+# Новая команда для смены языка
 async def language_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     lang = get_lang(user_id)
@@ -1378,9 +1398,10 @@ async def generate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
         
     prompt = ' '.join(context.args)
-    status_message = await update.message.reply_text(get_text('gen_in_progress', lang))
+    await update.message.reply_text(get_text('gen_in_progress', lang))
     
     try:
+        # Используем новую функцию
         image_bytes = await generate_image_imagen(prompt)
         
         if image_bytes:
@@ -1389,12 +1410,11 @@ async def generate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 caption=get_text('gen_caption', lang, prompt=prompt), 
                 parse_mode=ParseMode.HTML
             )
-            await status_message.delete()
         else:
-            await status_message.edit_text(get_text('gen_error', lang))
+            await update.message.reply_text(get_text('gen_error', lang))
     except Exception as e:
         logger.warning(f"Ошибка generate_command: {e}")
-        await status_message.edit_text(get_text('gen_error_api', lang, error=str(e)))
+        await update.message.reply_text(get_text('gen_error_api', lang, error=str(e)))
 
 
 async def ai_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1407,9 +1427,9 @@ async def ai_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def process_ai_message(update: Update, text: str, user_id: int, lang: str):
     try:
-        await update.message.chat.send_action('typing')
+        await update.message.chat.send_action(get_text('ai_typing', lang))
         chat = storage.get_chat_session(user_id)
-        response = await chat.send_message_async(text)
+        response = chat.send_message(text)
         
         storage.stats['ai_requests'] = storage.stats.get('ai_requests', 0) + 1
         storage.save_stats()
@@ -1421,26 +1441,13 @@ async def process_ai_message(update: Update, text: str, user_id: int, lang: str)
         await update.message.reply_text(get_text('ai_error', lang))
 
 async def send_long_message(message: Message, text: str):
-    MAX_LENGTH = 4096
-    if len(text) <= MAX_LENGTH:
+    if len(text) <= 4000:
         await message.reply_text(text, parse_mode=ParseMode.HTML)
     else:
-        parts = []
-        while len(text) > 0:
-            if len(text) > MAX_LENGTH:
-                part = text[:MAX_LENGTH]
-                last_newline = part.rfind('\n')
-                if last_newline != -1:
-                    part = part[:last_newline]
-                parts.append(part)
-                text = text[len(part):]
-            else:
-                parts.append(text)
-                break
-        
+        parts = [text[i:i+4000] for i in range(0, len(text), 4000)]
         for part in parts:
             await message.reply_text(part, parse_mode=ParseMode.HTML)
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(0.5)  # Чтобы избежать флуда
 
 async def clear_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -1571,14 +1578,14 @@ async def delnote_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(get_text('delnote_success', lang, num=note_num, text=deleted_note['text']))
         else:
             await update.message.reply_text(get_text('delnote_not_found', lang, num=note_num))
-    except (ValueError, IndexError):
+    except ValueError:
         await update.message.reply_text(get_text('delnote_invalid_num', lang))
 
 async def memory_save_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     lang = get_lang(user_id)
     if len(context.args) < 2:
-        await update.message.reply_text(get_text('help_text.help_memory', lang).split('\n\n')[1])
+        await update.message.reply_text(get_text('help_text.help_memory', lang).split('\n\n')[1]) # Показываем строку из help
         return
     key = context.args[0]
     value = ' '.join(context.args[1:])
@@ -1674,7 +1681,7 @@ async def todo_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await update.message.reply_text(get_text('todo_del_success', lang, num=todo_num, text=deleted_todo['text']))
             else:
                 await update.message.reply_text(get_text('todo_del_not_found', lang, num=todo_num))
-        except (ValueError, IndexError):
+        except ValueError:
             await update.message.reply_text(get_text('todo_del_invalid_num', lang))
     else:
         await update.message.reply_text(get_text('todo_prompt_needed', lang))
@@ -1683,14 +1690,40 @@ async def time_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = get_lang(update.effective_user.id)
     city = ' '.join(context.args) if context.args else 'Moscow'
     
-    try:
-        matching_tz = [tz for tz in pytz.all_timezones if city.lower().replace(" ", "_") in tz.lower()]
-        if matching_tz:
-            tz_name = matching_tz[0]
-        else:
+    # Расширенный список часовых поясов
+    timezones = {
+        'moscow': 'Europe/Moscow', 'москва': 'Europe/Moscow',
+        'london': 'Europe/London', 'лондон': 'Europe/London',
+        'new york': 'America/New_York', 'нью-йорк': 'America/New_York',
+        'tokyo': 'Asia/Tokyo', 'токио': 'Asia/Tokyo',
+        'paris': 'Europe/Paris', 'париж': 'Europe/Paris',
+        'berlin': 'Europe/Berlin', 'берлин': 'Europe/Berlin',
+        'dubai': 'Asia/Dubai', 'дубай': 'Asia/Dubai',
+        'sydney': 'Australia/Sydney', 'сидней': 'Australia/Sydney',
+        'los angeles': 'America/Los_Angeles', 'лос-анджелес': 'America/Los_Angeles',
+        'rome': 'Europe/Rome', 'рим': 'Europe/Rome'
+    }
+    
+    tz_name = timezones.get(city.lower(), None)
+    
+    # Если не нашли в словаре, пытаемся угадать
+    if not tz_name:
+        try:
+            # Ищем подходящий часовой пояс
+            matching_tz = [tz for tz in pytz.all_timezones if city.lower().replace(" ", "_") in tz.lower()]
+            if matching_tz:
+                tz_name = matching_tz[0]
+            else:
+                # Фолбэк на Москву, если ничего не найдено
+                tz_name = 'Europe/Moscow' if not context.args else None
+                if not tz_name:
+                     await update.message.reply_text(get_text('time_city_not_found', lang, city=city))
+                     return
+        except Exception:
              await update.message.reply_text(get_text('time_city_not_found', lang, city=city))
              return
 
+    try:
         tz = pytz.timezone(tz_name)
         current_time = datetime.now(tz)
         await update.message.reply_text(get_text('time_result', lang,
@@ -1707,26 +1740,35 @@ async def weather_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     lang = get_lang(user_id)
     
+    # Определяем язык для wttr.in
     wttr_lang = 'it' if lang == 'it' else 'en' if lang == 'en' else 'ru'
     city = ' '.join(context.args) if context.args else 'Moscow'
     
     try:
         async with aiohttp.ClientSession() as session:
+            # Добавляем параметр 'lang' для wttr.in
             url = f"https://wttr.in/{urlquote(city)}?format=j1&lang={wttr_lang}"
             async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
                 if resp.status == 200:
                     data = await resp.json()
                     current = data['current_condition'][0]
+                    temp_c = current['temp_C']
+                    feels_like = current['FeelsLikeC']
                     
-                    description = current.get(f'lang_{wttr_lang}', [{}])[0].get('value') or current['weatherDesc'][0]['value']
+                    # wttr.in предоставляет перевод в зависимости от 'lang'
+                    description_key = f'weatherDesc_{wttr_lang}' if f'weatherDesc_{wttr_lang}' in current else 'weatherDesc'
+                    description = current[description_key][0]['value']
+                    
+                    humidity = current['humidity']
+                    wind_speed = current['windspeedKmph']
                     
                     weather_text = get_text('weather_result', lang,
-                        city=data['nearest_area'][0]['areaName'][0]['value'],
-                        temp=current['temp_C'],
-                        feels=current['FeelsLikeC'],
+                        city=city.title(),
+                        temp=temp_c,
+                        feels=feels_like,
                         desc=description,
-                        humidity=current['humidity'],
-                        wind=current['windspeedKmph']
+                        humidity=humidity,
+                        wind=wind_speed
                     )
                     await update.message.reply_text(weather_text, parse_mode=ParseMode.HTML)
                 else:
@@ -1746,9 +1788,10 @@ async def translate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text_to_translate = ' '.join(context.args[1:])
     
     try:
+        # Просим Gemini перевести
         prompt = f"Переведи на {target_lang} язык следующий текст: {text_to_translate}"
         chat = storage.get_chat_session(user_id)
-        response = await chat.send_message_async(prompt)
+        response = chat.send_message(prompt)
         await send_long_message(update.message, response.text)
     except Exception as e:
         logger.warning(f"Ошибка перевода: {e}")
@@ -1760,7 +1803,8 @@ async def calc_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(get_text('calc_prompt_needed', lang))
         return
         
-    expression = ''.join(context.args)
+    expression = ' '.join(context.args)
+    # Простая валидация: разрешаем только цифры, точки и операторы
     allowed_chars = "0123456789.+-*/() "
     if not all(char in allowed_chars for char in expression):
         await update.message.reply_text(get_text('calc_error', lang))
@@ -1777,27 +1821,28 @@ async def password_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = get_lang(update.effective_user.id)
     try:
         length = 12 if not context.args else int(context.args[0])
-        if not (8 <= length <= 50):
+        if length < 8 or length > 50:
             await update.message.reply_text(get_text('password_length_error', lang))
             return
             
         chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()_-+='
         password = ''.join(random.choice(chars) for _ in range(length))
         await update.message.reply_text(get_text('password_result', lang, password=password), parse_mode=ParseMode.HTML)
-    except (ValueError, IndexError):
+    except ValueError:
         await update.message.reply_text(get_text('password_invalid_length', lang))
 
 async def random_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = get_lang(update.effective_user.id)
     try:
-        min_val, max_val = (1, 100)
         if len(context.args) >= 2:
             min_val = int(context.args[0])
             max_val = int(context.args[1])
-        
+        else:
+            min_val = 1
+            max_val = 100
         result = random.randint(min_val, max_val)
         await update.message.reply_text(get_text('random_result', lang, min=min_val, max=max_val, result=result), parse_mode=ParseMode.HTML)
-    except (ValueError, IndexError):
+    except ValueError:
         await update.message.reply_text(get_text('random_invalid_range', lang))
 
 async def dice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1810,13 +1855,11 @@ async def coin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = get_lang(update.effective_user.id)
     result_key = random.choice(['coin_heads', 'coin_tails'])
     result_text = get_text(result_key, lang)
-    emoji = '🦅' if result_key == 'coin_heads' else '💰'
+    emoji = '🦅' if result_key == 'coin_heads' else '💰' # (Орёл / Решка)
     await update.message.reply_text(get_text('coin_result', lang, emoji=emoji, result=result_text), parse_mode=ParseMode.HTML)
 
 async def joke_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Убедимся, что update это объект Message, а не CallbackQuery
-    message = update.message if isinstance(update, Update) else update
-    lang = get_lang(message.from_user.id)
+    lang = get_lang(update.effective_user.id)
     jokes = {
         'ru': [
             "Программист ложится спать. Жена: — Закрой окно, холодно! Программист: — И что, если я закрою окно, станет тепло? 😄",
@@ -1837,11 +1880,10 @@ async def joke_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Cosa dice un programmatore quando si sveglia? 'Hello, World!' ☀️"
         ]
     }
-    await message.reply_text(f"{get_text('joke_title', lang)}{random.choice(jokes.get(lang, jokes['en']))}", parse_mode=ParseMode.HTML)
+    await update.message.reply_text(f"{get_text('joke_title', lang)}{random.choice(jokes[lang])}", parse_mode=ParseMode.HTML)
 
 async def quote_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    message = update.message if isinstance(update, Update) else update
-    lang = get_lang(message.from_user.id)
+    lang = get_lang(update.effective_user.id)
     quotes = {
         'ru': [
             "Единственный способ сделать великую работу — любить то, что вы делаете. — Стив Джобс",
@@ -1862,11 +1904,10 @@ async def quote_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "La semplicità è la chiave dell'affidabilità. - Edsger Dijkstra"
         ]
     }
-    await message.reply_text(f"{get_text('quote_title', lang)}{random.choice(quotes.get(lang, quotes['en']))}{get_text('quote_title_end', lang)}", parse_mode=ParseMode.HTML)
+    await update.message.reply_text(f"{get_text('quote_title', lang)}{random.choice(quotes[lang])}{get_text('quote_title_end', lang)}", parse_mode=ParseMode.HTML)
 
 async def fact_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    message = update.message if isinstance(update, Update) else update
-    lang = get_lang(message.from_user.id)
+    lang = get_lang(update.effective_user.id)
     facts = {
         'ru': [
             "🌍 Земля — единственная планета Солнечной системы, названная не в честь бога.",
@@ -1893,7 +1934,7 @@ async def fact_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "⚡ Un fulmine è cinque volte più caldo della superficie del sole."
         ]
     }
-    await message.reply_text(f"{get_text('fact_title', lang)}{random.choice(facts.get(lang, facts['en']))}", parse_mode=ParseMode.HTML)
+    await update.message.reply_text(f"{get_text('fact_title', lang)}{random.choice(facts[lang])}", parse_mode=ParseMode.HTML)
 
 async def remind_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -1913,15 +1954,16 @@ async def remind_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         remind_time = datetime.now() + timedelta(minutes=minutes)
         
         user = storage.get_user(user_id)
-        reminder = {'text': text, 'time': remind_time.isoformat(), 'created': datetime.now().isoformat(), 'lang': lang}
+        reminder = {'text': text, 'time': remind_time.isoformat(), 'created': datetime.now().isoformat(), 'lang': lang} # Сохраняем язык
         reminders = user.get('reminders', [])
         reminders.append(reminder)
         storage.update_user(user_id, {'reminders': reminders})
         
+        # Передаем язык в задачу
         scheduler.add_job(send_reminder, 'date', run_date=remind_time, args=[context.bot, user_id, text, lang])
         
         await update.message.reply_text(get_text('remind_success', lang, text=text, minutes=minutes))
-    except (ValueError, IndexError):
+    except ValueError:
         await update.message.reply_text(get_text('remind_invalid_time', lang))
 
 async def reminders_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1935,12 +1977,6 @@ async def reminders_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = storage.get_user(user_id)
     reminders = user.get('reminders', [])
     
-    # Фильтруем прошедшие напоминания
-    active_reminders = [r for r in reminders if datetime.fromisoformat(r['time']) > datetime.now()]
-    if len(active_reminders) != len(reminders):
-        storage.update_user(user_id, {'reminders': active_reminders})
-        reminders = active_reminders
-
     if not reminders:
         await update.message.reply_text(get_text('reminders_empty', lang))
         return
@@ -1956,11 +1992,15 @@ async def reminders_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(reminders_text, parse_mode=ParseMode.HTML)
 
 async def send_reminder(bot, user_id: int, text: str, lang: str):
+    """Отправляет напоминание на языке пользователя."""
     try:
+        # Используем сохраненный язык
         reminder_text = get_text('reminder_alert', lang, text=text)
         await bot.send_message(chat_id=user_id, text=reminder_text, parse_mode=ParseMode.HTML)
         
+        # Удаляем напоминание из БД
         user = storage.get_user(user_id)
+        # Ищем по тексту и времени (на всякий случай, если текст совпадает)
         reminders = [r for r in user.get('reminders', []) if not (r['text'] == text and (datetime.now() - datetime.fromisoformat(r['time'])).total_seconds() > -60)]
         storage.update_user(user_id, {'reminders': reminders})
     except Exception as e:
@@ -1994,7 +2034,6 @@ async def grant_vip_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
             
         duration_delta = durations[duration_key]
-        vip_until = None
         
         if duration_delta:
             vip_until = datetime.now() + duration_delta
@@ -2007,12 +2046,9 @@ async def grant_vip_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(get_text('grant_vip_success', lang, id=target_id, duration_text=duration_text), parse_mode=ParseMode.HTML)
         
         try:
+            # Отправляем уведомление пользователю на его языке
             target_lang = get_lang(target_id)
-            dm_duration_text = get_text('duration_forever', target_lang)
-            if vip_until:
-                dm_duration_text = get_text('duration_until', target_lang, date=vip_until.strftime('%d.%m.%Y'))
-
-            dm_text = get_text('grant_vip_dm', target_lang, duration_text=dm_duration_text)
+            dm_text = get_text('grant_vip_dm', target_lang, duration_text=get_text(f'duration_{duration_key}', target_lang, date=vip_until.strftime('%d.%m.%Y') if duration_delta else ''))
             await context.bot.send_message(chat_id=target_id, text=dm_text, parse_mode=ParseMode.HTML)
         except Exception as e:
             logger.warning(f"Ошибка уведомления о VIP: {e}")
@@ -2059,14 +2095,18 @@ async def users_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     all_users = storage.get_all_users()
     users_text = get_text('users_list_title', lang, count=len(all_users))
     
-    for i, (user_id_target, user) in enumerate(all_users.items()):
-        if i >= 20:
+    for i, (user_id, user) in enumerate(all_users.items()):
+        if i >= 20: # Лимит 20 для Telegram
             users_text += get_text('users_list_more', lang, count=len(all_users) - 20)
             break
             
-        vip_badge = "💎" if user.get('vip', False) else "👤"
-        username = f"@{user.get('username', '')}" if user.get('username') else ""
-        users_text += f"{vip_badge} <code>{user_id_target}</code> - {user.get('first_name', 'Unknown')} {username}\n"
+        vip_badge = "💎" if user.get('vip', False) else ""
+        users_text += get_text('users_list_item', lang,
+            vip_badge=vip_badge,
+            id=user_id,
+            name=user.get('first_name', 'Unknown'),
+            username=user.get('username', '')
+        )
         
     await update.message.reply_text(users_text, parse_mode=ParseMode.HTML)
 
@@ -2092,11 +2132,12 @@ async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     for user_id_target in all_users.keys():
         try:
+            # Отправляем сообщение на языке пользователя
             target_lang = get_lang(user_id_target)
             broadcast_text = get_text('broadcast_dm', target_lang, text=message_text)
             await context.bot.send_message(chat_id=user_id_target, text=broadcast_text, parse_mode=ParseMode.HTML)
             success += 1
-            await asyncio.sleep(0.05)
+            await asyncio.sleep(0.05) # Избегаем флуда
         except Exception as e:
             logger.warning(f"Ошибка рассылки пользователю {user_id_target}: {e}")
             failed += 1
@@ -2150,16 +2191,13 @@ async def backup_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(get_text('backup_error', lang, error=str(e)))
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.message or not update.effective_user:
-        return
-
     identify_creator(update.effective_user)
     user_id = update.effective_user.id
     chat_type = update.message.chat.type
     text = update.message.text
     
     user = storage.get_user(user_id)
-    lang = user.get('language', 'ru')
+    lang = user.get('language', 'ru') # Получаем язык
     
     storage.update_user(user_id, {
         'messages_count': user.get('messages_count', 0) + 1, 
@@ -2170,97 +2208,93 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     storage.stats['total_messages'] = storage.stats.get('total_messages', 0) + 1
     storage.save_stats()
     
+    # Кнопки меню (проверка по всем языкам)
     button_key = None
-    if text:
-        for key, labels in menu_button_map.items():
-            if text in labels:
-                button_key = key
-                break
+    for key, labels in menu_button_map.items():
+        if text in labels:
+            button_key = key
+            break
             
     if button_key:
         await handle_menu_button(update, context, button_key, lang)
         return
     
+    # В группах только по упоминанию
     if chat_type in ['group', 'supergroup']:
-        bot_username = (await context.bot.get_me()).username
+        bot_username = context.bot.username
         if f"@{bot_username}" not in text:
             return
         text = text.replace(f"@{bot_username}", "").strip()
     
+    # AI ответ
     if text:
         await process_ai_message(update, text, user_id, lang)
 
 async def handle_menu_button(update: Update, context: ContextTypes.DEFAULT_TYPE, button_key: str, lang: str):
     user_id = update.effective_user.id
     
-    menu_actions = {
-        "chat": lambda: update.message.reply_text(get_text('menu.chat', lang), parse_mode=ParseMode.HTML),
-        "notes": lambda: update.message.reply_text(
-            get_text('menu.notes', lang),
-            parse_mode=ParseMode.HTML,
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton(get_text('menu.notes_create', lang), callback_data="note_create")],
-                [InlineKeyboardButton(get_text('menu.notes_list', lang), callback_data="note_list")]
-            ])
-        ),
-        "weather": lambda: update.message.reply_text(get_text('menu.weather', lang), parse_mode=ParseMode.HTML),
-        "time": lambda: update.message.reply_text(get_text('menu.time', lang), parse_mode=ParseMode.HTML),
-        "games": lambda: update.message.reply_text(
-            get_text('menu.games', lang),
-            parse_mode=ParseMode.HTML,
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton(get_text('menu.games_dice', lang), callback_data="game_dice"),
-                 InlineKeyboardButton(get_text('menu.games_coin', lang), callback_data="game_coin")],
-                [InlineKeyboardButton(get_text('menu.games_joke', lang), callback_data="game_joke"),
-                 InlineKeyboardButton(get_text('menu.games_quote', lang), callback_data="game_quote")],
-                [InlineKeyboardButton(get_text('menu.games_fact', lang), callback_data="game_fact")]
-            ])
-        ),
-        "info": lambda: info_command(update, context),
-        "vip_menu": lambda: (
-            update.message.reply_text(
-                get_text('menu.vip', lang),
-                parse_mode=ParseMode.HTML,
-                reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton(get_text('menu.vip_reminders', lang), callback_data="vip_reminders")]
-                ])
-            ) if storage.is_vip(user_id) else vip_command(update, context)
-        ),
-        "admin_panel": lambda: (
-            update.message.reply_text(
-                get_text('menu.admin', lang),
-                parse_mode=ParseMode.HTML,
-                reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton(get_text('menu.admin_users', lang), callback_data="admin_users")],
-                    [InlineKeyboardButton(get_text('menu.admin_stats', lang), callback_data="admin_stats")],
-                    [InlineKeyboardButton(get_text('menu.admin_broadcast', lang), callback_data="admin_broadcast")]
-                ])
-            ) if is_creator(user_id) else None
-        ),
-        "generate": lambda: (
-            update.message.reply_text(get_text('menu.generate', lang), parse_mode=ParseMode.HTML)
-            if storage.is_vip(user_id) else update.message.reply_text(get_text('vip_only', lang))
-        )
-    }
-    
-    if button_key in menu_actions:
-        await menu_actions[button_key]()
-
+    if button_key == "chat":
+        await update.message.reply_text(get_text('menu.chat', lang), parse_mode=ParseMode.HTML)
+    elif button_key == "notes":
+        keyboard = [
+            [InlineKeyboardButton(get_text('menu.notes_create', lang), callback_data="note_create")], 
+            [InlineKeyboardButton(get_text('menu.notes_list', lang), callback_data="note_list")]
+        ]
+        await update.message.reply_text(get_text('menu.notes', lang), parse_mode=ParseMode.HTML, reply_markup=InlineKeyboardMarkup(keyboard))
+    elif button_key == "weather":
+        await update.message.reply_text(get_text('menu.weather', lang), parse_mode=ParseMode.HTML)
+    elif button_key == "time":
+        await update.message.reply_text(get_text('menu.time', lang), parse_mode=ParseMode.HTML)
+    elif button_key == "games":
+        keyboard = [
+            [InlineKeyboardButton(get_text('menu.games_dice', lang), callback_data="game_dice"), 
+             InlineKeyboardButton(get_text('menu.games_coin', lang), callback_data="game_coin")],
+            [InlineKeyboardButton(get_text('menu.games_joke', lang), callback_data="game_joke"), 
+             InlineKeyboardButton(get_text('menu.games_quote', lang), callback_data="game_quote")],
+            [InlineKeyboardButton(get_text('menu.games_fact', lang), callback_data="game_fact")]
+        ]
+        await update.message.reply_text(get_text('menu.games', lang), parse_mode=ParseMode.HTML, reply_markup=InlineKeyboardMarkup(keyboard))
+    elif button_key == "info":
+        await info_command(update, context)
+    elif button_key == "vip_menu":
+        if storage.is_vip(user_id):
+            keyboard = [
+                [InlineKeyboardButton(get_text('menu.vip_reminders', lang), callback_data="vip_reminders")], 
+                [InlineKeyboardButton(get_text('menu.vip_stats', lang), callback_data="vip_stats")]
+            ]
+            await update.message.reply_text(get_text('menu.vip', lang), parse_mode=ParseMode.HTML, reply_markup=InlineKeyboardMarkup(keyboard))
+        else:
+            await vip_command(update, context)
+    elif button_key == "admin_panel":
+        if is_creator(user_id):
+            keyboard = [
+                [InlineKeyboardButton(get_text('menu.admin_users', lang), callback_data="admin_users")], 
+                [InlineKeyboardButton(get_text('menu.admin_stats', lang), callback_data="admin_stats")], 
+                [InlineKeyboardButton(get_text('menu.admin_broadcast', lang), callback_data="admin_broadcast")]
+            ]
+            await update.message.reply_text(get_text('menu.admin', lang), parse_mode=ParseMode.HTML, reply_markup=InlineKeyboardMarkup(keyboard))
+    elif button_key == "generate":
+        if storage.is_vip(user_id):
+            await update.message.reply_text(get_text('menu.generate', lang), parse_mode=ParseMode.HTML)
+        else:
+            await update.message.reply_text(get_text('vip_only', lang))
 
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     data = query.data
     user_id = query.from_user.id
-    lang = get_lang(user_id)
+    lang = get_lang(user_id) # Получаем язык для всех колбэков
     identify_creator(query.from_user)
     
+    # --- НОВЫЙ ОБРАБОТЧИК СМЕНЫ ЯЗЫКА ---
     if data.startswith("set_lang:"):
         new_lang = data.split(":")[1]
         if new_lang in localization_strings:
             storage.update_user(user_id, {'language': new_lang})
             await query.edit_message_text(get_text('lang_changed', new_lang))
             
+            # Отправляем новое приветственное сообщение с обновленной клавиатурой
             user = storage.get_user(user_id)
             welcome_text = get_text('welcome', new_lang, first_name=user.get('first_name', 'User'), creator=CREATOR_USERNAME)
             await query.message.reply_text(
@@ -2270,105 +2304,142 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         return
 
+    # Help callbacks
     if data.startswith("help_"):
         await handle_help_callback(update, context)
         return
     
+    # Note callbacks
     if data == "note_create":
         await query.edit_message_text(get_text('note_prompt_needed', lang), parse_mode=ParseMode.HTML)
     elif data == "note_list":
-        await notes_command(Update(update.update_id, message=query.message), context)
+        user = storage.get_user(user_id)
+        notes = user.get('notes', [])
+        if not notes:
+            await query.edit_message_text(get_text('notes_empty', lang))
+            return
+        notes_text = get_text('notes_list_title', lang, count=len(notes))
+        for i, note in enumerate(notes, 1):
+            created = datetime.fromisoformat(note['created'])
+            notes_text += get_text('notes_list_item', lang, i=i, date=created.strftime('%d.%m'), text=note['text'])
+        await query.edit_message_text(notes_text, parse_mode=ParseMode.HTML)
         
+    # Game callbacks
     elif data == "game_dice":
-        await dice_command(Update(update.update_id, message=query.message), context)
+        result = random.randint(1, 6)
+        dice_emoji = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'][result - 1]
+        await query.message.reply_text(get_text('dice_result', lang, emoji=dice_emoji, result=result), parse_mode=ParseMode.HTML)
     elif data == "game_coin":
-        await coin_command(Update(update.update_id, message=query.message), context)
+        result_key = random.choice(['coin_heads', 'coin_tails'])
+        result_text = get_text(result_key, lang)
+        emoji = '🦅' if result_key == 'coin_heads' else '💰'
+        await query.message.reply_text(get_text('coin_result', lang, emoji=emoji, result=result_text), parse_mode=ParseMode.HTML)
     elif data == "game_joke":
-        await joke_command(query.message, context)
+        await joke_command(query, context) # Используем команду, т.к. в ней уже есть логика
     elif data == "game_quote":
-        await quote_command(query.message, context)
+        await quote_command(query, context)
     elif data == "game_fact":
-        await fact_command(query.message, context)
+        await fact_command(query, context)
         
+    # VIP callbacks
     elif data == "vip_reminders":
-        await reminders_command(Update(update.update_id, message=query.message), context)
+        # Создаем фейковый update, т.к. команда ожидает message
+        fake_update = Update(update_id=update.update_id, message=query.message)
+        await reminders_command(fake_update, context)
+    elif data == "vip_stats":
+        fake_update = Update(update_id=update.update_id, message=query.message)
+        await profile_command(fake_update, context)
         
-    elif data == "admin_users" and is_creator(user_id):
-        await users_command(Update(update.update_id, message=query.message), context)
-    elif data == "admin_stats" and is_creator(user_id):
-        await stats_command(Update(update.update_id, message=query.message), context)
-    elif data == "admin_broadcast" and is_creator(user_id):
-        await query.edit_message_text(get_text('broadcast_prompt', lang), parse_mode=ParseMode.HTML)
-
+    # Admin callbacks
+    elif data == "admin_users":
+        if is_creator(user_id):
+            fake_update = Update(update_id=update.update_id, message=query.message)
+            await users_command(fake_update, context)
+    elif data == "admin_stats":
+        if is_creator(user_id):
+            fake_update = Update(update_id=update.update_id, message=query.message)
+            await stats_command(fake_update, context)
+    elif data == "admin_broadcast":
+        if is_creator(user_id):
+            await query.edit_message_text(get_text('broadcast_prompt', lang), parse_mode=ParseMode.HTML)
 
 def signal_handler(signum, frame):
     logger.info("Получен сигнал завершения. Останавливаем бота...")
-    scheduler.shutdown(wait=False)
-    raise SystemExit("Bot stopped gracefully")
+    scheduler.shutdown()
+    raise SystemExit
 
 def main():
     application = Application.builder().token(BOT_TOKEN).build()
     
     # Регистрация команд
-    handlers = [
-        CommandHandler("start", start_command),
-        CommandHandler("help", help_command),
-        CommandHandler("language", language_command),
-        CommandHandler("info", info_command),
-        CommandHandler("status", status_command),
-        CommandHandler("profile", profile_command),
-        CommandHandler("uptime", uptime_command),
-        CommandHandler("ai", ai_command),
-        CommandHandler("clear", clear_command),
-        CommandHandler("memorysave", memory_save_command),
-        CommandHandler("memoryget", memory_get_command),
-        CommandHandler("memorylist", memory_list_command),
-        CommandHandler("memorydel", memory_del_command),
-        CommandHandler("note", note_command),
-        CommandHandler("notes", notes_command),
-        CommandHandler("delnote", delnote_command),
-        CommandHandler("todo", todo_command),
-        CommandHandler("time", time_command),
-        CommandHandler("weather", weather_command),
-        CommandHandler("translate", translate_command),
-        CommandHandler("calc", calc_command),
-        CommandHandler("password", password_command),
-        CommandHandler("random", random_command),
-        CommandHandler("dice", dice_command),
-        CommandHandler("coin", coin_command),
-        CommandHandler("joke", joke_command),
-        CommandHandler("quote", quote_command),
-        CommandHandler("fact", fact_command),
-        CommandHandler("vip", vip_command),
-        CommandHandler("remind", remind_command),
-        CommandHandler("reminders", reminders_command),
-        CommandHandler("generate", generate_command),
-        CommandHandler("grant_vip", grant_vip_command),
-        CommandHandler("revoke_vip", revoke_vip_command),
-        CommandHandler("users", users_command),
-        CommandHandler("broadcast", broadcast_command),
-        CommandHandler("stats", stats_command),
-        CommandHandler("backup", backup_command),
-        MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message),
-        MessageHandler(filters.Document.ALL, handle_document),
-        MessageHandler(filters.PHOTO, handle_photo),
-        MessageHandler(filters.VOICE, handle_voice),
-        CallbackQueryHandler(handle_callback)
-    ]
-    application.add_handlers(handlers)
+    application.add_handler(CommandHandler("start", start_command))
+    application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("language", language_command)) # Новая команда
+    application.add_handler(CommandHandler("info", info_command))
+    application.add_handler(CommandHandler("status", status_command))
+    application.add_handler(CommandHandler("profile", profile_command))
+    application.add_handler(CommandHandler("uptime", uptime_command))
     
+    application.add_handler(CommandHandler("ai", ai_command))
+    application.add_handler(CommandHandler("clear", clear_command))
+    
+    application.add_handler(CommandHandler("memorysave", memory_save_command))
+    application.add_handler(CommandHandler("memoryget", memory_get_command))
+    application.add_handler(CommandHandler("memorylist", memory_list_command))
+    application.add_handler(CommandHandler("memorydel", memory_del_command))
+    
+    application.add_handler(CommandHandler("note", note_command))
+    application.add_handler(CommandHandler("notes", notes_command))
+    application.add_handler(CommandHandler("delnote", delnote_command))
+    
+    application.add_handler(CommandHandler("todo", todo_command))
+    
+    application.add_handler(CommandHandler("time", time_command))
+    application.add_handler(CommandHandler("weather", weather_command))
+    application.add_handler(CommandHandler("translate", translate_command))
+    application.add_handler(CommandHandler("calc", calc_command))
+    application.add_handler(CommandHandler("password", password_command))
+    
+    application.add_handler(CommandHandler("random", random_command))
+    application.add_handler(CommandHandler("dice", dice_command))
+    application.add_handler(CommandHandler("coin", coin_command))
+    application.add_handler(CommandHandler("joke", joke_command))
+    application.add_handler(CommandHandler("quote", quote_command))
+    application.add_handler(CommandHandler("fact", fact_command))
+    
+    application.add_handler(CommandHandler("vip", vip_command))
+    application.add_handler(CommandHandler("remind", remind_command))
+    application.add_handler(CommandHandler("reminders", reminders_command))
+    application.add_handler(CommandHandler("generate", generate_command))
+    
+    application.add_handler(CommandHandler("grant_vip", grant_vip_command))
+    application.add_handler(CommandHandler("revoke_vip", revoke_vip_command))
+    application.add_handler(CommandHandler("users", users_command))
+    application.add_handler(CommandHandler("broadcast", broadcast_command))
+    application.add_handler(CommandHandler("stats", stats_command))
+    application.add_handler(CommandHandler("backup", backup_command))
+    
+    # Обработчики сообщений
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    application.add_handler(MessageHandler(filters.Document.ALL, handle_document))
+    application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+    application.add_handler(MessageHandler(filters.VOICE, handle_voice))
+    application.add_handler(CallbackQueryHandler(handle_callback))
+    
+    # Запуск scheduler
     scheduler.start()
     
     logger.info("=" * 50)
     logger.info("✅ AI DISCO BOT ЗАПУЩЕН!")
-    logger.info(f"🤖 Модель: {model.model_name}")
+    logger.info("🤖 Модель: Gemini 2.5 Flash")
     logger.info("🗄️ БД: " + ("PostgreSQL ✓" if engine else "Local JSON"))
-    logger.info("🖼️ Генерация: Imagen 3")
-    logger.info(f"🔍 Анализ: {vision_model.model_name}")
-    logger.info("🎙️ Транскрипция: Gemini 1.5 Flash")
-    logger.info("🗣️ Языки: RU, EN, IT")
+    logger.info("🖼️ Генерация: Imagen 3 (Fixed)") # Обновлено
+    logger.info("🔍 Анализ: Gemini Vision")
+    logger.info("🎙️ Транскрипция: Gemini 2.5 Flash")
+    logger.info("🗣️ Языки: RU, EN, IT") # Добавлено
     logger.info("=" * 50)
     
+    # Graceful shutdown
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
     
