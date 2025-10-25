@@ -1137,7 +1137,10 @@ def get_help_keyboard(lang: str, is_admin: bool = False) -> InlineKeyboardMarkup
     ]
     if is_admin:
         keyboard.append([InlineKeyboardButton(get_text('help_sections.help_admin', lang), callback_data="help_admin")])
-    keyboard.append([InlineKeyboardButton(get_text('help_back', lang), callback_data="help_back")])
+    # --- ИСПРАВЛЕНИЕ ---
+    # Кнопка "Назад" не нужна в главном меню справки, она нужна только в подменю
+    # keyboard.append([InlineKeyboardButton(get_text('help_back', lang), callback_data="help_back")])
+    # ------------------
     return InlineKeyboardMarkup(keyboard)
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1154,6 +1157,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 # Callback handlers for help sections
+# --- ИСПРАВЛЕНО: Полностью переписана логика для корректной работы ---
 async def handle_help_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -1163,6 +1167,7 @@ async def handle_help_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     is_admin = is_creator(user_id)
 
     if data == "help_back":
+        # Если нажата "Назад", показываем главное меню справки
         await query.edit_message_text(
             get_text('help_title', lang),
             parse_mode=ParseMode.HTML,
@@ -1170,32 +1175,46 @@ async def handle_help_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         )
         return
 
-    # Формируем разделы справки на основе ключей локализации
-    sections = {
-        "help_basic": (get_text('help_text.help_basic', lang), get_help_keyboard(lang, is_admin)),
-        "help_ai": (get_text('help_text.help_ai', lang), get_help_keyboard(lang, is_admin)),
-        "help_memory": (get_text('help_text.help_memory', lang), get_help_keyboard(lang, is_admin)),
-        "help_notes": (get_text('help_text.help_notes', lang), get_help_keyboard(lang, is_admin)),
-        "help_todo": (get_text('help_text.help_todo', lang), get_help_keyboard(lang, is_admin)),
-        "help_utils": (get_text('help_text.help_utils', lang), get_help_keyboard(lang, is_admin)),
-        "help_games": (get_text('help_text.help_games', lang), get_help_keyboard(lang, is_admin)),
-        "help_vip": (get_text('help_text.help_vip', lang), get_help_keyboard(lang, is_admin)),
+    # Создаем клавиатуру "Назад" ОДИН РАЗ
+    back_markup = InlineKeyboardMarkup([[InlineKeyboardButton(get_text('help_back', lang), callback_data="help_back")]])
+
+    # Словарь с текстами для каждого раздела
+    sections_text = {
+        "help_basic": get_text('help_text.help_basic', lang),
+        "help_ai": get_text('help_text.help_ai', lang),
+        "help_memory": get_text('help_text.help_memory', lang),
+        "help_notes": get_text('help_text.help_notes', lang),
+        "help_todo": get_text('help_text.help_todo', lang),
+        "help_utils": get_text('help_text.help_utils', lang),
+        "help_games": get_text('help_text.help_games', lang),
+        "help_vip": get_text('help_text.help_vip', lang),
     }
 
-    if data == "help_admin" and is_admin:
-        text = get_text('help_text.help_admin', lang)
-        markup = InlineKeyboardMarkup([[InlineKeyboardButton(get_text('help_back', lang), callback_data="help_back")]])
-    elif data in sections:
-        text, markup = sections[data]
-    else:
-        await query.edit_message_text(get_text('section_not_found', lang))
-        return
+    text_to_show = None
 
-    await query.edit_message_text(
-        text,
-        parse_mode=ParseMode.HTML,
-        reply_markup=markup
-    )
+    if data in sections_text:
+        # Если это обычный раздел, берем текст
+        text_to_show = sections_text[data]
+    elif data == "help_admin" and is_admin:
+        # Если это админский раздел (и пользователь админ), берем админский текст
+        text_to_show = get_text('help_text.help_admin', lang)
+    
+    if text_to_show:
+        # Показываем текст раздела и клавиатуру "Назад"
+        await query.edit_message_text(
+            text_to_show,
+            parse_mode=ParseMode.HTML,
+            reply_markup=back_markup
+        )
+    else:
+        # Если раздел не найден (например, не-админ нажал "Админ" - хотя кнопки и не должно быть)
+        await query.edit_message_text(
+            get_text('help_title', lang),
+            parse_mode=ParseMode.HTML,
+            reply_markup=get_help_keyboard(lang, is_admin)
+        )
+# --- КОНЕЦ ИСПРАВЛЕНИЯ ---
+
 
 # --- НОВАЯ ФУНКЦИЯ ГЕНЕРАЦИИ ИЗОБРАЖЕНИЙ ---
 async def generate_image_imagen(prompt: str) -> Optional[bytes]:
