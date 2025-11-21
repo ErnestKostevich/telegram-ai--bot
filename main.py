@@ -14,7 +14,6 @@ import requests
 import io
 from urllib.parse import quote as urlquote
 import base64
-import mimetypes
 import tempfile
 
 # Telegram Imports
@@ -22,13 +21,11 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKe
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 from telegram.constants import ParseMode
 
-# Gemini (Только для Vision/Audio/Imagen)
+# Gemini (Vision/Audio)
 import google.generativeai as genai
 
-# --- HUGGING FACE / LLAMA IMPORTS (НОВОЕ) ---
-import torch
-from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
-from peft import PeftModel
+# --- HUGGING FACE API (ЛЕГКИЙ КЛИЕНТ) ---
+from huggingface_hub import InferenceClient
 
 # Utils
 import aiohttp
@@ -45,11 +42,12 @@ from sqlalchemy.orm import sessionmaker, declarative_base
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 DATABASE_URL = os.getenv('DATABASE_URL')
-HF_TOKEN = os.getenv('HF_TOKEN')  # НУЖЕН ДЛЯ LLAMA
+HF_TOKEN = os.getenv('HF_TOKEN') 
 
-# Настройки вашей модели
-YOUR_MODEL_NAME = "Ernest1Kostevich1/ernest-ai-llama-8b"
-BASE_MODEL_NAME = "meta-llama/Llama-3.1-8B-Instruct"
+# ID вашей модели на Hugging Face
+# Используем базовую Llama 3.1 Instruct, так как API адаптеры (LoRA) поддерживает сложнее
+# Если ваша модель Ernest1Kostevich1/ernest-ai-llama-8b публичная и merged, можно попробовать её
+YOUR_MODEL_NAME = "meta-llama/Meta-Llama-3.1-8B-Instruct" 
 
 CREATOR_USERNAME = "Ernest_Kostevich"
 CREATOR_ID = None
@@ -64,134 +62,71 @@ logger = logging.getLogger(__name__)
 # Проверка переменных
 if not BOT_TOKEN or not GEMINI_API_KEY or not HF_TOKEN:
     logger.error("❌ ОШИБКА: Не заданы BOT_TOKEN, GEMINI_API_KEY или HF_TOKEN")
-    # Не останавливаем скрипт жестко, но функционал будет ограничен
 
-# --- 1. НАСТРОЙКА GEMINI (ТОЛЬКО VISUAL/AUDIO) ---
+# --- 1. НАСТРОЙКА GEMINI (VISION/AUDIO) ---
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
-    generation_config = {
-        "temperature": 1,
-        "top_p": 0.95,
-        "top_k": 40,
-        "max_output_tokens": 2048,
-    }
-    safety_settings = [
-        {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
-        {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
-        {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
-        {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
-    ]
-    
-    # Модель для анализа картинок
     vision_model = genai.GenerativeModel(
-        model_name='gemini-2.5-flash',
-        generation_config=generation_config,
-        safety_settings=safety_settings
+        model_name='gemini-1.5-flash', # Используем стабильную версию
+        safety_settings=[
+            {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
+        ]
     )
 else:
     vision_model = None
 
-# --- 2. НАСТРОЙКА ВАШЕЙ LLAMA МОДЕЛИ (ЧАТ) ---
-logger.info("🚀 Инициализация модели Llama 3.1... Это может занять время.")
+# --- 2. НАСТРОЙКА HF API КЛИЕНТА ---
+# Это заменяет тяжелую загрузку модели
+hf_client = InferenceClient(model=YOUR_MODEL_NAME, token=HF_TOKEN)
 
-your_model = None
-your_tokenizer = None
-MODEL_LOADED = False
-
-if HF_TOKEN:
-    try:
-        # Конфигурация квантования (4-bit) для экономии памяти
-        bnb_config = BitsAndBytesConfig(
-            load_in_4bit=True,
-            bnb_4bit_use_double_quant=True,
-            bnb_4bit_quant_type="nf4",
-            bnb_4bit_compute_dtype=torch.bfloat16
-        )
-
-        logger.info("📥 Загрузка базовой модели...")
-        base_model = AutoModelForCausalLM.from_pretrained(
-            BASE_MODEL_NAME,
-            quantization_config=bnb_config,
-            device_map="auto",
-            trust_remote_code=True,
-            token=HF_TOKEN
-        )
-        
-        logger.info("📥 Загрузка вашего адаптера (LoRA)...")
-        your_model = PeftModel.from_pretrained(base_model, YOUR_MODEL_NAME, token=HF_TOKEN)
-        
-        logger.info("📥 Загрузка токенизатора...")
-        your_tokenizer = AutoTokenizer.from_pretrained(YOUR_MODEL_NAME, token=HF_TOKEN)
-        your_tokenizer.pad_token = your_tokenizer.eos_token
-        your_tokenizer.padding_side = "right"
-        
-        MODEL_LOADED = True
-        logger.info("✅ Модель Ernest AI загружена успешно!")
-        
-    except Exception as e:
-        logger.error(f"❌ Ошибка загрузки модели LLAMA: {e}")
-        logger.warning("⚠️ Чат-функции не будут работать, но утилиты доступны.")
-else:
-    logger.warning("⚠️ HF_TOKEN не найден. Загрузка модели пропущена.")
-
-
-# --- ФУНКЦИЯ ГЕНЕРАЦИИ (НОВАЯ) ---
+# --- ФУНКЦИЯ ГЕНЕРАЦИИ (API) ---
 def generate_with_your_model(prompt: str, lang: str = 'ru', max_new_tokens: int = 512) -> str:
-    if not MODEL_LOADED or your_model is None:
-        return "❌ Моя нейросеть сейчас недоступна (ошибка загрузки или нехватка памяти)."
+    if not HF_TOKEN:
+        return "❌ Ошибка: HF_TOKEN не найден."
     
     try:
         # Системный промпт
-        sys_prompt = "You are AI DISCO BOT, a helpful assistant."
+        sys_prompt = "You are AI DISCO BOT, a helpful assistant created by @Ernest_Kostevich."
         if lang == 'ru':
             sys_prompt = "Ты — AI DISCO BOT, умный и вежливый ассистент. Твой создатель — @Ernest_Kostevich. Отвечай на русском языке."
         elif lang == 'it':
-            sys_prompt = "Sei AI DISCO BOT, un assistente intelligente. Il tuo creatore è @Ernest_Kostevich. Rispondi in italiano."
+            sys_prompt = "Sei AI DISCO BOT, un assistente intelligente creato da @Ernest_Kostevich. Rispondi in italiano."
 
-        # Формат Llama 3
-        formatted_prompt = f"""<|begin_of_text|><|start_header_id|>system<|end_header_id|>
-
-{sys_prompt}<|eot_id|><|start_header_id|>user<|end_header_id|>
-
-{prompt}<|eot_id|><|start_header_id|>assistant<|end_header_id|>"""
+        # Формирование сообщений для Chat API
+        messages = [
+            {"role": "system", "content": sys_prompt},
+            {"role": "user", "content": prompt}
+        ]
         
-        inputs = your_tokenizer(
-            formatted_prompt,
-            return_tensors="pt",
-            truncation=True,
-            max_length=2048
-        ).to(your_model.device)
+        # Запрос к API Hugging Face (Serverless Inference)
+        # Это не грузит память вашего сервера
+        response = hf_client.chat_completion(
+            messages, 
+            max_tokens=max_new_tokens,
+            temperature=0.7,
+            top_p=0.9
+        )
         
-        with torch.no_grad():
-            outputs = your_model.generate(
-                **inputs,
-                max_new_tokens=max_new_tokens,
-                do_sample=True,
-                temperature=0.7,
-                top_p=0.9,
-                top_k=50,
-                repetition_penalty=1.1,
-                pad_token_id=your_tokenizer.eos_token_id
-            )
-        
-        response = your_tokenizer.decode(outputs[0], skip_special_tokens=True)
-        
-        # Очистка от системных тегов
-        if "<|start_header_id|>assistant<|end_header_id|>" in response:
-            response = response.split("<|start_header_id|>assistant<|end_header_id|>")[-1].strip()
-        
-        return response
+        return response.choices[0].message.content
         
     except Exception as e:
-        logger.error(f"Ошибка генерации Llama: {e}")
-        return "😔 Произошла ошибка при генерации ответа."
+        logger.error(f"Ошибка API Hugging Face: {e}")
+        # Fallback (если сервер перегружен, можно добавить повтор)
+        if "429" in str(e): # Rate limit
+            return "😔 Сервер перегружен (Rate Limit). Попробуйте через минуту."
+        if "401" in str(e):
+            return "❌ Ошибка авторизации HF_TOKEN."
+        return f"😔 Ошибка нейросети: {str(e)[:100]}"
 
 # --- ЛОКАЛИЗАЦИЯ ---
 localization_strings = {
     'ru': {
         'welcome': (
             "🤖 <b>AI DISCO BOT</b>\n\n"
-            "Привет, {first_name}! Я теперь работаю на модели <b>Llama 3.1 (Ernest AI)</b>.\n\n"
+            "Привет, {first_name}! Я работаю через <b>Hugging Face API</b> (Llama 3.1).\n\n"
             "<b>🎯 Возможности:</b>\n"
             "💬 Умный чат\n"
             "📝 Заметки и задачи\n"
@@ -213,7 +148,7 @@ localization_strings = {
         'help_sections': {'help_basic': "🏠 Основные", 'help_ai': "💬 AI", 'help_memory': "🧠 Память", 'help_notes': "📝 Заметки", 'help_todo': "📋 Задачи", 'help_utils': "🌍 Утилиты", 'help_games': "🎲 Игры", 'help_vip': "💎 VIP", 'help_admin': "👑 Админ"},
         'help_text': {
             'help_basic': "🚀 /start, 📖 /help, ℹ️ /info, 📊 /status, 👤 /profile, 🗣️ /language",
-            'help_ai': "💬 Просто пишите мне сообщения!\n🧹 /clear - Очистить контекст (работает ограниченно)",
+            'help_ai': "💬 Просто пишите мне сообщения!\n🧹 /clear - Очистить контекст (логически)",
             'help_memory': "🧠 /memorysave, /memoryget, /memorylist, /memorydel",
             'help_notes': "📝 /note [текст], /notes, /delnote [номер]",
             'help_todo': "📋 /todo add [текст], /todo list, /todo del [номер]",
@@ -223,7 +158,7 @@ localization_strings = {
             'help_admin': "👑 /grant_vip, /revoke_vip, /users, /broadcast, /stats, /backup"
         },
         'menu': {'chat': "🤖 <b>AI Чат</b>\nПиши, я отвечу!", 'notes': "📝 Заметки", 'notes_create': "➕ Создать", 'notes_list': "📋 Список", 'weather': "🌍 /weather [город]", 'time': "⏰ /time [город]", 'games': "🎲 Развлечения", 'games_dice': "🎲", 'games_coin': "🪙", 'games_joke': "😄", 'games_quote': "💭", 'games_fact': "🔬", 'vip': "💎 VIP Меню", 'vip_reminders': "⏰ Напоминания", 'vip_stats': "📊 Статы", 'admin': "👑 Админ", 'admin_users': "👥", 'admin_stats': "📊", 'admin_broadcast': "📢", 'generate': "🖼️ /generate [промпт]"},
-        'info': "🤖 <b>AI DISCO BOT 4.0</b>\n🧠 <b>AI:</b> Llama 3.1 (Ernest AI)\n👀 <b>Vision:</b> Gemini 2.5\n👨‍💻 @Ernest_Kostevich",
+        'info': "🤖 <b>AI DISCO BOT 4.0</b>\n🧠 <b>AI:</b> Llama 3.1 (via API)\n👀 <b>Vision:</b> Gemini 1.5\n👨‍💻 @Ernest_Kostevich",
         'status': "📊 <b>Статус</b>\n👥 Юзеры: {users}\n💎 VIP: {vips}\n🤖 AI Модель: {db_status}",
         'profile': "👤 <b>{first_name}</b>\n🆔 <code>{user_id}</code>\n📊 Сообщений: {msg_count}",
         'profile_vip': "\n💎 VIP до: {date}", 'profile_vip_forever': "\n💎 VIP: Навсегда",
@@ -253,14 +188,14 @@ localization_strings = {
         'error_generic': "❌ Ошибка: {error}", 'admin_only': "❌ Только создатель."
     },
     'en': {
-        'welcome': "🤖 <b>AI DISCO BOT</b>\n\nHi {first_name}! Now powered by <b>Llama 3.1 (Ernest AI)</b>.\n\nCommands: /help\nCreator: @{creator}",
+        'welcome': "🤖 <b>AI DISCO BOT</b>\n\nHi {first_name}! Powered by <b>Llama 3.1 (API)</b>.\n\nCommands: /help\nCreator: @{creator}",
         'lang_changed': "✅ Language changed to English 🇬🇧", 'lang_choose': "Choose language:",
         'main_keyboard': {'chat': "💬 AI Chat", 'notes': "📝 Notes", 'weather': "🌍 Weather", 'time': "⏰ Time", 'games': "🎲 Games", 'info': "ℹ️ Info", 'vip_menu': "💎 VIP", 'admin_panel': "👑 Admin", 'generate': "🖼️ Gen"},
         'help_title': "📚 <b>Help:</b>", 'help_back': "🔙 Back",
         'help_sections': {'help_basic': "🏠 Basic", 'help_ai': "💬 AI", 'help_memory': "🧠 Memory", 'help_notes': "📝 Notes", 'help_todo': "📋 ToDo", 'help_utils': "🌍 Utils", 'help_games': "🎲 Games", 'help_vip': "💎 VIP", 'help_admin': "👑 Admin"},
         'help_text': {'help_basic': "/start, /help, /language", 'help_ai': "Just type!", 'help_memory': "/memorysave...", 'help_notes': "/note...", 'help_todo': "/todo...", 'help_utils': "/weather...", 'help_games': "/dice...", 'help_vip': "/vip...", 'help_admin': "/stats..."},
         'menu': {'chat': "🤖 AI Chat", 'notes': "📝 Notes", 'notes_create': "➕ New", 'notes_list': "📋 List", 'weather': "🌍 Weather", 'time': "⏰ Time", 'games': "🎲 Games", 'games_dice': "🎲", 'games_coin': "🪙", 'games_joke': "😄", 'games_quote': "💭", 'games_fact': "🔬", 'vip': "💎 VIP", 'vip_reminders': "⏰ Remind", 'vip_stats': "📊 Stats", 'admin': "👑 Admin", 'admin_users': "👥", 'admin_stats': "📊", 'admin_broadcast': "📢", 'generate': "🖼️ Gen"},
-        'info': "🤖 AI DISCO BOT\nAI: Llama 3.1\nDev: @Ernest_Kostevich",
+        'info': "🤖 AI DISCO BOT\nAI: Llama 3.1 (API)\nDev: @Ernest_Kostevich",
         'status': "📊 Status\nUsers: {users}\nVIP: {vips}\nDB: {db_status}",
         'profile': "👤 {first_name}\nMessages: {msg_count}", 'profile_vip': "\nVIP until: {date}", 'profile_vip_forever': "\nVIP: Forever",
         'uptime': "⏱ Uptime: {days}d {hours}h",
@@ -288,14 +223,14 @@ localization_strings = {
         'error_generic': "❌ Error: {error}", 'admin_only': "❌ Creator only."
     },
     'it': {
-        'welcome': "🤖 <b>AI DISCO BOT</b>\n\nCiao {first_name}! Ora con <b>Llama 3.1</b>.\n\nCreatore: @{creator}",
+        'welcome': "🤖 <b>AI DISCO BOT</b>\n\nCiao {first_name}! Ora con <b>Llama 3.1 (API)</b>.\n\nCreatore: @{creator}",
         'lang_changed': "✅ Lingua: Italiano 🇮🇹", 'lang_choose': "Scegli lingua:",
         'main_keyboard': {'chat': "💬 Chat AI", 'notes': "📝 Note", 'weather': "🌍 Meteo", 'time': "⏰ Ora", 'games': "🎲 Giochi", 'info': "ℹ️ Info", 'vip_menu': "💎 VIP", 'admin_panel': "👑 Admin", 'generate': "🖼️ Gen"},
         'help_title': "📚 Aiuto:", 'help_back': "🔙 Indietro",
         'help_sections': {'help_basic': "🏠 Base", 'help_ai': "💬 AI", 'help_memory': "🧠 Memoria", 'help_notes': "📝 Note", 'help_todo': "📋 ToDo", 'help_utils': "🌍 Utilità", 'help_games': "🎲 Giochi", 'help_vip': "💎 VIP", 'help_admin': "👑 Admin"},
         'help_text': {'help_basic': "/start, /help", 'help_ai': "Scrivi e basta!", 'help_memory': "/memorysave...", 'help_notes': "/note...", 'help_todo': "/todo...", 'help_utils': "/weather...", 'help_games': "/dice...", 'help_vip': "/vip...", 'help_admin': "/stats..."},
         'menu': {'chat': "🤖 Chat", 'notes': "📝 Note", 'notes_create': "➕ Crea", 'notes_list': "📋 Lista", 'weather': "🌍 Meteo", 'time': "⏰ Ora", 'games': "🎲 Giochi", 'games_dice': "🎲", 'games_coin': "🪙", 'games_joke': "😄", 'games_quote': "💭", 'games_fact': "🔬", 'vip': "💎 VIP", 'vip_reminders': "⏰ Promemoria", 'vip_stats': "📊 Stat", 'admin': "👑 Admin", 'admin_users': "👥", 'admin_stats': "📊", 'admin_broadcast': "📢", 'generate': "🖼️ Gen"},
-        'info': "🤖 AI DISCO BOT\nAI: Llama 3.1\nDev: @Ernest_Kostevich",
+        'info': "🤖 AI DISCO BOT\nAI: Llama 3.1 (API)\nDev: @Ernest_Kostevich",
         'status': "📊 Stato\nUtenti: {users}\nVIP: {vips}\nDB: {db_status}",
         'profile': "👤 {first_name}\nMsg: {msg_count}", 'profile_vip': "\nVIP fino: {date}", 'profile_vip_forever': "\nVIP: Sempre",
         'uptime': "⏱ Online da: {days}g {hours}o",
@@ -543,14 +478,15 @@ async def generate_image_imagen(prompt: str) -> Optional[bytes]:
             async with session.post(url, json=payload, headers={'Content-Type': 'application/json'}) as resp:
                 if resp.status == 200:
                     res = await resp.json()
-                    b64 = res["predictions"][0]["bytesBase64Encoded"]
-                    return base64.b64decode(b64)
+                    if "predictions" in res and res["predictions"]:
+                        b64 = res["predictions"][0]["bytesBase64Encoded"]
+                        return base64.b64decode(b64)
     except Exception as e: logger.error(f"Imagen Error: {e}")
     return None
 
 # --- УТИЛИТЫ VISUAL/AUDIO ---
 async def analyze_image(img_bytes, prompt):
-    if not vision_model: return "Visual model not configured."
+    if not vision_model: return "Vision model not configured."
     try:
         img = Image.open(io.BytesIO(img_bytes))
         res = vision_model.generate_content([prompt, img])
@@ -564,6 +500,12 @@ async def transcribe_audio(audio_bytes):
            temp_file.write(audio_bytes)
            temp_path = temp_file.name
         uploaded_file = genai.upload_file(path=temp_path, mime_type="audio/ogg")
+        # Ждем обработки файла гуглом
+        import time
+        while uploaded_file.state.name == "PROCESSING":
+            time.sleep(1)
+            uploaded_file = genai.get_file(uploaded_file.name)
+            
         response = vision_model.generate_content(["Transcribe this audio", uploaded_file])
         os.remove(temp_path)
         return response.text
@@ -648,12 +590,12 @@ async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else: text += get_text('profile_vip_forever', l)
     await update.message.reply_text(text, parse_mode=ParseMode.HTML)
 
-# --- CORE AI LOGIC (UPDATED) ---
+# --- CORE AI LOGIC (UPDATED FOR API) ---
 async def process_ai_message(update: Update, text: str, user_id: int, lang: str):
     try:
         await update.message.chat.send_action("typing")
         
-        # ИСПОЛЬЗУЕМ НОВУЮ LLAMA ФУНКЦИЮ
+        # ИСПОЛЬЗУЕМ НОВУЮ API ФУНКЦИЮ
         response_text = generate_with_your_model(text, lang=lang)
         
         storage.stats['ai_requests'] = storage.stats.get('ai_requests', 0) + 1
@@ -676,8 +618,7 @@ async def ai_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await process_ai_message(update, ' '.join(context.args), update.effective_user.id, get_lang(update.effective_user.id))
 
 async def clear_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # С локальной моделью "память" не очищается так просто, так как история не хранится в объекте модели
-    await update.message.reply_text("Context cleared (Model reset).")
+    await update.message.reply_text("Context cleared.")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
@@ -822,7 +763,6 @@ async def time_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def translate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     l = get_lang(update.effective_user.id)
     if len(context.args) < 2: return await update.message.reply_text(get_text('translate_prompt_needed', l))
-    # Use Llama to translate
     prompt = f"Translate to {context.args[0]}: {' '.join(context.args[1:])}"
     await process_ai_message(update, prompt, update.effective_user.id, l)
 
@@ -856,15 +796,15 @@ async def coin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def joke_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     l = get_lang(update.effective_user.id)
-    await update.message.reply_text(get_text('joke_title', l) + "Programmer joke placeholder.")
+    await update.message.reply_text(get_text('joke_title', l) + "Why do programmers prefer dark mode? Because light attracts bugs!")
 
 async def quote_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     l = get_lang(update.effective_user.id)
-    await update.message.reply_text(get_text('quote_title', l) + "Inspirational quote placeholder.")
+    await update.message.reply_text(get_text('quote_title', l) + "Talk is cheap. Show me the code.")
 
 async def fact_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     l = get_lang(update.effective_user.id)
-    await update.message.reply_text(get_text('fact_title', l) + "Did you know placeholder.")
+    await update.message.reply_text(get_text('fact_title', l) + "The first computer bug was an actual real bug (a moth).")
 
 # --- VIP & ADMIN ---
 async def remind_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -886,7 +826,6 @@ async def remind_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def send_reminder(bot, uid, txt, l):
     await bot.send_message(uid, get_text('reminder_alert', l, text=txt), parse_mode=ParseMode.HTML)
-    # Cleanup logic omitted for brevity (would require finding and removing from DB)
 
 async def reminders_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
@@ -1016,7 +955,7 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f = await doc.get_file()
         byte_arr = await f.download_as_bytearray()
         text = await extract_text_from_document(bytes(byte_arr), doc.file_name)
-        # Analyze with Llama
+        # Analyze with Llama (API)
         analysis = generate_with_your_model(f"Analyze this document content:\n\n{text[:2000]}", lang=l)
         await update.message.reply_text(get_text('file_analyzing', l, filename=doc.file_name, text=analysis), parse_mode=ParseMode.HTML)
     except Exception as e: await update.message.reply_text(f"Error: {e}")
@@ -1134,7 +1073,7 @@ def main():
 
     scheduler.start()
     
-    logger.info("🚀 БОТ ЗАПУЩЕН (Llama 3.1 + Gemini Vision)")
+    logger.info("🚀 БОТ ЗАПУЩЕН (Hugging Face API + Gemini Vision)")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == '__main__':
