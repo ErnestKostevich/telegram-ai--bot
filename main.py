@@ -5,6 +5,7 @@ AI DISCO BOT v3.2 - FIXED
 Исправлено:
 1. Единый контекст для текста/фото/голоса/документов
 2. APScheduler - фикс "no running event loop"
+3. NoneType ошибки в users_command и handle_photo
 """
 
 import os, json, logging, random, asyncio, io, base64, tempfile
@@ -65,14 +66,11 @@ vision_model = genai.GenerativeModel(
     safety_settings=safety_settings
 )
 
-# === SCHEDULER (глобальный, запустим позже) ===
 scheduler = AsyncIOScheduler()
 
 
-# === ЕДИНЫЙ КОНТЕКСТ (КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ) ===
+# === ЕДИНЫЙ КОНТЕКСТ ===
 class UnifiedContext:
-    """Единый контекст для ВСЕХ типов сообщений: текст, фото, голос, документы"""
-    
     def __init__(self, max_history: int = 20):
         self.max_history = max_history
         self.sessions: Dict[int, List[Dict]] = {}
@@ -111,138 +109,80 @@ class UnifiedContext:
 unified_ctx = UnifiedContext()
 
 
-# === ЛОКАЛИЗАЦИЯ (2 языка) ===
+# === ЛОКАЛИЗАЦИЯ ===
 L = {
     'ru': {
         'welcome': "🤖 <b>AI DISCO BOT</b>\n\nПривет, {name}! Я бот на <b>Gemini 2.5</b>.\n\n<b>Возможности:</b>\n💬 AI-чат с контекстом\n📝 Заметки\n🌍 Погода/время\n🎲 Развлечения\n📎 Анализ файлов (VIP)\n🔍 Анализ фото (VIP)\n🖼️ Генерация картинок (VIP)\n\n/help - команды\n/language - язык\n\n👨‍💻 @{creator}",
-        'lang_changed': "✅ Язык: Русский 🇷🇺",
-        'lang_choose': "Выберите язык:",
+        'lang_changed': "✅ Язык: Русский 🇷🇺", 'lang_choose': "Выберите язык:",
         'help': "📚 <b>Команды:</b>\n\n<b>Основные:</b>\n/start /help /info /status /profile\n/language /clear\n\n<b>AI:</b>\n/ai [вопрос] - спросить AI\nПросто пишите - бот ответит\n\n<b>Заметки:</b>\n/note [текст] /notes /delnote [№]\n\n<b>Утилиты:</b>\n/time [город] /weather [город]\n/calc [выражение] /password [длина]\n\n<b>Игры:</b>\n/dice /coin /joke /quote /fact /random\n\n<b>VIP:</b>\n/vip /generate [описание]\n/remind [мин] [текст] /reminders\n📎 Отправь файл/фото - анализ\n\n<b>Админ:</b>\n/grant_vip /revoke_vip /users /broadcast /stats",
         'info': "🤖 <b>AI DISCO BOT v3.2</b>\n\nAI: Gemini 2.5 Flash\nКонтекст: Единый (текст+фото+голос)\nБД: {db}\n\n👨‍💻 @Ernest_Kostevich",
         'status': "📊 <b>Статус</b>\n\n👥 Юзеров: {users}\n💎 VIP: {vips}\n📨 Сообщений: {msgs}\n🤖 AI запросов: {ai}\n⏱ Аптайм: {days}д {hours}ч\n✅ Онлайн",
         'profile': "👤 <b>{name}</b>\n🆔 <code>{id}</code>\n📊 Сообщений: {msgs}\n📝 Заметок: {notes}",
-        'profile_vip': "\n💎 VIP до: {date}",
-        'profile_vip_forever': "\n💎 VIP: Навсегда ♾️",
+        'profile_vip': "\n💎 VIP до: {date}", 'profile_vip_forever': "\n💎 VIP: Навсегда ♾️",
         'vip_active': "💎 <b>VIP активен!</b>\n\n{until}\n\n🎁 Бонусы:\n• Анализ фото/файлов\n• Генерация картинок\n• Напоминания",
-        'vip_until': "⏰ До: {date}",
-        'vip_forever': "⏰ Навсегда ♾️",
+        'vip_until': "⏰ До: {date}", 'vip_forever': "⏰ Навсегда ♾️",
         'vip_inactive': "💎 <b>VIP не активен</b>\n\nСвяжитесь с @Ernest_Kostevich",
         'vip_only': "💎 Только для VIP. Свяжитесь с @Ernest_Kostevich",
-        'admin_only': "❌ Только для создателя",
-        'clear': "🧹 Контекст очищен!",
+        'admin_only': "❌ Только для создателя", 'clear': "🧹 Контекст очищен!",
         'ai_error': "😔 Ошибка AI, попробуйте снова",
-        'photo_analyzing': "🔍 Анализирую...",
-        'photo_result': "📸 <b>Ответ:</b>\n\n{text}",
-        'photo_error': "❌ Ошибка: {e}",
-        'voice_transcribing': "🎙️ Распознаю голос...",
-        'voice_result': "🎙️ <b>Вы:</b> <i>{text}</i>\n\n🤖 <b>Ответ:</b>\n\n{response}",
-        'voice_error': "❌ Ошибка голоса: {e}",
-        'file_analyzing': "📥 Анализирую файл...",
-        'file_result': "📄 <b>{name}</b>\n\n🤖 {text}",
-        'file_error': "❌ Ошибка файла: {e}",
-        'gen_prompt': "❓ /generate [описание]\n\nПример: /generate закат над океаном",
-        'gen_progress': "🎨 Генерирую...",
-        'gen_done': "🖼️ <b>{prompt}</b>\n\n💎 VIP | Imagen 3",
-        'gen_error': "❌ Ошибка генерации",
-        'note_saved': "✅ Заметка #{n} сохранена",
-        'note_prompt': "❓ /note [текст]",
-        'notes_empty': "📭 Нет заметок",
-        'notes_list': "📝 <b>Заметки ({n}):</b>\n\n{list}",
-        'delnote_ok': "✅ Заметка #{n} удалена",
-        'delnote_err': "❌ Заметка не найдена",
-        'time_result': "⏰ <b>{city}</b>\n\n🕐 {time}\n📅 {date}\n🌍 {tz}",
-        'time_error': "❌ Город не найден",
-        'weather_result': "🌍 <b>{city}</b>\n\n🌡 {temp}°C (ощущается {feels}°C)\n☁️ {desc}\n💧 {humidity}%\n💨 {wind} км/ч",
-        'weather_error': "❌ Ошибка погоды",
-        'calc_result': "🧮 {expr} = <b>{result}</b>",
-        'calc_error': "❌ Ошибка вычисления",
-        'password_result': "🔑 <code>{pwd}</code>",
-        'random_result': "🎲 {min}-{max}: <b>{r}</b>",
-        'dice_result': "🎲 Выпало: <b>{r}</b>",
-        'coin_heads': "Орёл 🦅",
-        'coin_tails': "Решка 💰",
-        'remind_ok': "⏰ Напоминание через {m} мин:\n📝 {text}",
-        'remind_prompt': "❓ /remind [минуты] [текст]",
-        'remind_alert': "⏰ <b>НАПОМИНАНИЕ</b>\n\n📝 {text}",
-        'reminders_empty': "📭 Нет напоминаний",
+        'photo_analyzing': "🔍 Анализирую...", 'photo_result': "📸 <b>Ответ:</b>\n\n{text}", 'photo_error': "❌ Ошибка: {e}",
+        'voice_transcribing': "🎙️ Распознаю голос...", 'voice_result': "🎙️ <b>Вы:</b> <i>{text}</i>\n\n🤖 <b>Ответ:</b>\n\n{response}", 'voice_error': "❌ Ошибка голоса: {e}",
+        'file_analyzing': "📥 Анализирую файл...", 'file_result': "📄 <b>{name}</b>\n\n🤖 {text}", 'file_error': "❌ Ошибка файла: {e}",
+        'gen_prompt': "❓ /generate [описание]\n\nПример: /generate закат над океаном", 'gen_progress': "🎨 Генерирую...",
+        'gen_done': "🖼️ <b>{prompt}</b>\n\n💎 VIP | Imagen 3", 'gen_error': "❌ Ошибка генерации",
+        'note_saved': "✅ Заметка #{n} сохранена", 'note_prompt': "❓ /note [текст]",
+        'notes_empty': "📭 Нет заметок", 'notes_list': "📝 <b>Заметки ({n}):</b>\n\n{list}",
+        'delnote_ok': "✅ Заметка #{n} удалена", 'delnote_err': "❌ Заметка не найдена",
+        'time_result': "⏰ <b>{city}</b>\n\n🕐 {time}\n📅 {date}\n🌍 {tz}", 'time_error': "❌ Город не найден",
+        'weather_result': "🌍 <b>{city}</b>\n\n🌡 {temp}°C (ощущается {feels}°C)\n☁️ {desc}\n💧 {humidity}%\n💨 {wind} км/ч", 'weather_error': "❌ Ошибка погоды",
+        'calc_result': "🧮 {expr} = <b>{result}</b>", 'calc_error': "❌ Ошибка вычисления",
+        'password_result': "🔑 <code>{pwd}</code>", 'random_result': "🎲 {min}-{max}: <b>{r}</b>",
+        'dice_result': "🎲 Выпало: <b>{r}</b>", 'coin_heads': "Орёл 🦅", 'coin_tails': "Решка 💰",
+        'remind_ok': "⏰ Напоминание через {m} мин:\n📝 {text}", 'remind_prompt': "❓ /remind [минуты] [текст]",
+        'remind_alert': "⏰ <b>НАПОМИНАНИЕ</b>\n\n📝 {text}", 'reminders_empty': "📭 Нет напоминаний",
         'reminders_list': "⏰ <b>Напоминания ({n}):</b>\n\n{list}",
-        'grant_ok': "✅ VIP выдан: {id}\n⏰ {dur}",
-        'grant_prompt': "❓ /grant_vip [id] [week/month/year/forever]",
-        'revoke_ok': "✅ VIP отозван: {id}",
-        'users_list': "👥 <b>Юзеры ({n}):</b>\n\n{list}",
-        'broadcast_start': "📤 Рассылка...",
-        'broadcast_done': "✅ Отправлено: {ok}, ошибок: {err}",
-        'broadcast_prompt': "❓ /broadcast [текст]",
-        'joke': "😄 <b>Шутка:</b>\n\n{text}",
-        'quote': "💭 <b>Цитата:</b>\n\n<i>{text}</i>",
-        'fact': "🔬 <b>Факт:</b>\n\n{text}",
+        'grant_ok': "✅ VIP выдан: {id}\n⏰ {dur}", 'grant_prompt': "❓ /grant_vip [id] [week/month/year/forever]",
+        'revoke_ok': "✅ VIP отозван: {id}", 'users_list': "👥 <b>Юзеры ({n}):</b>\n\n{list}",
+        'broadcast_start': "📤 Рассылка...", 'broadcast_done': "✅ Отправлено: {ok}, ошибок: {err}", 'broadcast_prompt': "❓ /broadcast [текст]",
+        'joke': "😄 <b>Шутка:</b>\n\n{text}", 'quote': "💭 <b>Цитата:</b>\n\n<i>{text}</i>", 'fact': "🔬 <b>Факт:</b>\n\n{text}",
         'menu_chat': "💬 Чат", 'menu_notes': "📝 Заметки", 'menu_weather': "🌍 Погода",
         'menu_time': "⏰ Время", 'menu_games': "🎲 Игры", 'menu_info': "ℹ️ Инфо",
         'menu_vip': "💎 VIP", 'menu_gen': "🖼️ Генерация", 'menu_admin': "👑 Админ",
     },
     'en': {
         'welcome': "🤖 <b>AI DISCO BOT</b>\n\nHi, {name}! I'm a <b>Gemini 2.5</b> bot.\n\n<b>Features:</b>\n💬 AI chat with context\n📝 Notes\n🌍 Weather/time\n🎲 Games\n📎 File analysis (VIP)\n🔍 Photo analysis (VIP)\n🖼️ Image generation (VIP)\n\n/help - commands\n/language - language\n\n👨‍💻 @{creator}",
-        'lang_changed': "✅ Language: English 🇬🇧",
-        'lang_choose': "Choose language:",
+        'lang_changed': "✅ Language: English 🇬🇧", 'lang_choose': "Choose language:",
         'help': "📚 <b>Commands:</b>\n\n<b>Basic:</b>\n/start /help /info /status /profile\n/language /clear\n\n<b>AI:</b>\n/ai [question] - ask AI\nJust type - bot will answer\n\n<b>Notes:</b>\n/note [text] /notes /delnote [#]\n\n<b>Utils:</b>\n/time [city] /weather [city]\n/calc [expr] /password [len]\n\n<b>Games:</b>\n/dice /coin /joke /quote /fact /random\n\n<b>VIP:</b>\n/vip /generate [prompt]\n/remind [min] [text] /reminders\n📎 Send file/photo - analysis\n\n<b>Admin:</b>\n/grant_vip /revoke_vip /users /broadcast /stats",
         'info': "🤖 <b>AI DISCO BOT v3.2</b>\n\nAI: Gemini 2.5 Flash\nContext: Unified (text+photo+voice)\nDB: {db}\n\n👨‍💻 @Ernest_Kostevich",
         'status': "📊 <b>Status</b>\n\n👥 Users: {users}\n💎 VIP: {vips}\n📨 Messages: {msgs}\n🤖 AI requests: {ai}\n⏱ Uptime: {days}d {hours}h\n✅ Online",
         'profile': "👤 <b>{name}</b>\n🆔 <code>{id}</code>\n📊 Messages: {msgs}\n📝 Notes: {notes}",
-        'profile_vip': "\n💎 VIP until: {date}",
-        'profile_vip_forever': "\n💎 VIP: Forever ♾️",
+        'profile_vip': "\n💎 VIP until: {date}", 'profile_vip_forever': "\n💎 VIP: Forever ♾️",
         'vip_active': "💎 <b>VIP active!</b>\n\n{until}\n\n🎁 Perks:\n• Photo/file analysis\n• Image generation\n• Reminders",
-        'vip_until': "⏰ Until: {date}",
-        'vip_forever': "⏰ Forever ♾️",
+        'vip_until': "⏰ Until: {date}", 'vip_forever': "⏰ Forever ♾️",
         'vip_inactive': "💎 <b>No VIP</b>\n\nContact @Ernest_Kostevich",
         'vip_only': "💎 VIP only. Contact @Ernest_Kostevich",
-        'admin_only': "❌ Creator only",
-        'clear': "🧹 Context cleared!",
+        'admin_only': "❌ Creator only", 'clear': "🧹 Context cleared!",
         'ai_error': "😔 AI error, try again",
-        'photo_analyzing': "🔍 Analyzing...",
-        'photo_result': "📸 <b>Response:</b>\n\n{text}",
-        'photo_error': "❌ Error: {e}",
-        'voice_transcribing': "🎙️ Transcribing...",
-        'voice_result': "🎙️ <b>You:</b> <i>{text}</i>\n\n🤖 <b>Response:</b>\n\n{response}",
-        'voice_error': "❌ Voice error: {e}",
-        'file_analyzing': "📥 Analyzing file...",
-        'file_result': "📄 <b>{name}</b>\n\n🤖 {text}",
-        'file_error': "❌ File error: {e}",
-        'gen_prompt': "❓ /generate [prompt]\n\nExample: /generate sunset over ocean",
-        'gen_progress': "🎨 Generating...",
-        'gen_done': "🖼️ <b>{prompt}</b>\n\n💎 VIP | Imagen 3",
-        'gen_error': "❌ Generation error",
-        'note_saved': "✅ Note #{n} saved",
-        'note_prompt': "❓ /note [text]",
-        'notes_empty': "📭 No notes",
-        'notes_list': "📝 <b>Notes ({n}):</b>\n\n{list}",
-        'delnote_ok': "✅ Note #{n} deleted",
-        'delnote_err': "❌ Note not found",
-        'time_result': "⏰ <b>{city}</b>\n\n🕐 {time}\n📅 {date}\n🌍 {tz}",
-        'time_error': "❌ City not found",
-        'weather_result': "🌍 <b>{city}</b>\n\n🌡 {temp}°C (feels {feels}°C)\n☁️ {desc}\n💧 {humidity}%\n💨 {wind} km/h",
-        'weather_error': "❌ Weather error",
-        'calc_result': "🧮 {expr} = <b>{result}</b>",
-        'calc_error': "❌ Calc error",
-        'password_result': "🔑 <code>{pwd}</code>",
-        'random_result': "🎲 {min}-{max}: <b>{r}</b>",
-        'dice_result': "🎲 Rolled: <b>{r}</b>",
-        'coin_heads': "Heads 🦅",
-        'coin_tails': "Tails 💰",
-        'remind_ok': "⏰ Reminder in {m} min:\n📝 {text}",
-        'remind_prompt': "❓ /remind [minutes] [text]",
-        'remind_alert': "⏰ <b>REMINDER</b>\n\n📝 {text}",
-        'reminders_empty': "📭 No reminders",
+        'photo_analyzing': "🔍 Analyzing...", 'photo_result': "📸 <b>Response:</b>\n\n{text}", 'photo_error': "❌ Error: {e}",
+        'voice_transcribing': "🎙️ Transcribing...", 'voice_result': "🎙️ <b>You:</b> <i>{text}</i>\n\n🤖 <b>Response:</b>\n\n{response}", 'voice_error': "❌ Voice error: {e}",
+        'file_analyzing': "📥 Analyzing file...", 'file_result': "📄 <b>{name}</b>\n\n🤖 {text}", 'file_error': "❌ File error: {e}",
+        'gen_prompt': "❓ /generate [prompt]\n\nExample: /generate sunset over ocean", 'gen_progress': "🎨 Generating...",
+        'gen_done': "🖼️ <b>{prompt}</b>\n\n💎 VIP | Imagen 3", 'gen_error': "❌ Generation error",
+        'note_saved': "✅ Note #{n} saved", 'note_prompt': "❓ /note [text]",
+        'notes_empty': "📭 No notes", 'notes_list': "📝 <b>Notes ({n}):</b>\n\n{list}",
+        'delnote_ok': "✅ Note #{n} deleted", 'delnote_err': "❌ Note not found",
+        'time_result': "⏰ <b>{city}</b>\n\n🕐 {time}\n📅 {date}\n🌍 {tz}", 'time_error': "❌ City not found",
+        'weather_result': "🌍 <b>{city}</b>\n\n🌡 {temp}°C (feels {feels}°C)\n☁️ {desc}\n💧 {humidity}%\n💨 {wind} km/h", 'weather_error': "❌ Weather error",
+        'calc_result': "🧮 {expr} = <b>{result}</b>", 'calc_error': "❌ Calc error",
+        'password_result': "🔑 <code>{pwd}</code>", 'random_result': "🎲 {min}-{max}: <b>{r}</b>",
+        'dice_result': "🎲 Rolled: <b>{r}</b>", 'coin_heads': "Heads 🦅", 'coin_tails': "Tails 💰",
+        'remind_ok': "⏰ Reminder in {m} min:\n📝 {text}", 'remind_prompt': "❓ /remind [minutes] [text]",
+        'remind_alert': "⏰ <b>REMINDER</b>\n\n📝 {text}", 'reminders_empty': "📭 No reminders",
         'reminders_list': "⏰ <b>Reminders ({n}):</b>\n\n{list}",
-        'grant_ok': "✅ VIP granted: {id}\n⏰ {dur}",
-        'grant_prompt': "❓ /grant_vip [id] [week/month/year/forever]",
-        'revoke_ok': "✅ VIP revoked: {id}",
-        'users_list': "👥 <b>Users ({n}):</b>\n\n{list}",
-        'broadcast_start': "📤 Broadcasting...",
-        'broadcast_done': "✅ Sent: {ok}, errors: {err}",
-        'broadcast_prompt': "❓ /broadcast [text]",
-        'joke': "😄 <b>Joke:</b>\n\n{text}",
-        'quote': "💭 <b>Quote:</b>\n\n<i>{text}</i>",
-        'fact': "🔬 <b>Fact:</b>\n\n{text}",
+        'grant_ok': "✅ VIP granted: {id}\n⏰ {dur}", 'grant_prompt': "❓ /grant_vip [id] [week/month/year/forever]",
+        'revoke_ok': "✅ VIP revoked: {id}", 'users_list': "👥 <b>Users ({n}):</b>\n\n{list}",
+        'broadcast_start': "📤 Broadcasting...", 'broadcast_done': "✅ Sent: {ok}, errors: {err}", 'broadcast_prompt': "❓ /broadcast [text]",
+        'joke': "😄 <b>Joke:</b>\n\n{text}", 'quote': "💭 <b>Quote:</b>\n\n<i>{text}</i>", 'fact': "🔬 <b>Fact:</b>\n\n{text}",
         'menu_chat': "💬 Chat", 'menu_notes': "📝 Notes", 'menu_weather': "🌍 Weather",
         'menu_time': "⏰ Time", 'menu_games': "🎲 Games", 'menu_info': "ℹ️ Info",
         'menu_vip': "💎 VIP", 'menu_gen': "🖼️ Generate", 'menu_admin': "👑 Admin",
@@ -377,7 +317,8 @@ class Storage:
             s = Session()
             try:
                 users = s.query(User).all()
-                return {u.id: {'id': u.id, 'username': u.username, 'first_name': u.first_name, 'vip': u.vip, 'language': u.language} for u in users}
+                # ✅ ФИКС: or '' для None значений
+                return {u.id: {'id': u.id, 'username': u.username or '', 'first_name': u.first_name or '', 'vip': u.vip, 'language': u.language or 'ru'} for u in users}
             finally: s.close()
         return {}
     
@@ -398,7 +339,7 @@ storage = Storage()
 # === ХЕЛПЕРЫ ===
 def identify_creator(user):
     global CREATOR_ID
-    if user.username == CREATOR_USERNAME and CREATOR_ID is None:
+    if user and user.username == CREATOR_USERNAME and CREATOR_ID is None:
         CREATOR_ID = user.id
 
 def is_creator(uid: int) -> bool:
@@ -470,9 +411,13 @@ async def generate_imagen(prompt: str) -> Optional[bytes]:
     return None
 
 
-# === ГЛАВНЫЕ ОБРАБОТЧИКИ (ИСПРАВЛЕННЫЕ!) ===
+# === ГЛАВНЫЕ ОБРАБОТЧИКИ ===
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # ✅ ФИКС: Проверка на None
+    if not update.effective_user or not update.message:
+        return
+    
     uid = update.effective_user.id
     lang = get_lang(uid)
     
@@ -490,7 +435,6 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         data = await f.download_as_bytearray()
         img = Image.open(io.BytesIO(bytes(data)))
         
-        # ✅ ЕДИНЫЙ КОНТЕКСТ
         unified_ctx.add_user_message(uid, [caption, img])
         resp = vision_model.generate_content([caption, img])
         text = resp.text
@@ -505,6 +449,9 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.effective_user or not update.message or not update.message.voice:
+        return
+    
     uid = update.effective_user.id
     lang = get_lang(uid)
     
@@ -519,7 +466,6 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(transcription)
             return
         
-        # ✅ ЕДИНЫЙ КОНТЕКСТ
         unified_ctx.add_user_message(uid, f"[Голосовое]: {transcription}")
         
         history = unified_ctx.get_text_history(uid)
@@ -538,6 +484,9 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.effective_user or not update.message or not update.message.document:
+        return
+    
     uid = update.effective_user.id
     lang = get_lang(uid)
     
@@ -562,7 +511,6 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         prompt = f"Файл '{name}'. {caption or 'Проанализируй:'}\n\n{doc_text[:3000]}"
         
-        # ✅ ЕДИНЫЙ КОНТЕКСТ
         unified_ctx.add_user_message(uid, prompt)
         
         history = unified_ctx.get_text_history(uid)
@@ -581,6 +529,9 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.effective_user or not update.message or not update.message.text:
+        return
+    
     identify_creator(update.effective_user)
     uid = update.effective_user.id
     text = update.message.text
@@ -595,7 +546,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     storage.stats['total_messages'] = storage.stats.get('total_messages', 0) + 1
     storage.save_stats()
     
-    # Проверка кнопок меню
     menu_map = {}
     for lng in ['ru', 'en']:
         for key in ['menu_chat', 'menu_notes', 'menu_weather', 'menu_time', 'menu_games', 'menu_info', 'menu_vip', 'menu_gen', 'menu_admin']:
@@ -605,7 +555,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await handle_menu(update, context, menu_map[text], lang)
         return
     
-    # В группах только по @
     if update.message.chat.type in ['group', 'supergroup']:
         bot_un = context.bot.username
         if f"@{bot_un}" not in text:
@@ -615,7 +564,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not text:
         return
     
-    # ✅ AI через ЕДИНЫЙ КОНТЕКСТ
     await update.message.chat.send_action("typing")
     
     try:
@@ -664,58 +612,54 @@ async def handle_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, action
 # === КОМАНДЫ ===
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.effective_user: return
     identify_creator(update.effective_user)
     uid = update.effective_user.id
-    storage.update_user(uid, {
-        'username': update.effective_user.username or '',
-        'first_name': update.effective_user.first_name or ''
-    })
+    storage.update_user(uid, {'username': update.effective_user.username or '', 'first_name': update.effective_user.first_name or ''})
     lang = get_lang(uid)
-    await update.message.reply_text(
-        t('welcome', lang, name=update.effective_user.first_name, creator=CREATOR_USERNAME),
-        parse_mode=ParseMode.HTML,
-        reply_markup=get_keyboard(uid)
-    )
+    await update.message.reply_text(t('welcome', lang, name=update.effective_user.first_name or 'User', creator=CREATOR_USERNAME), parse_mode=ParseMode.HTML, reply_markup=get_keyboard(uid))
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.effective_user: return
     await update.message.reply_text(t('help', get_lang(update.effective_user.id)), parse_mode=ParseMode.HTML)
 
 async def language_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    kb = [[InlineKeyboardButton("🇷🇺 Русский", callback_data="lang:ru")],
-          [InlineKeyboardButton("🇬🇧 English", callback_data="lang:en")]]
+    if not update.effective_user: return
+    kb = [[InlineKeyboardButton("🇷🇺 Русский", callback_data="lang:ru")], [InlineKeyboardButton("🇬🇧 English", callback_data="lang:en")]]
     await update.message.reply_text(t('lang_choose', get_lang(update.effective_user.id)), reply_markup=InlineKeyboardMarkup(kb))
 
 async def clear_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.effective_user: return
     uid = update.effective_user.id
     unified_ctx.clear(uid)
     await update.message.reply_text(t('clear', get_lang(uid)))
 
 async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.effective_user: return
     lang = get_lang(update.effective_user.id)
     db = "PostgreSQL ✓" if engine else "JSON"
     await update.message.reply_text(t('info', lang, db=db), parse_mode=ParseMode.HTML)
 
 async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.effective_user: return
     lang = get_lang(update.effective_user.id)
     users = storage.get_all_users()
     up = datetime.now() - BOT_START_TIME
-    await update.message.reply_text(t('status', lang,
-        users=len(users), vips=sum(1 for u in users.values() if u.get('vip')),
-        msgs=storage.stats.get('total_messages', 0), ai=storage.stats.get('ai_requests', 0),
-        days=up.days, hours=up.seconds // 3600
-    ), parse_mode=ParseMode.HTML)
+    await update.message.reply_text(t('status', lang, users=len(users), vips=sum(1 for u in users.values() if u.get('vip')), msgs=storage.stats.get('total_messages', 0), ai=storage.stats.get('ai_requests', 0), days=up.days, hours=up.seconds // 3600), parse_mode=ParseMode.HTML)
 
 async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.effective_user: return
     uid = update.effective_user.id
     lang = get_lang(uid)
     u = storage.get_user(uid)
-    txt = t('profile', lang, name=u.get('first_name', 'User'), id=uid, msgs=u.get('messages_count', 0), notes=len(u.get('notes', [])))
+    txt = t('profile', lang, name=u.get('first_name') or 'User', id=uid, msgs=u.get('messages_count', 0), notes=len(u.get('notes', [])))
     if storage.is_vip(uid):
         vu = u.get('vip_until')
         txt += t('profile_vip', lang, date=datetime.fromisoformat(vu).strftime('%d.%m.%Y')) if vu else t('profile_vip_forever', lang)
     await update.message.reply_text(txt, parse_mode=ParseMode.HTML)
 
 async def vip_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.effective_user: return
     uid = update.effective_user.id
     lang = get_lang(uid)
     if storage.is_vip(uid):
@@ -727,6 +671,7 @@ async def vip_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(t('vip_inactive', lang), parse_mode=ParseMode.HTML)
 
 async def ai_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.effective_user or not update.message: return
     if not context.args:
         await update.message.reply_text("❓ /ai [вопрос]")
         return
@@ -734,6 +679,7 @@ async def ai_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await handle_message(update, context)
 
 async def generate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.effective_user: return
     uid = update.effective_user.id
     lang = get_lang(uid)
     if not storage.is_vip(uid):
@@ -742,10 +688,8 @@ async def generate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
         await update.message.reply_text(t('gen_prompt', lang))
         return
-    
     prompt = ' '.join(context.args)
     await update.message.reply_text(t('gen_progress', lang))
-    
     img = await generate_imagen(prompt)
     if img:
         await update.message.reply_photo(photo=img, caption=t('gen_done', lang, prompt=prompt), parse_mode=ParseMode.HTML)
@@ -756,6 +700,7 @@ async def generate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # === ЗАМЕТКИ ===
 
 async def note_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.effective_user: return
     uid = update.effective_user.id
     lang = get_lang(uid)
     if not context.args:
@@ -769,6 +714,7 @@ async def note_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(t('note_saved', lang, n=len(notes)))
 
 async def notes_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.effective_user: return
     uid = update.effective_user.id
     lang = get_lang(uid)
     notes = storage.get_user(uid).get('notes', [])
@@ -779,6 +725,7 @@ async def notes_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(t('notes_list', lang, n=len(notes), list=lst), parse_mode=ParseMode.HTML)
 
 async def delnote_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.effective_user: return
     uid = update.effective_user.id
     lang = get_lang(uid)
     if not context.args or not context.args[0].isdigit():
@@ -797,10 +744,10 @@ async def delnote_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # === УТИЛИТЫ ===
 
 async def time_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.effective_user: return
     lang = get_lang(update.effective_user.id)
     city = ' '.join(context.args) if context.args else 'Moscow'
-    tzs = {'moscow': 'Europe/Moscow', 'москва': 'Europe/Moscow', 'london': 'Europe/London', 'лондон': 'Europe/London',
-           'new york': 'America/New_York', 'tokyo': 'Asia/Tokyo', 'paris': 'Europe/Paris', 'berlin': 'Europe/Berlin'}
+    tzs = {'moscow': 'Europe/Moscow', 'москва': 'Europe/Moscow', 'london': 'Europe/London', 'лондон': 'Europe/London', 'new york': 'America/New_York', 'tokyo': 'Asia/Tokyo', 'paris': 'Europe/Paris', 'berlin': 'Europe/Berlin'}
     tz_name = tzs.get(city.lower())
     if not tz_name:
         match = [z for z in pytz.all_timezones if city.lower().replace(" ", "_") in z.lower()]
@@ -813,6 +760,7 @@ async def time_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(t('time_error', lang))
 
 async def weather_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.effective_user: return
     lang = get_lang(update.effective_user.id)
     city = ' '.join(context.args) if context.args else 'Moscow'
     try:
@@ -827,6 +775,7 @@ async def weather_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(t('weather_error', lang))
 
 async def calc_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.effective_user: return
     lang = get_lang(update.effective_user.id)
     if not context.args:
         await update.message.reply_text("❓ /calc [выражение]")
@@ -842,6 +791,7 @@ async def calc_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(t('calc_error', lang))
 
 async def password_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.effective_user: return
     lang = get_lang(update.effective_user.id)
     length = int(context.args[0]) if context.args and context.args[0].isdigit() else 12
     length = max(8, min(50, length))
@@ -853,6 +803,7 @@ async def password_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # === ИГРЫ ===
 
 async def random_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.effective_user: return
     lang = get_lang(update.effective_user.id)
     try:
         mn, mx = (int(context.args[0]), int(context.args[1])) if len(context.args) >= 2 else (1, 100)
@@ -861,40 +812,37 @@ async def random_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(t('random_result', lang, min=mn, max=mx, r=random.randint(mn, mx)), parse_mode=ParseMode.HTML)
 
 async def dice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.effective_user: return
     await update.message.reply_text(t('dice_result', get_lang(update.effective_user.id), r=random.randint(1, 6)), parse_mode=ParseMode.HTML)
 
 async def coin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.effective_user: return
     lang = get_lang(update.effective_user.id)
     await update.message.reply_text(t('coin_heads' if random.choice([True, False]) else 'coin_tails', lang))
 
 async def joke_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.effective_user: return
     lang = get_lang(update.effective_user.id)
-    jokes = {
-        'ru': ["Программист: — Закрой окно! — И что, станет тепло? 😄", "31 OCT = 25 DEC 🎃", "Зачем очки? Чтобы лучше C++ 👓"],
-        'en': ["Why dark mode? Light attracts bugs! 🐛", "Why quit? Didn't get arrays 🤷", "Favorite spot? Foo bar 🍻"]
-    }
+    jokes = {'ru': ["Программист: — Закрой окно! — И что, станет тепло? 😄", "31 OCT = 25 DEC 🎃", "Зачем очки? Чтобы лучше C++ 👓"], 'en': ["Why dark mode? Light attracts bugs! 🐛", "Why quit? Didn't get arrays 🤷", "Favorite spot? Foo bar 🍻"]}
     await update.message.reply_text(t('joke', lang, text=random.choice(jokes.get(lang, jokes['en']))), parse_mode=ParseMode.HTML)
 
 async def quote_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.effective_user: return
     lang = get_lang(update.effective_user.id)
-    quotes = {
-        'ru': ["Единственный способ делать великую работу — любить её. — Джобс", "Инновация отличает лидера. — Джобс"],
-        'en': ["The only way to do great work is to love it. - Jobs", "Innovation distinguishes leaders. - Jobs"]
-    }
+    quotes = {'ru': ["Единственный способ делать великую работу — любить её. — Джобс", "Инновация отличает лидера. — Джобс"], 'en': ["The only way to do great work is to love it. - Jobs", "Innovation distinguishes leaders. - Jobs"]}
     await update.message.reply_text(t('quote', lang, text=random.choice(quotes.get(lang, quotes['en']))), parse_mode=ParseMode.HTML)
 
 async def fact_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.effective_user: return
     lang = get_lang(update.effective_user.id)
-    facts = {
-        'ru': ["🌍 Земля — единственная планета не в честь бога", "🐙 У осьминога 3 сердца и голубая кровь"],
-        'en': ["🌍 Earth is the only planet not named after a god", "🐙 Octopuses have 3 hearts and blue blood"]
-    }
+    facts = {'ru': ["🌍 Земля — единственная планета не в честь бога", "🐙 У осьминога 3 сердца и голубая кровь"], 'en': ["🌍 Earth is the only planet not named after a god", "🐙 Octopuses have 3 hearts and blue blood"]}
     await update.message.reply_text(t('fact', lang, text=random.choice(facts.get(lang, facts['en']))), parse_mode=ParseMode.HTML)
 
 
-# === НАПОМИНАНИЯ (VIP) ===
+# === НАПОМИНАНИЯ ===
 
 async def remind_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.effective_user: return
     uid = update.effective_user.id
     lang = get_lang(uid)
     if not storage.is_vip(uid):
@@ -907,18 +855,17 @@ async def remind_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         mins = int(context.args[0])
         txt = ' '.join(context.args[1:])
         when = datetime.now() + timedelta(minutes=mins)
-        
         u = storage.get_user(uid)
         rems = u.get('reminders', [])
         rems.append({'text': txt, 'time': when.isoformat(), 'lang': lang})
         storage.update_user(uid, {'reminders': rems})
-        
         scheduler.add_job(send_reminder, 'date', run_date=when, args=[context.bot, uid, txt, lang])
         await update.message.reply_text(t('remind_ok', lang, m=mins, text=txt))
     except:
         await update.message.reply_text(t('remind_prompt', lang))
 
 async def reminders_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.effective_user: return
     uid = update.effective_user.id
     lang = get_lang(uid)
     if not storage.is_vip(uid):
@@ -944,6 +891,7 @@ async def send_reminder(bot, uid: int, txt: str, lang: str):
 # === АДМИН КОМАНДЫ ===
 
 async def grant_vip_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.effective_user: return
     identify_creator(update.effective_user)
     uid = update.effective_user.id
     lang = get_lang(uid)
@@ -953,18 +901,15 @@ async def grant_vip_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if len(context.args) < 2:
         await update.message.reply_text(t('grant_prompt', lang))
         return
-    
     target = storage.get_user_by_identifier(context.args[0])
     if not target:
         await update.message.reply_text("❌ User not found")
         return
-    
     dur = context.args[1].lower()
     durations = {'week': timedelta(weeks=1), 'month': timedelta(days=30), 'year': timedelta(days=365), 'forever': None}
     if dur not in durations:
         await update.message.reply_text(t('grant_prompt', lang))
         return
-    
     delta = durations[dur]
     if delta:
         until = datetime.now() + delta
@@ -973,13 +918,13 @@ async def grant_vip_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         storage.update_user(target, {'vip': True, 'vip_until': None})
         dur_txt = "Forever ♾️"
-    
     await update.message.reply_text(t('grant_ok', lang, id=target, dur=dur_txt), parse_mode=ParseMode.HTML)
     try:
         await context.bot.send_message(chat_id=target, text=f"🎉 VIP granted! {dur_txt}")
     except: pass
 
 async def revoke_vip_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.effective_user: return
     identify_creator(update.effective_user)
     uid = update.effective_user.id
     lang = get_lang(uid)
@@ -989,28 +934,29 @@ async def revoke_vip_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if not context.args:
         await update.message.reply_text("❓ /revoke_vip [id/@username]")
         return
-    
     target = storage.get_user_by_identifier(context.args[0])
     if target:
         storage.update_user(target, {'vip': False, 'vip_until': None})
         await update.message.reply_text(t('revoke_ok', lang, id=target), parse_mode=ParseMode.HTML)
 
 async def users_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.effective_user: return
     identify_creator(update.effective_user)
     uid = update.effective_user.id
     lang = get_lang(uid)
     if not is_creator(uid):
         await update.message.reply_text(t('admin_only', lang))
         return
-    
     users = storage.get_all_users()
-    lst = "\n".join([f"{'💎' if u.get('vip') else ''} <code>{i}</code> {u.get('first_name', '')[:15]}" for i, u in list(users.items())[:20]])
+    # ✅ ФИКС: (u.get('first_name') or 'Unknown') вместо u.get('first_name', '')[:15]
+    lst = "\n".join([f"{'💎' if u.get('vip') else ''} <code>{i}</code> {(u.get('first_name') or 'Unknown')[:15]}" for i, u in list(users.items())[:20]])
     await update.message.reply_text(t('users_list', lang, n=len(users), list=lst), parse_mode=ParseMode.HTML)
 
 async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await status_command(update, context)
 
 async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.effective_user: return
     identify_creator(update.effective_user)
     uid = update.effective_user.id
     lang = get_lang(uid)
@@ -1020,10 +966,8 @@ async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
         await update.message.reply_text(t('broadcast_prompt', lang))
         return
-    
     txt = ' '.join(context.args)
     await update.message.reply_text(t('broadcast_start', lang))
-    
     users = storage.get_all_users()
     ok, err = 0, 0
     for target in users.keys():
@@ -1033,7 +977,6 @@ async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await asyncio.sleep(0.05)
         except:
             err += 1
-    
     await update.message.reply_text(t('broadcast_done', lang, ok=ok, err=err))
 
 
@@ -1041,22 +984,17 @@ async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
+    if not q or not q.from_user: return
     await q.answer()
     data = q.data
     uid = q.from_user.id
     lang = get_lang(uid)
-    
     if data.startswith("lang:"):
         new_lang = data.split(":")[1]
         storage.update_user(uid, {'language': new_lang})
         await q.edit_message_text(t('lang_changed', new_lang))
-        await q.message.reply_text(
-            t('welcome', new_lang, name=q.from_user.first_name, creator=CREATOR_USERNAME),
-            parse_mode=ParseMode.HTML,
-            reply_markup=get_keyboard(uid)
-        )
+        await q.message.reply_text(t('welcome', new_lang, name=q.from_user.first_name or 'User', creator=CREATOR_USERNAME), parse_mode=ParseMode.HTML, reply_markup=get_keyboard(uid))
         return
-    
     if data == "dice":
         await q.message.reply_text(t('dice_result', lang, r=random.randint(1, 6)), parse_mode=ParseMode.HTML)
     elif data == "coin":
@@ -1069,19 +1007,16 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await q.message.reply_text(t('quote', lang, text=random.choice(quotes)), parse_mode=ParseMode.HTML)
 
 
-# === POST_INIT - запуск scheduler ПОСЛЕ старта event loop ===
+# === POST_INIT ===
 async def post_init(application):
-    """Запускается после инициализации приложения, когда event loop уже работает"""
     scheduler.start()
     logger.info("✅ Scheduler запущен!")
 
 
 # === MAIN ===
-
 def main():
     app = Application.builder().token(BOT_TOKEN).post_init(post_init).build()
     
-    # Основные
     app.add_handler(CommandHandler("start", start_command))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("language", language_command))
@@ -1089,49 +1024,34 @@ def main():
     app.add_handler(CommandHandler("info", info_command))
     app.add_handler(CommandHandler("status", status_command))
     app.add_handler(CommandHandler("profile", profile_command))
-    
-    # AI
     app.add_handler(CommandHandler("ai", ai_command))
     app.add_handler(CommandHandler("generate", generate_command))
-    
-    # Заметки
     app.add_handler(CommandHandler("note", note_command))
     app.add_handler(CommandHandler("notes", notes_command))
     app.add_handler(CommandHandler("delnote", delnote_command))
-    
-    # Утилиты
     app.add_handler(CommandHandler("time", time_command))
     app.add_handler(CommandHandler("weather", weather_command))
     app.add_handler(CommandHandler("calc", calc_command))
     app.add_handler(CommandHandler("password", password_command))
-    
-    # Игры
     app.add_handler(CommandHandler("random", random_command))
     app.add_handler(CommandHandler("dice", dice_command))
     app.add_handler(CommandHandler("coin", coin_command))
     app.add_handler(CommandHandler("joke", joke_command))
     app.add_handler(CommandHandler("quote", quote_command))
     app.add_handler(CommandHandler("fact", fact_command))
-    
-    # VIP
     app.add_handler(CommandHandler("vip", vip_command))
     app.add_handler(CommandHandler("remind", remind_command))
     app.add_handler(CommandHandler("reminders", reminders_command))
-    
-    # Админ
     app.add_handler(CommandHandler("grant_vip", grant_vip_command))
     app.add_handler(CommandHandler("revoke_vip", revoke_vip_command))
     app.add_handler(CommandHandler("users", users_command))
     app.add_handler(CommandHandler("stats", stats_command))
     app.add_handler(CommandHandler("broadcast", broadcast_command))
     
-    # Обработчики медиа (ИСПРАВЛЕННЫЕ!)
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     app.add_handler(MessageHandler(filters.VOICE, handle_voice))
     app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    
-    # Callbacks
     app.add_handler(CallbackQueryHandler(handle_callback))
     
     logger.info("=" * 50)
@@ -1142,7 +1062,6 @@ def main():
     logger.info("=" * 50)
     
     app.run_polling(allowed_updates=Update.ALL_TYPES)
-
 
 if __name__ == '__main__':
     main()
