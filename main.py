@@ -101,7 +101,7 @@ SYSTEM_INSTRUCTION = """Ты — AI DISCO BOT, многофункциональ�
 Если контекст не ясен - вежливо уточни что пользователь хочет сделать с изображением."""
 
 model = genai.GenerativeModel(
-    model_name='gemini-2.5-flash-preview-05-20',
+    model_name='gemini-2.5-flas',
     generation_config=generation_config,
     safety_settings=safety_settings,
     system_instruction=SYSTEM_INSTRUCTION
