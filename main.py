@@ -2603,7 +2603,7 @@ async def warn_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(get_text('cant_self', lang))
         return
     
-if await is_user_admin(chat_id, target_user.id, context.bot):
+    if await is_user_admin(chat_id, target_user.id, context.bot):
         await update.message.reply_text(get_text('cant_admin', lang))
         return
     
