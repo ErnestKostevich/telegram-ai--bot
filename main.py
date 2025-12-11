@@ -3429,7 +3429,15 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(get_text('lang_changed', new_lang))
         return
     
-    # Help sections
+    # Help sections# Help back button - ПЕРВЫМ!
+    if data == 'help_back':
+        await query.edit_message_text(
+            get_text('help_title', lang),
+            parse_mode=ParseMode.HTML,
+            reply_markup=get_help_keyboard(lang, is_creator(user_id))
+        )
+        return
+    
     if data.startswith('help_'):
         section = data
         help_text = get_text(f'help_text.{section}', lang)
