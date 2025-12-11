@@ -3449,13 +3449,6 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
     
-    if data == 'help_back':
-        await query.edit_message_text(
-            get_text('help_title', lang),
-            parse_mode=ParseMode.HTML,
-            reply_markup=get_help_keyboard(lang, is_creator(user_id))
-        )
-        return
     
     # Notes
     if data == 'notes_create':
