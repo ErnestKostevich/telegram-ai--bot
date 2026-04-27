@@ -1,10 +1,11 @@
 python-telegram-bot>=21.5
-sqlalchemy
+sqlalchemy[asyncio]
+aiosqlite
+asyncpg
 aiohttp>=3.10.0
 requests>=2.32.0
 pytz
 python-dotenv
-psycopg2-binary
 Pillow
 PyMuPDF
 python-docx

@@ -15,18 +15,6 @@ logger = logging.getLogger(__name__)
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 db = DBManager()
 
-# --- Cache for performance ---
-user_settings_cache = {}
-
-def get_cached_settings(user_id):
-    if user_id not in user_settings_cache:
-        try:
-            user_settings_cache[user_id] = db.get_user_settings(user_id)
-        except Exception as e:
-            logger.error(f"Error fetching settings for {user_id}: {e}")
-            return None
-    return user_settings_cache[user_id]
-
 # --- Helpers ---
 
 async def is_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -46,30 +34,31 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
     
     try:
-        db.get_user(user.id)
+        await db.get_user(user.id)
         if chat.type != 'private':
-            db.get_group(chat.id)
+            await db.get_group(chat.id)
     except Exception as e:
         logger.error(f"Start command DB error: {e}")
 
     if chat.type == 'private':
         welcome_text = (
-            f"🚀 **AI DISCO BOT v5.2: GROUP FIX**\n\n"
-            f"Привет, {user.first_name}! Я готов к работе.\n\n"
+            f"🚀 **AI DISCO BOT v5.5: ULTIMATE STABILITY**\n\n"
+            f"Привет, {user.first_name}! Я был полностью пересобран для максимальной скорости и стабильности.\n\n"
+            "🔹 **Async Engine**: Теперь я работаю на асинхронном движке.\n"
             "🔹 **BYOK**: Подключай свои ключи в /settings.\n"
-            "🔹 **Группы**: Теперь я стабильно работаю в чатах!\n"
-            "🔹 **Команды**: /settings для настройки, /help_group для групп."
+            "🔹 **Группы**: Стабильная работа в любых чатах.\n\n"
+            "⚙️ Нажми /settings для настройки."
         )
         await update.message.reply_text(welcome_text, parse_mode=ParseMode.MARKDOWN)
     else:
-        await update.message.reply_text("🤖 AI DISCO BOT активирован! Упомяните меня или ответьте на моё сообщение, чтобы я ответил.")
+        await update.message.reply_text("🤖 AI DISCO BOT активирован! Упомяните меня или ответьте на моё сообщение.")
 
 async def help_group(update: Update, context: ContextTypes.DEFAULT_TYPE):
     help_text = (
         "🛡 **Команды для групп:**\n"
         "/setai [on/off] - Включить/выключить AI\n"
         "/setwelcome [текст] - Приветствие новых участников\n\n"
-        "💡 Чтобы я ответил, просто тегните меня или сделайте реплай на моё сообщение."
+        "💡 Чтобы я ответил, тегните меня или сделайте реплай."
     )
     await update.message.reply_text(help_text, parse_mode=ParseMode.MARKDOWN)
 
@@ -77,54 +66,57 @@ async def help_group(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.type != 'private':
-        await update.message.reply_text("❌ Настройки доступны только в ЛС бота.")
         return
     
     user_id = update.effective_user.id
-    user_settings = get_cached_settings(user_id)
-    active_prov = user_settings.active_provider if user_settings else "Не выбран"
-    
-    keyboard = [
-        [InlineKeyboardButton("🌐 Выбрать провайдера", callback_data='set_provider')],
-        [InlineKeyboardButton("🔑 Ввести API ключ", callback_data='set_key_prompt')],
-        [InlineKeyboardButton("🗑 Очистить историю", callback_data='clear_chat')]
-    ]
-    
-    text = f"⚙️ **Настройки**\n\nТекущий провайдер: `{str(active_prov).upper()}`"
-    await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
+    try:
+        user_settings = await db.get_user_settings(user_id)
+        active_prov = user_settings.active_provider if user_settings else "Не выбран"
+        
+        keyboard = [
+            [InlineKeyboardButton("🌐 Выбрать провайдера", callback_data='set_provider')],
+            [InlineKeyboardButton("🔑 Ввести API ключ", callback_data='set_key_prompt')],
+            [InlineKeyboardButton("🗑 Очистить историю", callback_data='clear_chat')]
+        ]
+        
+        text = f"⚙️ **Настройки**\n\nТекущий провайдер: `{str(active_prov).upper()}`"
+        await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
+    except Exception as e:
+        logger.error(f"Settings error: {e}")
+        await update.message.reply_text("❌ Ошибка при загрузке настроек.")
 
 async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     user_id = query.from_user.id
     await query.answer()
     
-    if query.data == 'set_provider':
-        keyboard = []
-        for i in range(0, len(PROVIDERS_LIST), 2):
-            row = [InlineKeyboardButton(PROVIDERS_LIST[i][0], callback_data=f"prov_{PROVIDERS_LIST[i][1]}")]
-            if i + 1 < len(PROVIDERS_LIST):
-                row.append(InlineKeyboardButton(PROVIDERS_LIST[i+1][0], callback_data=f"prov_{PROVIDERS_LIST[i+1][1]}"))
-            keyboard.append(row)
-        keyboard.append([InlineKeyboardButton("⬅️ Назад", callback_data='back_to_settings')])
-        await query.edit_message_text("Выберите провайдера:", reply_markup=InlineKeyboardMarkup(keyboard))
-    
-    elif query.data.startswith('prov_'):
-        provider = query.data.split('_')[1]
-        user_settings = get_cached_settings(user_id)
-        if user_settings:
-            user_settings.active_provider = provider
-            db.session.commit()
+    try:
+        if query.data == 'set_provider':
+            keyboard = []
+            for i in range(0, len(PROVIDERS_LIST), 2):
+                row = [InlineKeyboardButton(PROVIDERS_LIST[i][0], callback_data=f"prov_{PROVIDERS_LIST[i][1]}")]
+                if i + 1 < len(PROVIDERS_LIST):
+                    row.append(InlineKeyboardButton(PROVIDERS_LIST[i+1][0], callback_data=f"prov_{PROVIDERS_LIST[i+1][1]}"))
+                keyboard.append(row)
+            keyboard.append([InlineKeyboardButton("⬅️ Назад", callback_data='back_to_settings')])
+            await query.edit_message_text("Выберите провайдера:", reply_markup=InlineKeyboardMarkup(keyboard))
+        
+        elif query.data.startswith('prov_'):
+            provider = query.data.split('_')[1]
+            await db.update_user_settings(user_id, active_provider=provider)
             await query.edit_message_text(f"✅ Выбран: **{provider.upper()}**\nВведите ключ: `/key {provider} КЛЮЧ`", parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Назад", callback_data='back_to_settings')]]))
 
-    elif query.data == 'back_to_settings':
-        user_settings = get_cached_settings(user_id)
-        active_prov = user_settings.active_provider if user_settings else "Не выбран"
-        keyboard = [[InlineKeyboardButton("🌐 Выбрать провайдера", callback_data='set_provider')], [InlineKeyboardButton("🔑 Ввести API ключ", callback_data='set_key_prompt')], [InlineKeyboardButton("🗑 Очистить историю", callback_data='clear_chat')]]
-        await query.edit_message_text(f"⚙️ **Настройки**\n\nТекущий провайдер: `{str(active_prov).upper()}`", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
+        elif query.data == 'back_to_settings':
+            user_settings = await db.get_user_settings(user_id)
+            active_prov = user_settings.active_provider if user_settings else "Не выбран"
+            keyboard = [[InlineKeyboardButton("🌐 Выбрать провайдера", callback_data='set_provider')], [InlineKeyboardButton("🔑 Ввести API ключ", callback_data='set_key_prompt')], [InlineKeyboardButton("🗑 Очистить историю", callback_data='clear_chat')]]
+            await query.edit_message_text(f"⚙️ **Настройки**\n\nТекущий провайдер: `{str(active_prov).upper()}`", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
 
-    elif query.data == 'clear_chat':
-        db.clear_history(user_id)
-        await query.edit_message_text("🗑 История очищена!", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Назад", callback_data='back_to_settings')]]))
+        elif query.data == 'clear_chat':
+            await db.clear_history(user_id)
+            await query.edit_message_text("🗑 История очищена!", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Назад", callback_data='back_to_settings')]]))
+    except Exception as e:
+        logger.error(f"Callback error: {e}")
 
 async def set_key_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if len(context.args) < 2:
@@ -134,11 +126,8 @@ async def set_key_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     provider, api_key = context.args[0].lower(), context.args[1]
     user_id = update.effective_user.id
     try:
-        db.update_user_key(user_id, provider, api_key)
-        user_settings = get_cached_settings(user_id)
-        if user_settings:
-            user_settings.active_provider = provider
-            db.session.commit()
+        await db.update_user_key(user_id, provider, api_key)
+        await db.update_user_settings(user_id, active_provider=provider)
         await update.message.reply_text(f"✅ Ключ для **{provider.upper()}** сохранен!")
     except Exception as e:
         logger.error(f"Key save error: {e}")
@@ -153,8 +142,11 @@ async def setai_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     state = context.args[0].lower() in ['on', 'true', '1']
-    db.update_group(update.effective_chat.id, ai_enabled=state)
-    await update.message.reply_text(f"✅ AI в чате: {'ВКЛ' if state else 'ВЫКЛ'}")
+    try:
+        await db.update_group(update.effective_chat.id, ai_enabled=state)
+        await update.message.reply_text(f"✅ AI в чате: {'ВКЛ' if state else 'ВЫКЛ'}")
+    except Exception as e:
+        logger.error(f"SetAI error: {e}")
 
 # --- AI Logic ---
 
@@ -166,7 +158,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     is_private = update.effective_chat.type == 'private'
     
-    # Group logic
     if not is_private:
         bot_me = await context.bot.get_me()
         is_mentioned = f"@{bot_me.username}" in text
@@ -175,58 +166,49 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not (is_mentioned or is_reply_to_bot):
             return
         
-        # Check if AI is enabled in group
-        group = db.get_group(chat_id)
-        if not group.ai_enabled:
-            return
+        try:
+            group = await db.get_group(chat_id)
+            if not group.ai_enabled: return
+        except: return
             
         text = text.replace(f"@{bot_me.username}", "").strip()
 
-    # Get settings (always use user_id for BYOK)
-    user_settings = get_cached_settings(user_id)
-    if not user_settings or not user_settings.active_provider:
-        if is_private: await update.message.reply_text("❌ Выберите провайдера в /settings")
-        return
-
-    active_prov = user_settings.active_provider
-    key_entry = db.get_active_key(user_id, active_prov)
-    
-    if not key_entry:
-        if is_private: await update.message.reply_text(f"❌ Нет ключа для {active_prov.upper()}. Введите его в /settings")
-        return
-
-    # Build context
     try:
-        db.add_message(user_id, "user", text)
-        history = db.get_history(user_id, limit=6)
+        user_settings = await db.get_user_settings(user_id)
+        if not user_settings or not user_settings.active_provider:
+            if is_private: await update.message.reply_text("❌ Выберите провайдера в /settings")
+            return
+
+        active_prov = user_settings.active_provider
+        key_entry = await db.get_active_key(user_id, active_prov)
+        
+        if not key_entry:
+            if is_private: await update.message.reply_text(f"❌ Нет ключа для {active_prov.upper()}. Введите его в /settings")
+            return
+
+        await db.add_message(user_id, "user", text)
+        history = await db.get_history(user_id, limit=6)
         messages = [{"role": m.role, "content": m.content} for m in history]
         messages.insert(0, {"role": "system", "content": "You are AI DISCO BOT. Be helpful and concise."})
 
         await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
         
         provider = get_provider(active_prov, key_entry.api_key, key_entry.model)
-        if not provider:
-            if is_private: await update.message.reply_text("❌ Ошибка конфигурации провайдера.")
-            return
+        if not provider: return
             
         response = await provider.generate(messages)
-        db.add_message(user_id, "assistant", response)
+        await db.add_message(user_id, "assistant", response)
         await update.message.reply_text(response, parse_mode=ParseMode.MARKDOWN)
     except Exception as e:
         logger.error(f"AI Process Error: {e}")
         if is_private: await update.message.reply_text(f"❌ Ошибка: {str(e)}")
 
-def main():
-    init_db()
-    
-    # Add missing method to DBManager for convenience
-    def update_user_settings(self, user_id, **kwargs):
-        settings = self.get_user_settings(user_id)
-        for k, v in kwargs.items(): setattr(settings, k, v)
-        self.session.commit()
-    DBManager.update_user_settings = update_user_settings
+async def post_init(application: Application):
+    await init_db()
+    logger.info("✅ Database initialized")
 
-    application = Application.builder().token(BOT_TOKEN).build()
+def main():
+    application = Application.builder().token(BOT_TOKEN).post_init(post_init).build()
     
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("settings", settings))
@@ -237,7 +219,7 @@ def main():
     application.add_handler(CallbackQueryHandler(callback_handler))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
-    logger.info("🚀 AI DISCO BOT v5.2 Started!")
+    logger.info("🚀 AI DISCO BOT v5.5 Started!")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == '__main__':
