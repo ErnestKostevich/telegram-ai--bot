@@ -4,7 +4,24 @@ from sqlalchemy.orm import sessionmaker
 from models import Base, User, UserKey, UserSettings, ChatMessage, GroupChat
 from datetime import datetime
 
-DATABASE_URL = os.getenv('DATABASE_URL', 'sqlite:///bot.db')
+DATABASE_URL = os.getenv('DATABASE_URL')
+
+# Render provides split variables if DATABASE_URL is not set directly
+if not DATABASE_URL:
+    pg_user = os.getenv('PG_USER')
+    pg_pass = os.getenv('PG_PASSWORD')
+    pg_host = os.getenv('PG_HOST')
+    pg_port = os.getenv('PG_PORT', '5432')
+    pg_db = os.getenv('PG_DATABASE')
+    if all([pg_user, pg_pass, pg_host, pg_db]):
+        DATABASE_URL = f"postgresql://{pg_user}:{pg_pass}@{pg_host}:{pg_port}/{pg_db}"
+    else:
+        DATABASE_URL = 'sqlite:///bot.db'
+
+# SQLAlchemy requires 'postgresql://' instead of 'postgres://' which Render might provide
+if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
 engine = create_engine(DATABASE_URL)
 Session = sessionmaker(bind=engine)
 
