@@ -1,7 +1,7 @@
 import os
 import logging
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from sqlalchemy import select, delete, update
+from sqlalchemy import select, delete, update, func
 from models import Base, User, UserKey, UserSettings, ChatMessage, GroupChat
 from datetime import datetime
 
@@ -9,23 +9,13 @@ logger = logging.getLogger(__name__)
 
 DATABASE_URL = os.getenv('DATABASE_URL')
 
-# Render/Postgres fix
 if DATABASE_URL:
     if DATABASE_URL.startswith("postgres://"):
         DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+asyncpg://", 1)
     elif DATABASE_URL.startswith("postgresql://"):
         DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
 else:
-    # Fallback to split vars
-    pg_user = os.getenv('PG_USER')
-    pg_pass = os.getenv('PG_PASSWORD')
-    pg_host = os.getenv('PG_HOST')
-    pg_port = os.getenv('PG_PORT', '5432')
-    pg_db = os.getenv('PG_DATABASE')
-    if all([pg_user, pg_pass, pg_host, pg_db]):
-        DATABASE_URL = f"postgresql+asyncpg://{pg_user}:{pg_pass}@{pg_host}:{pg_port}/{pg_db}"
-    else:
-        DATABASE_URL = 'sqlite+aiosqlite:///bot.db'
+    DATABASE_URL = 'sqlite+aiosqlite:///bot.db'
 
 engine = create_async_engine(
     DATABASE_URL,
@@ -46,15 +36,25 @@ async def init_db():
         await conn.run_sync(Base.metadata.create_all)
 
 class DBManager:
-    async def get_user(self, user_id: int):
+    async def get_user(self, user_id: int, username: str = None, first_name: str = None):
         async with AsyncSessionLocal() as session:
             result = await session.execute(select(User).filter_by(id=user_id))
             user = result.scalar_one_or_none()
             if not user:
-                user = User(id=user_id)
+                user = User(id=user_id, username=username, first_name=first_name)
                 session.add(user)
                 await session.commit()
+                await session.refresh(user)
+            elif username or first_name:
+                user.username = username or user.username
+                user.first_name = first_name or user.first_name
+                await session.commit()
             return user
+
+    async def update_user(self, user_id: int, **kwargs):
+        async with AsyncSessionLocal() as session:
+            await session.execute(update(User).filter_by(id=user_id).values(**kwargs))
+            await session.commit()
 
     async def get_user_settings(self, user_id: int):
         async with AsyncSessionLocal() as session:
@@ -64,7 +64,18 @@ class DBManager:
                 settings = UserSettings(user_id=user_id)
                 session.add(settings)
                 await session.commit()
+                await session.refresh(settings)
             return settings
+
+    async def update_user_settings(self, user_id: int, **kwargs):
+        async with AsyncSessionLocal() as session:
+            await session.execute(update(UserSettings).filter_by(user_id=user_id).values(**kwargs))
+            await session.commit()
+
+    async def get_active_key(self, user_id: int, provider: str):
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(select(UserKey).filter_by(user_id=user_id, provider=provider))
+            return result.scalar_one_or_none()
 
     async def update_user_key(self, user_id: int, provider: str, api_key: str, model: str = None):
         async with AsyncSessionLocal() as session:
@@ -78,14 +89,28 @@ class DBManager:
                 session.add(key)
             await session.commit()
 
-    async def get_active_key(self, user_id: int, provider: str):
+    async def get_group(self, chat_id: int, title: str = None):
         async with AsyncSessionLocal() as session:
-            result = await session.execute(select(UserKey).filter_by(user_id=user_id, provider=provider))
-            return result.scalar_one_or_none()
+            result = await session.execute(select(GroupChat).filter_by(id=chat_id))
+            group = result.scalar_one_or_none()
+            if not group:
+                group = GroupChat(id=chat_id, title=title)
+                session.add(group)
+                await session.commit()
+                await session.refresh(group)
+            elif title:
+                group.title = title
+                await session.commit()
+            return group
 
-    async def add_message(self, user_id: int, role: str, content: str):
+    async def update_group(self, chat_id: int, **kwargs):
         async with AsyncSessionLocal() as session:
-            msg = ChatMessage(user_id=user_id, role=role, content=content)
+            await session.execute(update(GroupChat).filter_by(id=chat_id).values(**kwargs))
+            await session.commit()
+
+    async def add_message(self, user_id: int, chat_id: int, role: str, content: str):
+        async with AsyncSessionLocal() as session:
+            msg = ChatMessage(user_id=user_id, chat_id=chat_id, role=role, content=content)
             session.add(msg)
             await session.commit()
 
@@ -105,27 +130,13 @@ class DBManager:
             await session.execute(delete(ChatMessage).filter_by(user_id=user_id))
             await session.commit()
 
-    async def get_group(self, chat_id: int):
+    async def get_stats(self):
         async with AsyncSessionLocal() as session:
-            result = await session.execute(select(GroupChat).filter_by(id=chat_id))
-            group = result.scalar_one_or_none()
-            if not group:
-                group = GroupChat(id=chat_id)
-                session.add(group)
-                await session.commit()
-            return group
-
-    async def update_group(self, chat_id: int, **kwargs):
-        async with AsyncSessionLocal() as session:
-            await session.execute(update(GroupChat).filter_by(id=chat_id).values(**kwargs))
-            await session.commit()
-
-    async def update_user_settings(self, user_id: int, **kwargs):
-        async with AsyncSessionLocal() as session:
-            await session.execute(update(UserSettings).filter_by(user_id=user_id).values(**kwargs))
-            await session.commit()
-
-    async def update_user(self, user_id: int, **kwargs):
-        async with AsyncSessionLocal() as session:
-            await session.execute(update(User).filter_by(id=user_id).values(**kwargs))
-            await session.commit()
+            user_count = await session.execute(select(func.count(User.id)))
+            group_count = await session.execute(select(func.count(GroupChat.id)))
+            msg_count = await session.execute(select(func.count(ChatMessage.id)))
+            return {
+                "users": user_count.scalar(),
+                "groups": group_count.scalar(),
+                "messages": msg_count.scalar()
+            }
