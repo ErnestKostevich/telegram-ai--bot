@@ -15,6 +15,10 @@ class User(Base):
     registered = Column(DateTime, default=datetime.now)
     last_active = Column(DateTime, default=datetime.now)
     messages_count = Column(Integer, default=0)
+    notes = Column(JSON, default=list)
+    todos = Column(JSON, default=list)
+    memory = Column(JSON, default=dict)
+    reminders = Column(JSON, default=list)
     
     # Relationships
     keys = relationship("UserKey", back_populates="user", cascade="all, delete-orphan")

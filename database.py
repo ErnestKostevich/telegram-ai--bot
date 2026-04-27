@@ -124,3 +124,8 @@ class DBManager:
         async with AsyncSessionLocal() as session:
             await session.execute(update(UserSettings).filter_by(user_id=user_id).values(**kwargs))
             await session.commit()
+
+    async def update_user(self, user_id: int, **kwargs):
+        async with AsyncSessionLocal() as session:
+            await session.execute(update(User).filter_by(id=user_id).values(**kwargs))
+            await session.commit()
