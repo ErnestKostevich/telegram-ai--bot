@@ -1,6 +1,7 @@
 import aiohttp
 import json
 import logging
+import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -9,6 +10,7 @@ class AIProvider:
         self.api_key = api_key
         self.model = model
         self.base_url = base_url
+        self.timeout = aiohttp.ClientTimeout(total=30) # 30 seconds timeout
 
     async def generate(self, messages: list) -> str:
         raise NotImplementedError
@@ -21,18 +23,23 @@ class OpenAICompatibleProvider(AIProvider):
         }
         payload = {
             "model": self.model,
-            "messages": messages
+            "messages": messages,
+            "max_tokens": 2000
         }
-        async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession(timeout=self.timeout) as session:
             try:
-                async with session.post(self.base_url, headers=headers, json=payload, timeout=60) as resp:
+                async with session.post(self.base_url, headers=headers, json=payload) as resp:
                     if resp.status == 200:
                         data = await resp.json()
                         return data['choices'][0]['message']['content']
                     else:
                         error_text = await resp.text()
-                        return f"❌ Ошибка API ({resp.status}): {error_text[:200]}"
+                        logger.error(f"API Error {resp.status}: {error_text}")
+                        return f"❌ Ошибка API ({resp.status}). Проверьте ключ или баланс."
+            except asyncio.TimeoutError:
+                return "❌ Ошибка: Превышено время ожидания ответа от AI."
             except Exception as e:
+                logger.error(f"Connection Error: {e}")
                 return f"❌ Ошибка соединения: {str(e)}"
 
 class AnthropicProvider(AIProvider):
@@ -48,17 +55,20 @@ class AnthropicProvider(AIProvider):
         
         payload = {
             "model": self.model or "claude-3-5-sonnet-20240620",
-            "max_tokens": 4096,
+            "max_tokens": 2000,
             "system": system_prompt,
             "messages": user_messages
         }
-        async with aiohttp.ClientSession() as session:
-            async with session.post(url, headers=headers, json=payload) as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    return data['content'][0]['text']
-                else:
-                    return f"❌ Ошибка Anthropic: {resp.status}"
+        async with aiohttp.ClientSession(timeout=self.timeout) as session:
+            try:
+                async with session.post(url, headers=headers, json=payload) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        return data['content'][0]['text']
+                    else:
+                        return f"❌ Ошибка Anthropic: {resp.status}"
+            except Exception as e:
+                return f"❌ Ошибка: {str(e)}"
 
 class GoogleProvider(AIProvider):
     async def generate(self, messages: list) -> str:
@@ -72,16 +82,18 @@ class GoogleProvider(AIProvider):
             contents.append({"role": role, "parts": [{"text": m['content']}]})
             
         payload = {"contents": contents}
-        async with aiohttp.ClientSession() as session:
-            async with session.post(url, headers=headers, json=payload) as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    try:
-                        return data['candidates'][0]['content']['parts'][0]['text']
-                    except:
-                        return "❌ Ошибка парсинга ответа Gemini."
-                else:
-                    return f"❌ Ошибка Gemini: {resp.status}"
+        async with aiohttp.ClientSession(timeout=self.timeout) as session:
+            try:
+                async with session.post(url, headers=headers, json=payload) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        if 'candidates' in data and data['candidates']:
+                            return data['candidates'][0]['content']['parts'][0]['text']
+                        return "❌ AI не смог сгенерировать ответ (возможно, сработал фильтр контента)."
+                    else:
+                        return f"❌ Ошибка Gemini: {resp.status}"
+            except Exception as e:
+                return f"❌ Ошибка: {str(e)}"
 
 def get_provider(provider_id: str, api_key: str, model: str = None) -> AIProvider:
     config = {
