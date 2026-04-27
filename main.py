@@ -42,16 +42,16 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if chat.type == 'private':
         welcome_text = (
-            f"🚀 **AI DISCO BOT v5.5: ULTIMATE STABILITY**\n\n"
-            f"Привет, {user.first_name}! Я был полностью пересобран для максимальной скорости и стабильности.\n\n"
-            "🔹 **Async Engine**: Теперь я работаю на асинхронном движке.\n"
-            "🔹 **BYOK**: Подключай свои ключи в /settings.\n"
-            "🔹 **Группы**: Стабильная работа в любых чатах.\n\n"
-            "⚙️ Нажми /settings для настройки."
+            f"🚀 **AI DISCO BOT v5.6: COMMANDS FIXED**\n\n"
+            f"Привет, {user.first_name}! Теперь все команды работают.\n\n"
+            "🔹 **Настройки**: /settings\n"
+            "🔹 **Ввод ключа**: `/key [провайдер] [ключ]`\n"
+            "🔹 **Группы**: /help_group\n\n"
+            "Попробуйте нажать /settings прямо сейчас!"
         )
         await update.message.reply_text(welcome_text, parse_mode=ParseMode.MARKDOWN)
     else:
-        await update.message.reply_text("🤖 AI DISCO BOT активирован! Упомяните меня или ответьте на моё сообщение.")
+        await update.message.reply_text("🤖 AI DISCO BOT активен! Используйте /help_group для списка команд.")
 
 async def help_group(update: Update, context: ContextTypes.DEFAULT_TYPE):
     help_text = (
@@ -66,12 +66,13 @@ async def help_group(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.type != 'private':
+        await update.message.reply_text("❌ Настройки доступны только в ЛС бота.")
         return
     
     user_id = update.effective_user.id
     try:
         user_settings = await db.get_user_settings(user_id)
-        active_prov = user_settings.active_provider if user_settings else "Не выбран"
+        active_prov = user_settings.active_provider if user_settings and user_settings.active_provider else "Не выбран"
         
         keyboard = [
             [InlineKeyboardButton("🌐 Выбрать провайдера", callback_data='set_provider')],
@@ -106,9 +107,14 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await db.update_user_settings(user_id, active_provider=provider)
             await query.edit_message_text(f"✅ Выбран: **{provider.upper()}**\nВведите ключ: `/key {provider} КЛЮЧ`", parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Назад", callback_data='back_to_settings')]]))
 
+        elif query.data == 'set_key_prompt':
+            user_settings = await db.get_user_settings(user_id)
+            prov = user_settings.active_provider if user_settings and user_settings.active_provider else "openai"
+            await query.edit_message_text(f"🔑 Введите ключ для **{prov.upper()}**:\n\n`/key {prov} ВАШ_КЛЮЧ`", parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Назад", callback_data='back_to_settings')]]))
+
         elif query.data == 'back_to_settings':
             user_settings = await db.get_user_settings(user_id)
-            active_prov = user_settings.active_provider if user_settings else "Не выбран"
+            active_prov = user_settings.active_provider if user_settings and user_settings.active_provider else "Не выбран"
             keyboard = [[InlineKeyboardButton("🌐 Выбрать провайдера", callback_data='set_provider')], [InlineKeyboardButton("🔑 Ввести API ключ", callback_data='set_key_prompt')], [InlineKeyboardButton("🗑 Очистить историю", callback_data='clear_chat')]]
             await query.edit_message_text(f"⚙️ **Настройки**\n\nТекущий провайдер: `{str(active_prov).upper()}`", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
 
@@ -158,6 +164,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     is_private = update.effective_chat.type == 'private'
     
+    # Group logic
     if not is_private:
         bot_me = await context.bot.get_me()
         is_mentioned = f"@{bot_me.username}" in text
@@ -210,16 +217,20 @@ async def post_init(application: Application):
 def main():
     application = Application.builder().token(BOT_TOKEN).post_init(post_init).build()
     
+    # Регистрация команд
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("settings", settings))
     application.add_handler(CommandHandler("key", set_key_command))
     application.add_handler(CommandHandler("help_group", help_group))
     application.add_handler(CommandHandler("setai", setai_command))
     
+    # Обработка кнопок
     application.add_handler(CallbackQueryHandler(callback_handler))
+    
+    # Обработка текстовых сообщений (должна быть последней)
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
-    logger.info("🚀 AI DISCO BOT v5.5 Started!")
+    logger.info("🚀 AI DISCO BOT v5.6 Started!")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == '__main__':
