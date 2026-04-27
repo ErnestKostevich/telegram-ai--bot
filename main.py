@@ -20,6 +20,7 @@ db = DBManager()
 # --- Helpers ---
 
 async def is_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.effective_chat or not update.effective_user: return False
     if update.effective_chat.type == 'private':
         return update.effective_user.id == ADMIN_ID
     try:
@@ -40,6 +41,7 @@ def get_main_keyboard():
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
+    if not user: return
     await db.get_user(user.id, user.username, user.first_name)
     
     if update.effective_chat.type == 'private':
@@ -133,7 +135,7 @@ async def vip_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     user = await db.get_user(user_id)
     status = "💎 VIP Активен" if user.vip else "❌ VIP не активен"
-    until = f"\nДо: {user.vip_until.strftime('%d.%m.%Y')}" if user.vip_until else ""
+    until = f"\nДо: {user.vip_until.strftime('%d.%m.%Y')}" if user.vip and user.vip_until else ""
     await update.message.reply_text(f"👤 **Статус:** {status}{until}", parse_mode=ParseMode.MARKDOWN)
 
 async def remind_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -197,23 +199,31 @@ async def mute_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def purge_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await is_admin(update, context): return
     count = int(context.args[0]) if context.args and context.args[0].isdigit() else 10
-    await context.bot.delete_message(update.effective_chat.id, update.message.message_id)
-    await update.message.reply_text(f"🧹 Удалено {count} сообщений (имитация).")
+    try:
+        await context.bot.delete_message(update.effective_chat.id, update.message.message_id)
+        await update.message.reply_text(f"🧹 Удалено {count} сообщений (имитация).")
+    except:
+        pass
 
 # --- AI Guardian & Disco Mode ---
 
 async def ai_guardian_check(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
+    if not update.effective_chat or update.effective_chat.type == 'private': return False
     chat_id = update.effective_chat.id
     group = await db.get_group(chat_id)
     if not group.ai_guardian: return False
     toxic_words = ['скам', 'scam', 'крипта', 'заработок', 'выигрыш']
     if any(word in text.lower() for word in toxic_words):
-        await update.message.delete()
-        await update.message.reply_text(f"🛡 **AI Guardian:** Сообщение от {update.effective_user.first_name} удалено.")
+        try:
+            await update.message.delete()
+            await update.message.reply_text(f"🛡 **AI Guardian:** Сообщение от {update.effective_user.first_name} удалено.")
+        except:
+            pass
         return True
     return False
 
 async def disco_mode_logic(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.effective_chat or update.effective_chat.type == 'private': return
     chat_id = update.effective_chat.id
     group = await db.get_group(chat_id)
     if not group.disco_mode: return
@@ -298,7 +308,9 @@ async def update_xp(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if new_xp >= (user.level * 100):
         new_level += 1
         if update.effective_chat.type != 'private':
-            await update.message.reply_text(f"🎉 {update.effective_user.first_name} достиг уровня {new_level}!")
+            try:
+                await update.message.reply_text(f"🎉 {update.effective_user.first_name} достиг уровня {new_level}!")
+            except: pass
     await db.update_user(user_id, xp=new_xp, level=new_level, messages_count=user.messages_count + 1)
 
 async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -317,6 +329,9 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         provider = query.data.split('_')[1]
         await db.update_user_settings(user_id, active_provider=provider)
         await query.edit_message_text(f"✅ Выбран: **{provider.upper()}**\nВведите ключ: `/key {provider} КЛЮЧ`", parse_mode=ParseMode.MARKDOWN)
+    elif query.data == 'clear_chat':
+        await db.clear_history(user_id)
+        await query.edit_message_text("🗑 История AI очищена!")
 
 async def post_init(application: Application):
     await init_db()

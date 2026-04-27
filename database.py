@@ -1,7 +1,7 @@
 import os
 import logging
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from sqlalchemy import select, delete, update, func
+from sqlalchemy import select, delete, update, func, text
 from models import Base, User, UserKey, UserSettings, ChatMessage, GroupChat
 from datetime import datetime
 
@@ -33,23 +33,61 @@ AsyncSessionLocal = async_sessionmaker(
 
 async def init_db():
     async with engine.begin() as conn:
+        # This will create tables if they don't exist
         await conn.run_sync(Base.metadata.create_all)
+        
+        # Manual migration for existing tables if columns are missing
+        # We try to add columns that might be missing from previous versions
+        columns_to_add = {
+            "users": [
+                ("xp", "INTEGER DEFAULT 0"),
+                ("level", "INTEGER DEFAULT 1"),
+                ("rep", "INTEGER DEFAULT 0"),
+                ("daily_last_claim", "TIMESTAMP"),
+                ("notes", "JSON DEFAULT '[]'"),
+                ("todos", "JSON DEFAULT '[]'"),
+                ("memory", "JSON DEFAULT '{}'"),
+                ("reminders", "JSON DEFAULT '[]'")
+            ],
+            "group_chats": [
+                ("antilink", "BOOLEAN DEFAULT FALSE"),
+                ("antispam", "BOOLEAN DEFAULT FALSE"),
+                ("caps_filter", "BOOLEAN DEFAULT FALSE"),
+                ("ai_guardian", "BOOLEAN DEFAULT FALSE"),
+                ("disco_mode", "BOOLEAN DEFAULT FALSE"),
+                ("slowmode", "INTEGER DEFAULT 0")
+            ]
+        }
+        
+        for table, cols in columns_to_add.items():
+            for col_name, col_type in cols:
+                try:
+                    await conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_type}"))
+                    logger.info(f"Added column {col_name} to table {table}")
+                except Exception:
+                    # Column likely already exists
+                    pass
 
 class DBManager:
     async def get_user(self, user_id: int, username: str = None, first_name: str = None):
         async with AsyncSessionLocal() as session:
-            result = await session.execute(select(User).filter_by(id=user_id))
-            user = result.scalar_one_or_none()
-            if not user:
-                user = User(id=user_id, username=username, first_name=first_name)
-                session.add(user)
-                await session.commit()
-                await session.refresh(user)
-            elif username or first_name:
-                user.username = username or user.username
-                user.first_name = first_name or user.first_name
-                await session.commit()
-            return user
+            try:
+                result = await session.execute(select(User).filter_by(id=user_id))
+                user = result.scalar_one_or_none()
+                if not user:
+                    user = User(id=user_id, username=username, first_name=first_name)
+                    session.add(user)
+                    await session.commit()
+                    await session.refresh(user)
+                elif username or first_name:
+                    user.username = username or user.username
+                    user.first_name = first_name or user.first_name
+                    await session.commit()
+                return user
+            except Exception as e:
+                logger.error(f"Error in get_user: {e}")
+                await session.rollback()
+                raise
 
     async def update_user(self, user_id: int, **kwargs):
         async with AsyncSessionLocal() as session:
