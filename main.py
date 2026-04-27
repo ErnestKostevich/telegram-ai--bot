@@ -20,7 +20,11 @@ user_settings_cache = {}
 
 def get_cached_settings(user_id):
     if user_id not in user_settings_cache:
-        user_settings_cache[user_id] = db.get_user_settings(user_id)
+        try:
+            user_settings_cache[user_id] = db.get_user_settings(user_id)
+        except Exception as e:
+            logger.error(f"Error fetching settings for {user_id}: {e}")
+            return None
     return user_settings_cache[user_id]
 
 # --- Helpers ---
@@ -31,34 +35,41 @@ async def is_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         member = await context.bot.get_chat_member(update.effective_chat.id, update.effective_user.id)
         return member.status in ['creator', 'administrator']
-    except:
+    except Exception as e:
+        logger.error(f"Admin check error: {e}")
         return False
 
 # --- Basic Handlers ---
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    db.get_user(user.id)
+    chat = update.effective_chat
     
-    if update.effective_chat.type == 'private':
+    try:
+        db.get_user(user.id)
+        if chat.type != 'private':
+            db.get_group(chat.id)
+    except Exception as e:
+        logger.error(f"Start command DB error: {e}")
+
+    if chat.type == 'private':
         welcome_text = (
-            f"🚀 **AI DISCO BOT v5.1: OPTIMIZED**\n\n"
-            f"Привет, {user.first_name}! Я стал быстрее и стабильнее.\n\n"
-            "🔹 **BYOK**: Подключай свои ключи от 10+ провайдеров.\n"
-            "🔹 **Группы**: AI-модерация и общение в чатах.\n"
-            "🔹 **Скорость**: Оптимизированные запросы и мгновенные ответы.\n\n"
-            "⚙️ Нажми /settings для настройки."
+            f"🚀 **AI DISCO BOT v5.2: GROUP FIX**\n\n"
+            f"Привет, {user.first_name}! Я готов к работе.\n\n"
+            "🔹 **BYOK**: Подключай свои ключи в /settings.\n"
+            "🔹 **Группы**: Теперь я стабильно работаю в чатах!\n"
+            "🔹 **Команды**: /settings для настройки, /help_group для групп."
         )
         await update.message.reply_text(welcome_text, parse_mode=ParseMode.MARKDOWN)
     else:
-        await update.message.reply_text("🤖 AI DISCO BOT готов к работе! /help_group для команд.")
+        await update.message.reply_text("🤖 AI DISCO BOT активирован! Упомяните меня или ответьте на моё сообщение, чтобы я ответил.")
 
 async def help_group(update: Update, context: ContextTypes.DEFAULT_TYPE):
     help_text = (
-        "🛡 **Команды (админы):**\n"
-        "/ban, /mute, /unmute, /warn, /reset_warns\n"
-        "/setwelcome [текст], /setai [on/off]\n\n"
-        "💡 AI отвечает на упоминание или реплай."
+        "🛡 **Команды для групп:**\n"
+        "/setai [on/off] - Включить/выключить AI\n"
+        "/setwelcome [текст] - Приветствие новых участников\n\n"
+        "💡 Чтобы я ответил, просто тегните меня или сделайте реплай на моё сообщение."
     )
     await update.message.reply_text(help_text, parse_mode=ParseMode.MARKDOWN)
 
@@ -66,20 +77,20 @@ async def help_group(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.type != 'private':
+        await update.message.reply_text("❌ Настройки доступны только в ЛС бота.")
         return
     
     user_id = update.effective_user.id
     user_settings = get_cached_settings(user_id)
-    active_prov = user_settings.active_provider or "Не выбран"
+    active_prov = user_settings.active_provider if user_settings else "Не выбран"
     
     keyboard = [
         [InlineKeyboardButton("🌐 Выбрать провайдера", callback_data='set_provider')],
         [InlineKeyboardButton("🔑 Ввести API ключ", callback_data='set_key_prompt')],
-        [InlineKeyboardButton("🗑 Очистить историю", callback_data='clear_chat')],
-        [InlineKeyboardButton("ℹ️ Мой статус", callback_data='my_status')]
+        [InlineKeyboardButton("🗑 Очистить историю", callback_data='clear_chat')]
     ]
     
-    text = f"⚙️ **Настройки**\n\nТекущий провайдер: `{active_prov.upper()}`"
+    text = f"⚙️ **Настройки**\n\nТекущий провайдер: `{str(active_prov).upper()}`"
     await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
 
 async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -100,15 +111,16 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif query.data.startswith('prov_'):
         provider = query.data.split('_')[1]
         user_settings = get_cached_settings(user_id)
-        user_settings.active_provider = provider
-        db.session.commit()
-        await query.edit_message_text(f"✅ Выбран: **{provider.upper()}**\nВведите ключ: `/key {provider} КЛЮЧ`", parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Назад", callback_data='back_to_settings')]]))
+        if user_settings:
+            user_settings.active_provider = provider
+            db.session.commit()
+            await query.edit_message_text(f"✅ Выбран: **{provider.upper()}**\nВведите ключ: `/key {provider} КЛЮЧ`", parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Назад", callback_data='back_to_settings')]]))
 
     elif query.data == 'back_to_settings':
         user_settings = get_cached_settings(user_id)
-        active_prov = user_settings.active_provider or "Не выбран"
-        keyboard = [[InlineKeyboardButton("🌐 Выбрать провайдера", callback_data='set_provider')], [InlineKeyboardButton("🔑 Ввести API ключ", callback_data='set_key_prompt')], [InlineKeyboardButton("🗑 Очистить историю", callback_data='clear_chat')], [InlineKeyboardButton("ℹ️ Мой статус", callback_data='my_status')]]
-        await query.edit_message_text(f"⚙️ **Настройки**\n\nТекущий провайдер: `{active_prov.upper()}`", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
+        active_prov = user_settings.active_provider if user_settings else "Не выбран"
+        keyboard = [[InlineKeyboardButton("🌐 Выбрать провайдера", callback_data='set_provider')], [InlineKeyboardButton("🔑 Ввести API ключ", callback_data='set_key_prompt')], [InlineKeyboardButton("🗑 Очистить историю", callback_data='clear_chat')]]
+        await query.edit_message_text(f"⚙️ **Настройки**\n\nТекущий провайдер: `{str(active_prov).upper()}`", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.MARKDOWN)
 
     elif query.data == 'clear_chat':
         db.clear_history(user_id)
@@ -121,13 +133,28 @@ async def set_key_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     provider, api_key = context.args[0].lower(), context.args[1]
     user_id = update.effective_user.id
-    db.update_user_key(user_id, provider, api_key)
+    try:
+        db.update_user_key(user_id, provider, api_key)
+        user_settings = get_cached_settings(user_id)
+        if user_settings:
+            user_settings.active_provider = provider
+            db.session.commit()
+        await update.message.reply_text(f"✅ Ключ для **{provider.upper()}** сохранен!")
+    except Exception as e:
+        logger.error(f"Key save error: {e}")
+        await update.message.reply_text("❌ Ошибка при сохранении ключа.")
+
+# --- Group Logic ---
+
+async def setai_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await is_admin(update, context): return
+    if not context.args:
+        await update.message.reply_text("❌ Используйте: `/setai on` или `/setai off`")
+        return
     
-    user_settings = get_cached_settings(user_id)
-    user_settings.active_provider = provider
-    db.session.commit()
-    
-    await update.message.reply_text(f"✅ Ключ для **{provider.upper()}** сохранен!")
+    state = context.args[0].lower() in ['on', 'true', '1']
+    db.update_group(update.effective_chat.id, ai_enabled=state)
+    await update.message.reply_text(f"✅ AI в чате: {'ВКЛ' if state else 'ВЫКЛ'}")
 
 # --- AI Logic ---
 
@@ -139,58 +166,79 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     is_private = update.effective_chat.type == 'private'
     
+    # Group logic
     if not is_private:
-        bot_username = (await context.bot.get_me()).username
-        if f"@{bot_username}" not in text and not (update.message.reply_to_message and update.message.reply_to_message.from_user.id == context.bot.id):
+        bot_me = await context.bot.get_me()
+        is_mentioned = f"@{bot_me.username}" in text
+        is_reply_to_bot = update.message.reply_to_message and update.message.reply_to_message.from_user.id == bot_me.id
+        
+        if not (is_mentioned or is_reply_to_bot):
             return
-        text = text.replace(f"@{bot_username}", "").strip()
+        
+        # Check if AI is enabled in group
         group = db.get_group(chat_id)
-        if not group.ai_enabled: return
+        if not group.ai_enabled:
+            return
+            
+        text = text.replace(f"@{bot_me.username}", "").strip()
 
+    # Get settings (always use user_id for BYOK)
     user_settings = get_cached_settings(user_id)
-    active_prov = user_settings.active_provider
-    if not active_prov:
+    if not user_settings or not user_settings.active_provider:
         if is_private: await update.message.reply_text("❌ Выберите провайдера в /settings")
         return
 
+    active_prov = user_settings.active_provider
     key_entry = db.get_active_key(user_id, active_prov)
+    
     if not key_entry:
         if is_private: await update.message.reply_text(f"❌ Нет ключа для {active_prov.upper()}. Введите его в /settings")
         return
 
-    db.add_message(user_id, "user", text)
-    history = db.get_history(user_id, limit=8) # Reduced limit for speed
-    messages = [{"role": m.role, "content": m.content} for m in history]
-    messages.insert(0, {"role": "system", "content": "You are AI DISCO BOT. Be concise and helpful."})
-
-    await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
-    
+    # Build context
     try:
+        db.add_message(user_id, "user", text)
+        history = db.get_history(user_id, limit=6)
+        messages = [{"role": m.role, "content": m.content} for m in history]
+        messages.insert(0, {"role": "system", "content": "You are AI DISCO BOT. Be helpful and concise."})
+
+        await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
+        
         provider = get_provider(active_prov, key_entry.api_key, key_entry.model)
+        if not provider:
+            if is_private: await update.message.reply_text("❌ Ошибка конфигурации провайдера.")
+            return
+            
         response = await provider.generate(messages)
         db.add_message(user_id, "assistant", response)
         await update.message.reply_text(response, parse_mode=ParseMode.MARKDOWN)
     except Exception as e:
-        logger.error(f"AI Error: {e}")
+        logger.error(f"AI Process Error: {e}")
         if is_private: await update.message.reply_text(f"❌ Ошибка: {str(e)}")
 
 def main():
     init_db()
+    
+    # Add missing method to DBManager for convenience
+    def update_user_settings(self, user_id, **kwargs):
+        settings = self.get_user_settings(user_id)
+        for k, v in kwargs.items(): setattr(settings, k, v)
+        self.session.commit()
+    DBManager.update_user_settings = update_user_settings
+
     application = Application.builder().token(BOT_TOKEN).build()
     
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("settings", settings))
     application.add_handler(CommandHandler("key", set_key_command))
     application.add_handler(CommandHandler("help_group", help_group))
-    
-    # Simple moderation handlers
-    application.add_handler(CommandHandler("ban", lambda u, c: None)) # Placeholder
+    application.add_handler(CommandHandler("setai", setai_command))
     
     application.add_handler(CallbackQueryHandler(callback_handler))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
-    logger.info("🚀 AI DISCO BOT v5.1 Started!")
-    application.run_polling()
+    logger.info("🚀 AI DISCO BOT v5.2 Started!")
+    application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == '__main__':
     main()
