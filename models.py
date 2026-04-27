@@ -53,5 +53,7 @@ class GroupChat(Base):
     title = Column(String(255))
     ai_enabled = Column(Boolean, default=True)
     welcome_enabled = Column(Boolean, default=True)
-    welcome_text = Column(Text)
+    welcome_text = Column(Text, default="Привет, {name}! Добро пожаловать в чат!")
     rules = Column(Text)
+    warns_limit = Column(Integer, default=3)
+    user_warns = Column(JSON, default=dict) # {user_id: count}

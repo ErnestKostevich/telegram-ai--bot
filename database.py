@@ -55,3 +55,35 @@ class DBManager:
     def clear_history(self, user_id: int):
         self.session.query(ChatMessage).filter_by(user_id=user_id).delete()
         self.session.commit()
+
+    def get_group(self, chat_id: int):
+        group = self.session.query(GroupChat).filter_by(id=chat_id).first()
+        if not group:
+            group = GroupChat(id=chat_id)
+            self.session.add(group)
+            self.session.commit()
+        return group
+
+    def update_group(self, chat_id: int, **kwargs):
+        group = self.get_group(chat_id)
+        for key, value in kwargs.items():
+            setattr(group, key, value)
+        self.session.commit()
+
+    def add_warn(self, chat_id: int, user_id: int):
+        group = self.get_group(chat_id)
+        warns = dict(group.user_warns or {})
+        uid_str = str(user_id)
+        warns[uid_str] = warns.get(uid_str, 0) + 1
+        group.user_warns = warns
+        self.session.commit()
+        return warns[uid_str]
+
+    def reset_warns(self, chat_id: int, user_id: int):
+        group = self.get_group(chat_id)
+        warns = dict(group.user_warns or {})
+        uid_str = str(user_id)
+        if uid_str in warns:
+            del warns[uid_str]
+        group.user_warns = warns
+        self.session.commit()
