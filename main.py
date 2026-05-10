@@ -1,108 +1,86 @@
-import asyncio
 import logging
-from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, filters
-import bot.handlers as handlers
-from bot.config import BOT_TOKEN
-from bot.storage import storage
+import os
+from dotenv import load_dotenv
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, filters
 
-logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    level=logging.INFO
-)
+load_dotenv()
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-async def post_init(application: Application):
-    logger.info("Initializing storage and scheduler...")
-    await storage.load()
-    
-    from bot.scheduler import start_scheduler
-    start_scheduler(application.bot)
-    logger.info("Bot is ready!")
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 def main():
     logger.info("Starting AI DISCO BOT (BYOK Edition)...")
     
-    if not BOT_TOKEN:
-        logger.error("BOT_TOKEN is not set!")
-        return
+    from bot import handlers
 
-    application = Application.builder().token(BOT_TOKEN).post_init(post_init).build()
+    application = ApplicationBuilder().token(BOT_TOKEN).post_init(post_init).build()
 
     # Base
-    application.add_handler(CommandHandler("start", handlers.start_command))
-    application.add_handler(CommandHandler("help", handlers.help_command))
-    application.add_handler(CommandHandler("info", handlers.info_command))
-    application.add_handler(CommandHandler("status", handlers.status_command))
-    application.add_handler(CommandHandler("lang", handlers.lang_command))
-    application.add_handler(CommandHandler("profile", handlers.profile_command))
-    application.add_handler(CommandHandler("disco", handlers.disco_command))
+    for cmd, fn in [
+        ("start", handlers.start_command), ("help", handlers.help_command),
+        ("info", handlers.info_command), ("status", handlers.status_command),
+        ("lang", handlers.lang_command), ("profile", handlers.profile_command),
+        ("disco", handlers.disco_command),
+    ]:
+        application.add_handler(CommandHandler(cmd, fn))
 
     # AI & Memory
-    application.add_handler(CommandHandler("setprovider", handlers.setprovider_command))
-    application.add_handler(CommandHandler("setkey", handlers.setkey_command))
-    application.add_handler(CommandHandler("setmodel", handlers.setmodel_command))
-    application.add_handler(CommandHandler("ai", handlers.ai_command))
-    application.add_handler(CommandHandler("memorysave", handlers.memorysave_command))
-    application.add_handler(CommandHandler("memoryget", handlers.memoryget_command))
-    application.add_handler(CommandHandler("memorylist", handlers.memorylist_command))
-    application.add_handler(CommandHandler("memorydel", handlers.memorydel_command))
+    for cmd, fn in [
+        ("setprovider", handlers.setprovider_command), ("setkey", handlers.setkey_command),
+        ("setmodel", handlers.setmodel_command), ("ai", handlers.ai_command),
+        ("memorysave", handlers.memorysave_command), ("memoryget", handlers.memoryget_command),
+        ("memorylist", handlers.memorylist_command), ("memorydel", handlers.memorydel_command),
+    ]:
+        application.add_handler(CommandHandler(cmd, fn))
 
-    # Notes
-    application.add_handler(CommandHandler("note", handlers.note_command))
-    application.add_handler(CommandHandler("notes", handlers.notes_command))
-    application.add_handler(CommandHandler("delnote", handlers.delnote_command))
-    application.add_handler(CommandHandler("todo", handlers.todo_command))
+    # Notes & Todo
+    for cmd, fn in [
+        ("note", handlers.note_command), ("notes", handlers.notes_command),
+        ("delnote", handlers.delnote_command), ("todo", handlers.todo_command),
+    ]:
+        application.add_handler(CommandHandler(cmd, fn))
 
-    # VIP
-    application.add_handler(CommandHandler("vip", handlers.vip_command))
-    application.add_handler(CommandHandler("remind", handlers.remind_command))
-    application.add_handler(CommandHandler("reminders", handlers.reminders_command))
-
-    # Creator
-    application.add_handler(CommandHandler("grant_vip", handlers.grant_vip_command))
-    application.add_handler(CommandHandler("broadcast", handlers.broadcast_command))
-    application.add_handler(CommandHandler("stats", handlers.stats_command))
+    # VIP & Creator
+    for cmd, fn in [
+        ("vip", handlers.vip_command), ("remind", handlers.remind_command),
+        ("reminders", handlers.reminders_command), ("grant_vip", handlers.grant_vip_command),
+        ("broadcast", handlers.broadcast_command), ("stats", handlers.stats_command),
+    ]:
+        application.add_handler(CommandHandler(cmd, fn))
 
     # Games & Utils
-    application.add_handler(CommandHandler("dice", handlers.dice_command))
-    application.add_handler(CommandHandler("coinflip", handlers.coinflip_command))
-    application.add_handler(CommandHandler("random", handlers.random_command))
-    application.add_handler(CommandHandler("joke", handlers.joke_command))
-    application.add_handler(CommandHandler("time", handlers.time_command))
-    application.add_handler(CommandHandler("weather", handlers.weather_command))
-    application.add_handler(CommandHandler("calc", handlers.calc_command))
-    application.add_handler(CommandHandler("password", handlers.password_command))
-    application.add_handler(CommandHandler("generate", handlers.generate_command))
+    for cmd, fn in [
+        ("dice", handlers.dice_command), ("coinflip", handlers.coinflip_command),
+        ("random", handlers.random_command), ("joke", handlers.joke_command),
+        ("time", handlers.time_command), ("weather", handlers.weather_command),
+        ("calc", handlers.calc_command), ("password", handlers.password_command),
+        ("generate", handlers.generate_command),
+    ]:
+        application.add_handler(CommandHandler(cmd, fn))
 
     # Groups
-    application.add_handler(CommandHandler("grouphelp", handlers.grouphelp_command))
-    application.add_handler(CommandHandler("ban", handlers.ban_command))
-    application.add_handler(CommandHandler("ask", handlers.ask_command))
-    application.add_handler(CommandHandler("rules", handlers.rules_command))
-    application.add_handler(CommandHandler("setrules", handlers.setrules_command))
-    application.add_handler(CommandHandler("guardian", handlers.guardian_command))
-    
-    # Extended Missing Commands
-    from bot.handlers import extended
-    application.add_handler(CommandHandler("warn", extended.warn_command))
-    application.add_handler(CommandHandler("mute", extended.mute_command))
-    application.add_handler(CommandHandler("purge", extended.purge_command))
-    application.add_handler(CommandHandler("antispam", extended.antispam_command))
-    application.add_handler(CommandHandler("groupstats", extended.groupstats_command))
-    application.add_handler(CommandHandler("rank", extended.rank_command))
-    application.add_handler(CommandHandler("translate", extended.translate_command))
-    application.add_handler(CommandHandler("daily", extended.daily_command))
-    application.add_handler(CommandHandler("rep", extended.rep_command))
-    application.add_handler(CommandHandler("roast", extended.roast_command))
-    
-    # Generic mock commands for the rest
-    mock_cmds = ["warnings", "unwarn", "unmute", "kick", "antilink", "caps", "leaderboard", "welcome", "goodbye", "summary", "topic", "idea", "rules_ai", "quest", "quiz", "vote", "event", "pin", "unpin", "announce", "slowmode", "logs", "vipgroup", "setpremium", "customwelcome", "autorole", "aivoice"]
-    for cmd in mock_cmds:
-        application.add_handler(CommandHandler(cmd, extended.generic_mock_command))
+    for cmd, fn in [
+        ("grouphelp", handlers.grouphelp_command), ("ban", handlers.ban_command),
+        ("warn", handlers.warn_command), ("mute", handlers.mute_command),
+        ("kick", handlers.kick_command), ("ask", handlers.ask_command),
+        ("summary", handlers.summary_command), ("translate", handlers.translate_command),
+        ("rules", handlers.rules_command), ("setrules", handlers.setrules_command),
+        ("guardian", handlers.guardian_command), ("groupstats", handlers.groupstats_command),
+    ]:
+        application.add_handler(CommandHandler(cmd, fn))
+
+    # Extended commands (stubs for less common ones)
+    from bot.handlers.extended import generic_mock_command, daily_command, rep_command, roast_command
+    for cmd, fn in [("daily", daily_command), ("rep", rep_command), ("roast", roast_command)]:
+        application.add_handler(CommandHandler(cmd, fn))
+    for cmd in ["warnings", "unwarn", "unmute", "antilink", "caps", "leaderboard", "welcome",
+                 "goodbye", "topic", "idea", "rules_ai", "quest", "quiz", "vote", "event",
+                 "pin", "unpin", "announce", "slowmode", "logs", "purge", "antispam",
+                 "vipgroup", "setpremium", "customwelcome", "autorole", "aivoice", "rank"]:
+        application.add_handler(CommandHandler(cmd, generic_mock_command))
 
     # Interactive
-    from telegram.ext import CallbackQueryHandler
     application.add_handler(CallbackQueryHandler(handlers.button_callback))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.keyboard_message_handler))
     application.add_handler(MessageHandler(filters.PHOTO | filters.Document.ALL, handlers.media_message_handler))
@@ -110,5 +88,15 @@ def main():
     logger.info("Bot is polling...")
     application.run_polling(drop_pending_updates=True)
 
+async def post_init(application):
+    from bot.storage import storage
+    from bot.scheduler import start_scheduler
+
+    logger.info("Initializing storage and scheduler...")
+    await storage.load()
+    start_scheduler(application)
+    logger.info("Bot is ready!")
+
 if __name__ == "__main__":
+    print("Menu")
     main()

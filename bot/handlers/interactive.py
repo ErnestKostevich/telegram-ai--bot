@@ -1,45 +1,37 @@
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
-from bot.keyboards import get_settings_keyboard, get_vip_keyboard, get_lang_keyboard, get_main_keyboard, get_help_keyboard
+from bot.keyboards import (get_settings_keyboard, get_vip_keyboard, get_lang_keyboard,
+                           get_main_keyboard, get_help_keyboard, get_games_keyboard, get_tools_keyboard)
 from bot.storage import storage
-from bot.i18n import get_text
+from bot.i18n import get_text, t
 
-def _get_lang(update):
-    user_id = update.effective_user.id
-    user = storage.get_user(user_id)
-    return user.get("language", "ru")
+def _lang(update):
+    return storage.get_user(update.effective_user.id).get("language", "ru")
 
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    
     data = query.data
-    user_id = update.effective_user.id
-    user = storage.get_user(user_id)
+    uid = update.effective_user.id
+    user = storage.get_user(uid)
     lang = user.get("language", "ru")
-    
-    # --- Provider selection ---
+
+    # === Provider ===
     if data == "ai_provider":
         user["state"] = "awaiting_setprovider"
         await storage.save()
-        
         from bot.ai import PROVIDERS
-        keyboard = []
+        kb = []
         row = []
         for p in PROVIDERS:
             row.append(InlineKeyboardButton(p.capitalize(), callback_data=f"setprov_{p}"))
             if len(row) == 2:
-                keyboard.append(row)
+                kb.append(row)
                 row = []
-        if row:
-            keyboard.append(row)
-            
-        await query.edit_message_text(
-            "⚡ <b>Выбор провайдера</b>\n\nВыберите провайдера из списка:",
-            parse_mode="HTML",
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        )
-        
+        if row: kb.append(row)
+        kb.append([InlineKeyboardButton(get_text(lang, "ik_back"), callback_data="back_settings")])
+        await query.edit_message_text("⚡ <b>Provider</b>", parse_mode="HTML", reply_markup=InlineKeyboardMarkup(kb))
+
     elif data.startswith("setprov_"):
         provider = data.split("_", 1)[1]
         from bot.ai import PROVIDERS
@@ -47,133 +39,163 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             user["ai_provider"] = provider
             user["state"] = None
             await storage.save()
-            await query.edit_message_text(
-                f"✅ Провайдер установлен: <b>{provider}</b>\n\nТеперь установите ключ: <code>/setkey {provider} [ваш_ключ]</code>",
-                parse_mode="HTML"
-            )
-        else:
-            await query.edit_message_text(f"❌ Неизвестный провайдер: {provider}")
-    
-    # --- Model selection ---
+            await query.edit_message_text(t(lang, "provider_set", provider=provider), parse_mode="HTML")
+
     elif data == "ai_model":
         user["state"] = "awaiting_setmodel"
         await storage.save()
-        await query.edit_message_text(
-            "🧠 <b>Выбор модели</b>\n\n"
-            "Отправьте мне название модели в чат\n"
-            "(например: <code>gpt-4o</code>, <code>claude-3-5-sonnet-20240620</code>)",
-            parse_mode="HTML"
-        )
-    
-    # --- Key configuration ---
+        await query.edit_message_text("🧠 <b>Model</b>\n\nSend model name in chat\n(<code>gpt-4o</code>, <code>claude-3-5-sonnet</code>...)", parse_mode="HTML")
+
     elif data == "ai_keys":
         user["state"] = "awaiting_setkey"
         await storage.save()
-        await query.edit_message_text(
-            "🔑 <b>Настройка ключей</b>\n\n"
-            "Отправьте мне ключ в формате:\n<code>провайдер ваш_ключ</code>\n\n"
-            "Например: <code>gemini AIzaSyA...</code>",
-            parse_mode="HTML"
-        )
-    
-    # --- VIP ---
+        await query.edit_message_text("🔑 <b>API Key</b>\n\nSend: <code>provider key</code>\nExample: <code>gemini AIza...</code>", parse_mode="HTML")
+
+    elif data == "back_settings":
+        await query.edit_message_text(get_text(lang, "settings_menu"), parse_mode="HTML", reply_markup=get_settings_keyboard(lang))
+
+    # === Profile & Disco (inline) ===
+    elif data == "show_profile":
+        xp = user.get("stats", {}).get("commands", 0) * 10
+        level = xp // 100 + 1
+        next_xp = level * 100
+        progress = xp % 100
+        vip = t(lang, "status_yes") if user.get("vip") else t(lang, "status_no")
+        text = t(lang, "profile_title", level=level, xp=xp, next_level_xp=next_xp,
+                 progress_bar='▓'*(progress//10)+'░'*(10-progress//10), progress=progress,
+                 vip_status=vip, msgs=user.get('stats',{}).get('msgs',0),
+                 provider=user.get('ai_provider','gemini'), model=user.get('ai_model','default'))
+        await query.edit_message_text(text, parse_mode="HTML",
+                                       reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(get_text(lang, "ik_back"), callback_data="back_settings")]]))
+
+    elif data == "toggle_disco":
+        user["disco_mode"] = not user.get("disco_mode", False)
+        await storage.save()
+        msg = t(lang, "disco_on") if user["disco_mode"] else t(lang, "disco_off")
+        await query.edit_message_text(msg, parse_mode="HTML",
+                                       reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(get_text(lang, "ik_back"), callback_data="back_settings")]]))
+
+    # === VIP ===
     elif data == "vip_reminders":
-        await query.edit_message_text(
-            "⏰ <b>Напоминания</b>\n\n"
-            "Установить: <code>/remind [минуты] [текст]</code>\n"
-            "Список: <code>/reminders</code>",
-            parse_mode="HTML"
-        )
+        await query.edit_message_text(t(lang, "remind_usage"), parse_mode="HTML",
+                                       reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(get_text(lang, "ik_back"), callback_data="back_vip")]]))
     elif data == "vip_generate":
         user["state"] = "awaiting_generate_prompt"
         await storage.save()
-        await query.edit_message_text(
-            "🖼️ <b>Генерация изображений</b>\n\n"
-            "Отправьте мне описание того, что вы хотите нарисовать!",
-            parse_mode="HTML"
-        )
+        await query.edit_message_text(t(lang, "gen_describe"), parse_mode="HTML")
     elif data == "vip_guardian":
-        await query.edit_message_text(
-            "🛡️ <b>AI Guardian</b>\n\n"
-            "Защита от спама и токсичности.\n"
-            "Включить в группе: <code>/guardian on</code>",
-            parse_mode="HTML"
-        )
-    
-    # --- Language ---
+        await query.edit_message_text("🛡️ <b>AI Guardian</b>\n\n<code>/guardian on</code> / <code>/guardian off</code>", parse_mode="HTML",
+                                       reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(get_text(lang, "ik_back"), callback_data="back_vip")]]))
+    elif data == "back_vip":
+        await query.edit_message_text(get_text(lang, "vip_menu"), parse_mode="HTML", reply_markup=get_vip_keyboard(lang))
+
+    # === Language ===
     elif data.startswith("lang_"):
         new_lang = data.split("_")[1]
         user["language"] = new_lang
         await storage.save()
-        
-        text = get_text(new_lang, "lang_changed")
         await query.message.delete()
-        await context.bot.send_message(
-            chat_id=update.effective_chat.id,
-            text=text,
-            reply_markup=get_main_keyboard(new_lang)
-        )
-    
-    # --- Help: Back button (MUST be before help_ prefix!) ---
+        await context.bot.send_message(chat_id=update.effective_chat.id, text=get_text(new_lang, "lang_changed"), reply_markup=get_main_keyboard(new_lang))
+
+    # === Help ===
     elif data == "help_back":
-        text = get_text(lang, "help")
-        await query.edit_message_text(text, parse_mode="HTML", reply_markup=get_help_keyboard(lang))
-    
-    # --- Help: Section details ---
+        await query.edit_message_text(get_text(lang, "help"), parse_mode="HTML", reply_markup=get_help_keyboard(lang))
+
     elif data.startswith("help_"):
         section = data.split("_")[1]
         sections = {
-            "base":    "🏠 <b>Базовые:</b>\n/start — запуск бота\n/help — список команд\n/info — информация о боте\n/status — статус системы\n/profile — ваш профиль\n/lang — смена языка",
-            "ai":      "💬 <b>AI & Память:</b>\n/ai [вопрос] — задать вопрос\n/setprovider — выбор провайдера\n/setkey — установить API ключ\n/setmodel — выбор модели\n/memorysave [ключ] [значение]\n/memoryget [ключ]\n/memorylist\n/memorydel [ключ]",
-            "notes":   "📝 <b>Заметки & Задачи:</b>\n/note [текст] — создать заметку\n/notes — все заметки\n/delnote [номер] — удалить\n/todo [текст] — добавить задачу\n/todo — список задач\n/todo done [номер]\n/todo del [номер]",
-            "vip":     "💎 <b>VIP:</b>\n/vip — статус VIP\n/remind [мин] [текст] — напоминание\n/reminders — список\n/generate [описание] — генерация картинок\n/disco on/off — AI Disco Mode",
-            "groups":  "👥 <b>Группы:</b>\n/grouphelp — справка\n/ban — бан\n/warn — предупреждение\n/mute — мут\n/kick — кик\n/purge — очистка\n/ask [вопрос] — AI в группе\n/rules — правила\n/setrules — установить правила\n/guardian on/off — защита\n/groupstats — статистика",
-            "creator": "👑 <b>Создатель:</b>\n/grant_vip [user_id] [дни] — выдать VIP\n/broadcast [текст] — рассылка\n/stats — полная статистика",
-            "games":   "🎮 <b>Игры:</b>\n/dice — кубик\n/coinflip — монетка\n/random [мин] [макс]\n/joke — шутка\n/daily — награда\n/roast — прожарка\n/rep — репутация\n\n🛠 <b>Утилиты:</b>\n/time — время\n/weather [город]\n/calc [выражение]\n/password [длина]\n/translate [текст]"
+            "base":    "🏠 <b>Base:</b>\n/start /help /info /status\n/profile /lang /disco",
+            "ai":      "💬 <b>AI:</b>\n/ai [?] — ask AI\n/setprovider /setkey /setmodel\n/memorysave /memoryget\n/memorylist /memorydel",
+            "notes":   "📝 <b>Notes:</b>\n/note /notes /delnote\n/todo — tasks",
+            "vip":     "💎 <b>VIP:</b>\n/vip /remind /reminders\n/generate — images",
+            "groups":  "👥 <b>Groups:</b>\n/grouphelp /ban /warn /mute /kick\n/ask /summary /translate\n/rules /setrules /guardian\n/groupstats",
+            "games":   "🎮 <b>Games & Tools:</b>\n/dice /coinflip /random /joke\n/daily /roast /rep\n/time /weather /calc /password",
+            "creator": "👑 <b>Creator:</b>\n/grant_vip /broadcast /stats",
         }
-        text = sections.get(section, f"ℹ️ Раздел: {section}")
+        text = sections.get(section, f"ℹ️ {section}")
         await query.edit_message_text(text, parse_mode="HTML", reply_markup=get_help_keyboard(lang, submenu=True))
+
+    # === Games buttons ===
+    elif data == "game_dice":
+        await query.message.reply_dice(emoji="🎲")
+        await query.message.delete()
+    elif data == "game_coinflip":
+        result = get_text(lang, "coinflip_h") if __import__('random').randint(0,1) else get_text(lang, "coinflip_t")
+        await query.edit_message_text(t(lang, "coinflip_text", result=result), parse_mode="HTML")
+    elif data == "game_joke":
+        import random
+        jokes = {
+            "ru": ["Почему программисты не любят природу? Слишком много багов. 🐛", "Оптимист: стакан наполовину полон. Программист: стакан в два раза больше, чем нужно. 🥛"],
+            "en": ["Why do programmers prefer dark mode? Light attracts bugs. 🐛", "There are 10 types of people: those who understand binary and those who don't. 💻"],
+            "it": ["Perché i programmatori preferiscono il buio? La luce attira i bug. 🐛", "Ci sono 10 tipi di persone: chi capisce il binario e chi no. 💻"],
+        }
+        await query.edit_message_text(f"😄 {random.choice(jokes.get(lang, jokes['en']))}")
+    elif data == "game_daily":
+        user["stats"]["commands"] = user["stats"].get("commands", 0) + 50
+        await storage.save()
+        await query.edit_message_text("🎁 <b>+500 XP!</b>", parse_mode="HTML")
+    elif data == "game_roast":
+        import random
+        roasts = {"ru": ["Твой код как чувство юмора — полон багов! 🔥"], "en": ["Your code is like your humor — full of bugs! 🔥"], "it": ["Il tuo codice è come il tuo umorismo — pieno di bug! 🔥"]}
+        await query.edit_message_text(f"🔥 {random.choice(roasts.get(lang, roasts['en']))}")
+
+    # === Tool buttons ===
+    elif data == "tool_time":
+        user["state"] = "awaiting_time_city"
+        await storage.save()
+        await query.edit_message_text(t(lang, "time_usage"))
+    elif data == "tool_weather":
+        user["state"] = "awaiting_weather_city"
+        await storage.save()
+        await query.edit_message_text(t(lang, "weather_usage"))
+    elif data == "tool_calc":
+        user["state"] = "awaiting_calc"
+        await storage.save()
+        await query.edit_message_text(t(lang, "calc_usage"))
+    elif data == "tool_password":
+        import random, string
+        pwd = "".join(random.choice(string.ascii_letters + string.digits + "!@#$%^&*") for _ in range(16))
+        await query.edit_message_text(t(lang, "pwd_result", pwd=pwd), parse_mode="HTML")
+    elif data == "tool_translate":
+        user["state"] = "awaiting_translate"
+        await storage.save()
+        await query.edit_message_text(t(lang, "translate_usage"))
 
 
 async def keyboard_message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
-    
     from bot.i18n import translations
-    
-    btn_ai_vals = [t["btn_ai"] for t in translations.values()]
-    btn_mem_vals = [t["btn_mem"] for t in translations.values()]
-    btn_notes_vals = [t["btn_notes"] for t in translations.values()]
-    btn_vip_vals = [t["btn_vip"] for t in translations.values()]
-    btn_settings_vals = [t["btn_settings"] for t in translations.values()]
-    btn_admin_vals = [t["btn_admin"] for t in translations.values()]
-    btn_lang_vals = [t["btn_lang"] for t in translations.values()]
-    
-    user_id = update.effective_user.id
-    user = storage.get_user(user_id)
+
+    all_btns = {}
+    for key_prefix in ["btn_ai", "btn_mem", "btn_notes", "btn_vip", "btn_settings", "btn_games", "btn_tools", "btn_lang"]:
+        all_btns[key_prefix] = [tr[key_prefix] for tr in translations.values() if key_prefix in tr]
+
+    uid = update.effective_user.id
+    user = storage.get_user(uid)
     lang = user.get("language", "ru")
-    
-    if text in btn_ai_vals:
-        await update.message.reply_text("Отправьте ваш запрос с помощью команды /ai [вопрос] или просто напишите мне в личные сообщения.")
-    elif text in btn_mem_vals:
+
+    if text in all_btns.get("btn_ai", []):
+        await update.message.reply_text(t(lang, "ai_no_query"))
+    elif text in all_btns.get("btn_mem", []):
         from bot.handlers.ai_memory import memorylist_command
         await memorylist_command(update, context)
-    elif text in btn_notes_vals:
+    elif text in all_btns.get("btn_notes", []):
         from bot.handlers.notes import notes_command
         await notes_command(update, context)
-    elif text in btn_vip_vals:
-        await update.message.reply_text(get_text(lang, "vip_menu"), reply_markup=get_vip_keyboard(lang))
-    elif text in btn_settings_vals:
-        await update.message.reply_text(get_text(lang, "settings_menu"), reply_markup=get_settings_keyboard(lang))
-    elif text in btn_admin_vals:
-        from bot.handlers.vip_creator import stats_command
-        await stats_command(update, context)
-    elif text in btn_lang_vals:
-        await update.message.reply_text("🌐 Выберите язык / Choose language / Scegli la lingua:", reply_markup=get_lang_keyboard())
+    elif text in all_btns.get("btn_vip", []):
+        await update.message.reply_text(get_text(lang, "vip_menu"), parse_mode="HTML", reply_markup=get_vip_keyboard(lang))
+    elif text in all_btns.get("btn_settings", []):
+        await update.message.reply_text(get_text(lang, "settings_menu"), parse_mode="HTML", reply_markup=get_settings_keyboard(lang))
+    elif text in all_btns.get("btn_games", []):
+        await update.message.reply_text(get_text(lang, "games_menu"), parse_mode="HTML", reply_markup=get_games_keyboard(lang))
+    elif text in all_btns.get("btn_tools", []):
+        await update.message.reply_text(get_text(lang, "tools_menu"), parse_mode="HTML", reply_markup=get_tools_keyboard(lang))
+    elif text in all_btns.get("btn_lang", []):
+        await update.message.reply_text("🌐", reply_markup=get_lang_keyboard())
     else:
-        # Fallback — check conversation state or AI chat
         if update.effective_chat.type == 'private' and not text.startswith('/'):
             state = user.get("state")
-            
+
             if state == "awaiting_generate_prompt":
                 user["state"] = None
                 await storage.save()
@@ -181,63 +203,82 @@ async def keyboard_message_handler(update: Update, context: ContextTypes.DEFAULT
                 from bot.handlers.media import generate_command
                 await generate_command(update, context)
                 return
-                
             elif state == "awaiting_setprovider":
                 user["state"] = None
-                provider = text.strip().lower()
+                p = text.strip().lower()
                 from bot.ai import PROVIDERS
-                if provider in PROVIDERS:
-                    user["ai_provider"] = provider
+                if p in PROVIDERS:
+                    user["ai_provider"] = p
                     await storage.save()
-                    await update.message.reply_text(f"✅ Провайдер установлен: <b>{provider}</b>\nТеперь установите ключ: <code>/setkey {provider} [ваш_ключ]</code>", parse_mode="HTML")
+                    await update.message.reply_text(t(lang, "provider_set", provider=p), parse_mode="HTML")
                 else:
-                    await update.message.reply_text(f"❌ Неизвестный провайдер: {provider}\nДоступные: {', '.join(PROVIDERS)}")
+                    await update.message.reply_text(t(lang, "provider_unknown", list=', '.join(PROVIDERS)))
                 return
-                
             elif state == "awaiting_setkey":
                 user["state"] = None
                 parts = text.strip().split(maxsplit=1)
                 if len(parts) == 2:
-                    provider, key = parts[0].lower(), parts[1]
+                    prov, key = parts[0].lower(), parts[1]
                     from bot.ai import PROVIDERS
-                    if provider in PROVIDERS:
-                        user["api_keys"][provider] = key
+                    if prov in PROVIDERS:
+                        user["api_keys"][prov] = key
                         await storage.save()
-                        try:
-                            await update.message.delete()
-                        except Exception:
-                            pass
-                        await context.bot.send_message(
-                            chat_id=update.effective_chat.id,
-                            text=f"✅ Ключ для <b>{provider}</b> сохранён! Ваше сообщение с ключом удалено для безопасности.",
-                            parse_mode="HTML"
-                        )
+                        try: await update.message.delete()
+                        except: pass
+                        await context.bot.send_message(chat_id=update.effective_chat.id, text=t(lang, "key_saved", provider=prov), parse_mode="HTML")
                     else:
-                        await update.message.reply_text(f"❌ Неизвестный провайдер: {provider}")
+                        await update.message.reply_text(t(lang, "provider_unknown", list=', '.join(PROVIDERS)))
                 else:
-                    await update.message.reply_text("❌ Формат: <code>провайдер ключ</code>\nПример: <code>gemini AIzaSyA...</code>", parse_mode="HTML")
+                    await update.message.reply_text("❌ Format: <code>provider key</code>", parse_mode="HTML")
                 return
-                
             elif state == "awaiting_setmodel":
                 user["state"] = None
-                model = text.strip()
-                user["ai_model"] = model
+                user["ai_model"] = text.strip()
                 await storage.save()
-                await update.message.reply_text(f"🧠 Модель установлена: <b>{model}</b>", parse_mode="HTML")
+                await update.message.reply_text(t(lang, "model_set", model=text.strip()), parse_mode="HTML")
                 return
-            
+            elif state == "awaiting_time_city":
+                user["state"] = None
+                await storage.save()
+                context.args = text.split()
+                from bot.handlers.utils import time_command
+                await time_command(update, context)
+                return
+            elif state == "awaiting_weather_city":
+                user["state"] = None
+                await storage.save()
+                context.args = text.split()
+                from bot.handlers.utils import weather_command
+                await weather_command(update, context)
+                return
+            elif state == "awaiting_calc":
+                user["state"] = None
+                await storage.save()
+                context.args = text.split()
+                from bot.handlers.utils import calc_command
+                await calc_command(update, context)
+                return
+            elif state == "awaiting_translate":
+                user["state"] = None
+                await storage.save()
+                context.args = text.split()
+                from bot.handlers.groups import translate_command
+                await translate_command(update, context)
+                return
+
             # Default: AI chat
             from bot.ai import ai_handler
-            
-            msg = await update.message.reply_text("⏳ AI думает...")
-            system_prompt = "Ты AI ассистент. "
+            user["stats"]["msgs"] = user["stats"].get("msgs", 0) + 1
+            msg = await update.message.reply_text(t(lang, "ai_thinking"))
+            system = "You are an AI assistant. "
+            if user.get("disco_mode"):
+                system = "You are a fun creative AI. Use emojis and humor. "
             if user.get("memory"):
-                system_prompt += "Память:\n"
+                system += "Memory:\n"
                 for k, v in user["memory"].items():
-                    system_prompt += f"- {k}: {v}\n"
-            
+                    system += f"- {k}: {v}\n"
             try:
-                response = await ai_handler.generate_response(user_id, text, system_prompt=system_prompt)
+                response = await ai_handler.generate_response(uid, text, system_prompt=system)
                 if len(response) > 4000:
                     for i in range(0, len(response), 4000):
                         await update.message.reply_text(response[i:i+4000])
@@ -245,4 +286,4 @@ async def keyboard_message_handler(update: Update, context: ContextTypes.DEFAULT
                 else:
                     await msg.edit_text(response)
             except Exception as e:
-                await msg.edit_text(f"❌ Ошибка AI: {str(e)}")
+                await msg.edit_text(f"❌ {e}")
