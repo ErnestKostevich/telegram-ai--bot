@@ -54,12 +54,28 @@ async def main():
     application.add_handler(CommandHandler("broadcast", handlers.broadcast_command))
     application.add_handler(CommandHandler("stats", handlers.stats_command))
 
+    # Games & Utils
+    application.add_handler(CommandHandler("dice", handlers.dice_command))
+    application.add_handler(CommandHandler("coinflip", handlers.coinflip_command))
+    application.add_handler(CommandHandler("random", handlers.random_command))
+    application.add_handler(CommandHandler("joke", handlers.joke_command))
+    application.add_handler(CommandHandler("time", handlers.time_command))
+    application.add_handler(CommandHandler("weather", handlers.weather_command))
+    application.add_handler(CommandHandler("calc", handlers.calc_command))
+    application.add_handler(CommandHandler("password", handlers.password_command))
+
     # Groups
     application.add_handler(CommandHandler("grouphelp", handlers.grouphelp_command))
     application.add_handler(CommandHandler("ban", handlers.ban_command))
     application.add_handler(CommandHandler("ask", handlers.ask_command))
     application.add_handler(CommandHandler("rules", handlers.rules_command))
     application.add_handler(CommandHandler("setrules", handlers.setrules_command))
+
+    # Interactive
+    from telegram.ext import CallbackQueryHandler
+    application.add_handler(CallbackQueryHandler(handlers.button_callback))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.keyboard_message_handler))
+    application.add_handler(MessageHandler(filters.PHOTO | filters.Document.ALL, handlers.media_message_handler))
 
     # Start the scheduler for reminders
     from bot.scheduler import start_scheduler
