@@ -51,14 +51,20 @@ def get_tools_keyboard(lang="ru"):
 def get_help_keyboard(lang="ru", submenu=None):
     if submenu:
         return InlineKeyboardMarkup([[InlineKeyboardButton(get_text(lang, "ik_back"), callback_data="help_back")]])
+    labels = {
+        "ru": {"base": "🏠 Базовые", "ai": "💬 AI & Память", "notes": "📝 Заметки", "vip": "💎 VIP", "groups": "👥 Группы", "games": "🎮 Игры", "creator": "👑 Создатель"},
+        "en": {"base": "🏠 Basic", "ai": "💬 AI & Memory", "notes": "📝 Notes", "vip": "💎 VIP", "groups": "👥 Groups", "games": "🎮 Games", "creator": "👑 Creator"},
+        "it": {"base": "🏠 Base", "ai": "💬 AI & Memoria", "notes": "📝 Note", "vip": "💎 VIP", "groups": "👥 Gruppi", "games": "🎮 Giochi", "creator": "👑 Creatore"}
+    }
+    lb = labels.get(lang, labels["en"])
     keyboard = [
-        [InlineKeyboardButton("🏠 Base", callback_data="help_base"),
-         InlineKeyboardButton("💬 AI", callback_data="help_ai")],
-        [InlineKeyboardButton("📝 Notes", callback_data="help_notes"),
-         InlineKeyboardButton("💎 VIP", callback_data="help_vip")],
-        [InlineKeyboardButton("👥 Groups", callback_data="help_groups"),
-         InlineKeyboardButton("🎮 Games", callback_data="help_games")],
-        [InlineKeyboardButton("👑 Creator", callback_data="help_creator")]
+        [InlineKeyboardButton(lb["base"], callback_data="help_base"),
+         InlineKeyboardButton(lb["ai"], callback_data="help_ai")],
+        [InlineKeyboardButton(lb["notes"], callback_data="help_notes"),
+         InlineKeyboardButton(lb["vip"], callback_data="help_vip")],
+        [InlineKeyboardButton(lb["groups"], callback_data="help_groups"),
+         InlineKeyboardButton(lb["games"], callback_data="help_games")],
+        [InlineKeyboardButton(lb["creator"], callback_data="help_creator")]
     ]
     return InlineKeyboardMarkup(keyboard)
 
