@@ -164,15 +164,54 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def keyboard_message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
-    from bot.i18n import translations
-
-    all_btns = {}
-    for key_prefix in ["btn_ai", "btn_mem", "btn_notes", "btn_vip", "btn_settings", "btn_games", "btn_tools", "btn_lang"]:
-        all_btns[key_prefix] = [tr[key_prefix] for tr in translations.values() if key_prefix in tr]
+    if not text:
+        return
 
     uid = update.effective_user.id
     user = storage.get_user(uid)
     lang = user.get("language", "ru")
+    is_private = update.effective_chat.type == 'private'
+    is_group = update.effective_chat.type in ['group', 'supergroup']
+
+    # --- In GROUPS: only respond to @mentions or replies to the bot ---
+    if is_group:
+        bot_username = (await context.bot.get_me()).username
+        is_mention = f"@{bot_username}" in text
+        is_reply_to_bot = (
+            update.message.reply_to_message and
+            update.message.reply_to_message.from_user and
+            update.message.reply_to_message.from_user.id == context.bot.id
+        )
+
+        if is_mention or is_reply_to_bot:
+            # Strip the @mention from the query
+            query = text.replace(f"@{bot_username}", "").strip()
+            if not query:
+                return
+
+            from bot.ai import ai_handler
+            msg = await update.message.reply_text(t(lang, "ai_thinking"))
+            system = "You are an AI assistant in a group chat. Be concise and helpful. "
+            if user.get("disco_mode"):
+                system = "You are a fun creative AI in a group chat. Use emojis and humor. Be concise. "
+            try:
+                response = await ai_handler.generate_response(uid, query, system_prompt=system)
+                if len(response) > 4000:
+                    for i in range(0, len(response), 4000):
+                        await update.message.reply_text(response[i:i+4000])
+                    await msg.delete()
+                else:
+                    await msg.edit_text(response)
+            except Exception as e:
+                await msg.edit_text(f"❌ {e}")
+        # In groups, ignore everything else (don't match keyboard buttons)
+        return
+
+    # --- PRIVATE chat: handle keyboard buttons ---
+    from bot.i18n import translations
+    all_btns = {}
+    for key_prefix in ["btn_ai", "btn_mem", "btn_notes", "btn_vip", "btn_settings", "btn_games", "btn_tools", "btn_lang"]:
+        all_btns[key_prefix] = [tr[key_prefix] for tr in translations.values() if key_prefix in tr]
 
     if text in all_btns.get("btn_ai", []):
         await update.message.reply_text(t(lang, "ai_no_query"))
@@ -193,7 +232,8 @@ async def keyboard_message_handler(update: Update, context: ContextTypes.DEFAULT
     elif text in all_btns.get("btn_lang", []):
         await update.message.reply_text("🌐", reply_markup=get_lang_keyboard())
     else:
-        if update.effective_chat.type == 'private' and not text.startswith('/'):
+        # Private chat: handle states or fallback to AI
+        if not text.startswith('/'):
             state = user.get("state")
 
             if state == "awaiting_generate_prompt":
@@ -266,7 +306,7 @@ async def keyboard_message_handler(update: Update, context: ContextTypes.DEFAULT
                 await translate_command(update, context)
                 return
 
-            # Default: AI chat
+            # Default: AI chat in private
             from bot.ai import ai_handler
             user["stats"]["msgs"] = user["stats"].get("msgs", 0) + 1
             msg = await update.message.reply_text(t(lang, "ai_thinking"))
