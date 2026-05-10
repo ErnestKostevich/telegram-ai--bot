@@ -49,9 +49,10 @@ def get_tools_keyboard(lang="ru"):
     ]
     return InlineKeyboardMarkup(keyboard)
 
-def get_help_keyboard(lang="ru", submenu=None):
+def get_help_keyboard(lang="ru", submenu=None, user_id=None):
     if submenu:
         return InlineKeyboardMarkup([[InlineKeyboardButton(get_text(lang, "ik_back"), callback_data="help_back")]])
+    from bot.config import CREATOR_ID
     labels = {
         "ru": {"base": "🏠 Базовые", "ai": "💬 AI & Память", "notes": "📝 Заметки", "vip": "💎 VIP", "groups": "👥 Группы", "games": "🎮 Игры", "creator": "👑 Создатель"},
         "en": {"base": "🏠 Basic", "ai": "💬 AI & Memory", "notes": "📝 Notes", "vip": "💎 VIP", "groups": "👥 Groups", "games": "🎮 Games", "creator": "👑 Creator"},
@@ -65,8 +66,9 @@ def get_help_keyboard(lang="ru", submenu=None):
          InlineKeyboardButton(lb["vip"], callback_data="help_vip")],
         [InlineKeyboardButton(lb["groups"], callback_data="help_groups"),
          InlineKeyboardButton(lb["games"], callback_data="help_games")],
-        [InlineKeyboardButton(lb["creator"], callback_data="help_creator")]
     ]
+    if user_id == CREATOR_ID:
+        keyboard.append([InlineKeyboardButton(lb["creator"], callback_data="help_creator")])
     return InlineKeyboardMarkup(keyboard)
 
 def get_lang_keyboard():

@@ -133,7 +133,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # === Help ===
     elif data == "help_back":
-        await query.edit_message_text(get_text(lang, "help"), parse_mode="HTML", reply_markup=get_help_keyboard(lang))
+        await query.edit_message_text(get_text(lang, "help"), parse_mode="HTML", reply_markup=get_help_keyboard(lang, user_id=uid))
 
     elif data.startswith("help_"):
         section = data.split("_")[1]
@@ -145,7 +145,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "vip": "💎 <b>VIP функции</b>\n\n/vip — статус\n/remind [мин] [текст] — напоминание\n/reminders — список\n/generate [описание] — 🖼 генерация картинок\n/daily — ежедневная награда",
                 "groups": "👥 <b>Группы</b>\n\n🛡 <b>Модерация:</b>\n/warn /mute /ban /kick\n/guardian on|off — AI защита\n\n🤖 <b>AI в группах:</b>\n/ask [вопрос]\n/summary — сводка чата\n/translate [язык] [текст]\n@бот [вопрос] — по упоминанию\n\n📢 <b>Управление:</b>\n/rules • /setrules • /groupstats",
                 "games": "🎮 <b>Игры & Утилиты</b>\n\n🎲 /dice — кубик\n🪙 /coinflip — монетка\n🔢 /random [от] [до]\n😄 /joke — шутка\n🎁 /daily — награда\n🔥 /roast — прожарка\n\n🛠 <b>Утилиты:</b>\n⏰ /time [город]\n🌤 /weather [город]\n🧮 /calc [выражение]\n🔑 /password [длина]\n🌍 /translate [язык] [текст]",
-                "creator": "👑 <b>Команды создателя</b>\n\n/grant_vip [user_id] [дни]\n/broadcast [текст] — рассылка\n/stats — статистика бота"
+                "creator": "👑 <b>Команды создателя</b>\n\n/grant_vip [@user] [week|month|year|forever]\n/grant_vip [@user] remove — забрать\n/users — список пользователей\n/broadcast [текст] — рассылка\n/stats — статистика бота"
             },
             "en": {
                 "base": "🏠 <b>Basic Commands</b>\n\n/start — launch bot\n/help — reference\n/info — about bot\n/status — system status\n/profile — your profile & XP\n/lang — change language\n/disco on|off — party mode 🪩",
@@ -154,7 +154,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "vip": "💎 <b>VIP Features</b>\n\n/vip — status\n/remind [min] [text] — reminder\n/reminders — list\n/generate [prompt] — 🖼 image generation\n/daily — daily reward",
                 "groups": "👥 <b>Groups</b>\n\n🛡 <b>Moderation:</b>\n/warn /mute /ban /kick\n/guardian on|off — AI protection\n\n🤖 <b>Group AI:</b>\n/ask [question]\n/summary — chat summary\n/translate [lang] [text]\n@bot [question] — by mention\n\n📢 <b>Management:</b>\n/rules • /setrules • /groupstats",
                 "games": "🎮 <b>Games & Tools</b>\n\n🎲 /dice — dice roll\n🪙 /coinflip — coin flip\n🔢 /random [min] [max]\n😄 /joke — joke\n🎁 /daily — reward\n🔥 /roast — roast\n\n🛠 <b>Tools:</b>\n⏰ /time [city]\n🌤 /weather [city]\n🧮 /calc [expression]\n🔑 /password [length]\n🌍 /translate [lang] [text]",
-                "creator": "👑 <b>Creator Commands</b>\n\n/grant_vip [user_id] [days]\n/broadcast [text] — mass send\n/stats — bot statistics"
+                "creator": "👑 <b>Creator Commands</b>\n\n/grant_vip [@user] [week|month|year|forever]\n/grant_vip [@user] remove — revoke\n/users — user list\n/broadcast [text] — mass send\n/stats — bot statistics"
             },
             "it": {
                 "base": "🏠 <b>Comandi Base</b>\n\n/start — avvia bot\n/help — guida\n/info — info bot\n/status — stato sistema\n/profile — profilo e XP\n/lang — cambia lingua\n/disco on|off — modalità festa 🪩",
@@ -163,12 +163,12 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "vip": "💎 <b>Funzioni VIP</b>\n\n/vip — stato\n/remind [min] [testo] — promemoria\n/reminders — lista\n/generate [desc] — 🖼 genera immagine\n/daily — premio giornaliero",
                 "groups": "👥 <b>Gruppi</b>\n\n🛡 <b>Moderazione:</b>\n/warn /mute /ban /kick\n/guardian on|off — protezione AI\n\n🤖 <b>AI nel Gruppo:</b>\n/ask [domanda]\n/summary — riassunto chat\n/translate [lingua] [testo]\n@bot [domanda] — per menzione\n\n📢 <b>Gestione:</b>\n/rules • /setrules • /groupstats",
                 "games": "🎮 <b>Giochi & Strumenti</b>\n\n🎲 /dice — dado\n🪙 /coinflip — moneta\n🔢 /random [min] [max]\n😄 /joke — barzelletta\n🎁 /daily — premio\n🔥 /roast — roast\n\n🛠 <b>Strumenti:</b>\n⏰ /time [città]\n🌤 /weather [città]\n🧮 /calc [espressione]\n🔑 /password [lunghezza]\n🌍 /translate [lingua] [testo]",
-                "creator": "👑 <b>Comandi Creatore</b>\n\n/grant_vip [user_id] [giorni]\n/broadcast [testo] — invio massivo\n/stats — statistiche bot"
+                "creator": "👑 <b>Comandi Creatore</b>\n\n/grant_vip [@user] [week|month|year|forever]\n/grant_vip [@user] remove — revocare\n/users — lista utenti\n/broadcast [testo] — invio massivo\n/stats — statistiche bot"
             }
         }
         lang_sections = sections.get(lang, sections["en"])
         text = lang_sections.get(section, f"ℹ️ {section}")
-        await query.edit_message_text(text, parse_mode="HTML", reply_markup=get_help_keyboard(lang, submenu=True))
+        await query.edit_message_text(text, parse_mode="HTML", reply_markup=get_help_keyboard(lang, submenu=True, user_id=uid))
 
     # === Games buttons ===
     elif data == "game_dice":
