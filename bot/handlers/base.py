@@ -3,31 +3,25 @@ from telegram.ext import ContextTypes
 from bot.storage import storage
 from bot.ai import PROVIDERS
 from bot.keyboards import get_main_keyboard, get_help_keyboard
+from bot.i18n import get_text
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     user = storage.get_user(user_id)
     user["stats"]["commands"] += 1
     
-    text = (
-        "🤖 <b>Добро пожаловать в AI DISCO BOT!</b>\n\n"
-        "Я — многофункциональный ИИ-ассистент.\n"
-        "В этой версии внедрена система <b>BYOK (Bring Your Own Key)</b>, "
-        "что дает вам свободу выбора из 10+ провайдеров (Gemini, OpenAI, Anthropic и др.).\n\n"
-        "<b>С чего начать:</b>\n"
-        "1. Перейдите в настройки: <code>/setprovider</code>\n"
-        "2. Установите ваш ключ: <code>/setkey [провайдер] [ключ]</code>\n"
-        "3. Просто общайтесь или отправляйте файлы/фото!\n\n"
-        "👇 <i>Воспользуйтесь меню ниже для управления:</i>"
-    )
-    await update.message.reply_text(text, parse_mode="HTML", reply_markup=get_main_keyboard())
+    user_lang = user.get("language", "ru")
+    
+    text = get_text(user_lang, "welcome")
+    await update.message.reply_text(text, parse_mode="HTML", reply_markup=get_main_keyboard(user_lang))
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     user = storage.get_user(user_id)
     user["stats"]["commands"] += 1
+    user_lang = user.get("language", "ru")
     
-    text = "📚 <b>Справка по командам:</b>\n\nВыберите нужный раздел в меню ниже:"
+    text = get_text(user_lang, "help")
     await update.message.reply_text(text, parse_mode="HTML", reply_markup=get_help_keyboard())
 
 async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -54,3 +48,22 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "⚡ BYOK Модель: Активна"
     )
     await update.message.reply_text(text, parse_mode="HTML")
+
+async def lang_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    user = storage.get_user(user_id)
+    
+    if not context.args:
+        await update.message.reply_text("🌐 Использование / Usage / Uso: /lang [ru|en|it]")
+        return
+        
+    lang = context.args[0].lower()
+    if lang not in ["ru", "en", "it"]:
+        await update.message.reply_text("❌ Доступные языки / Available languages / Lingue disponibili: ru, en, it")
+        return
+        
+    user["language"] = lang
+    storage.save()
+    
+    text = get_text(lang, "lang_changed")
+    await update.message.reply_text(text, reply_markup=get_main_keyboard(lang))

@@ -51,21 +51,34 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def keyboard_message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     
-    if text == "💬 AI Чат":
+    # We must match against any language string for these buttons
+    from bot.i18n import translations
+    
+    btn_ai_vals = [t["btn_ai"] for t in translations.values()]
+    btn_mem_vals = [t["btn_mem"] for t in translations.values()]
+    btn_notes_vals = [t["btn_notes"] for t in translations.values()]
+    btn_vip_vals = [t["btn_vip"] for t in translations.values()]
+    btn_settings_vals = [t["btn_settings"] for t in translations.values()]
+    btn_admin_vals = [t["btn_admin"] for t in translations.values()]
+    btn_lang_vals = [t["btn_lang"] for t in translations.values()]
+    
+    if text in btn_ai_vals:
         await update.message.reply_text("Отправьте ваш запрос с помощью команды /ai [вопрос] или просто напишите мне, если я добавлен в группу с нужными правами.")
-    elif text == "🧠 Память":
+    elif text in btn_mem_vals:
         from bot.handlers.ai_memory import memorylist_command
         await memorylist_command(update, context)
-    elif text == "📝 Заметки":
+    elif text in btn_notes_vals:
         from bot.handlers.notes import notes_command
         await notes_command(update, context)
-    elif text == "💎 VIP Меню":
-        await update.message.reply_text("💎 VIP Управление:", reply_markup=get_vip_keyboard())
-    elif text == "⚙️ Настройки AI":
-        await update.message.reply_text("⚙️ Настройки BYOK:", reply_markup=get_settings_keyboard())
-    elif text == "👑 Админ":
+    elif text in btn_vip_vals:
+        await update.message.reply_text("💎 VIP Меню:", reply_markup=get_vip_keyboard())
+    elif text in btn_settings_vals:
+        await update.message.reply_text("⚙️ Настройки AI:", reply_markup=get_settings_keyboard())
+    elif text in btn_admin_vals:
         from bot.handlers.vip_creator import stats_command
         await stats_command(update, context)
+    elif text in btn_lang_vals:
+        await update.message.reply_text("🌐 Для смены языка отправьте: /lang [ru|en|it]\n🌐 To change language send: /lang [ru|en|it]")
     else:
         # Fallback to AI answer if it's a private chat and not a command
         if update.effective_chat.type == 'private' and not text.startswith('/'):

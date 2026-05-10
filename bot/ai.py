@@ -82,7 +82,7 @@ class AIHandler:
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": prompt})
         async with aiohttp.ClientSession() as session:
-            async with session.post(url, headers=headers, json={"model": "llama3-70b-8192", "messages": messages}) as resp:
+            async with session.post(url, headers=headers, json={"model": "llama-3.1-70b-versatile", "messages": messages}) as resp:
                 data = await resp.json()
                 if "error" in data:
                     raise Exception(data["error"]["message"])
