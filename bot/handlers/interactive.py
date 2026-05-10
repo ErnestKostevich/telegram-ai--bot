@@ -224,6 +224,9 @@ async def keyboard_message_handler(update: Update, context: ContextTypes.DEFAULT
 
     uid = update.effective_user.id
     user = storage.get_user(uid)
+    # Save username for creator lookup
+    if update.effective_user.username:
+        user["username"] = update.effective_user.username
     lang = user.get("language", "ru")
     is_private = update.effective_chat.type == 'private'
     is_group = update.effective_chat.type in ['group', 'supergroup']

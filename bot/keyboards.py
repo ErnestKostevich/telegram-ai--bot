@@ -1,7 +1,8 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
 from bot.i18n import get_text
 
-def get_main_keyboard(lang="ru"):
+def get_main_keyboard(lang="ru", user_id=None):
+    from bot.config import CREATOR_ID
     keyboard = [
         [KeyboardButton(get_text(lang, "btn_ai")), KeyboardButton(get_text(lang, "btn_mem"))],
         [KeyboardButton(get_text(lang, "btn_notes")), KeyboardButton(get_text(lang, "btn_vip"))],
