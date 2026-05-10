@@ -9,7 +9,10 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = storage.get_user(user_id)
     user["stats"]["commands"] += 1
     lang = user.get("language", "ru")
-    await update.message.reply_text(get_text(lang, "welcome"), parse_mode="HTML", reply_markup=get_main_keyboard(lang))
+    if update.effective_chat.type == 'private':
+        await update.message.reply_text(get_text(lang, "welcome"), parse_mode="HTML", reply_markup=get_main_keyboard(lang))
+    else:
+        await update.message.reply_text(get_text(lang, "welcome"), parse_mode="HTML")
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
