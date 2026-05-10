@@ -8,6 +8,9 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     user = storage.get_user(user_id)
     user["stats"]["commands"] += 1
+    # Save username for creator lookup
+    if update.effective_user.username:
+        user["username"] = update.effective_user.username
     lang = user.get("language", "ru")
     if update.effective_chat.type == 'private':
         await update.message.reply_text(get_text(lang, "welcome"), parse_mode="HTML", reply_markup=get_main_keyboard(lang))

@@ -46,6 +46,7 @@ def main():
         ("vip", handlers.vip_command), ("remind", handlers.remind_command),
         ("reminders", handlers.reminders_command), ("grant_vip", handlers.grant_vip_command),
         ("broadcast", handlers.broadcast_command), ("stats", handlers.stats_command),
+        ("users", handlers.users_command),
     ]:
         application.add_handler(CommandHandler(cmd, fn))
 
