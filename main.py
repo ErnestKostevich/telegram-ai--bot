@@ -12,17 +12,22 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-async def main():
-    logger.info("Starting AI DISCO BOT (BYOK Edition)...")
-    
-    # Load data from GitHub API
+async def post_init(application: Application):
+    logger.info("Initializing storage and scheduler...")
     await storage.load()
+    
+    from bot.scheduler import start_scheduler
+    start_scheduler(application.bot)
+    logger.info("Bot is ready!")
+
+def main():
+    logger.info("Starting AI DISCO BOT (BYOK Edition)...")
     
     if not BOT_TOKEN:
         logger.error("BOT_TOKEN is not set!")
         return
 
-    application = Application.builder().token(BOT_TOKEN).build()
+    application = Application.builder().token(BOT_TOKEN).post_init(post_init).build()
 
     # Base
     application.add_handler(CommandHandler("start", handlers.start_command))
@@ -77,12 +82,8 @@ async def main():
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.keyboard_message_handler))
     application.add_handler(MessageHandler(filters.PHOTO | filters.Document.ALL, handlers.media_message_handler))
 
-    # Start the scheduler for reminders
-    from bot.scheduler import start_scheduler
-    start_scheduler(application.bot)
-
     logger.info("Bot is polling...")
-    await application.run_polling(drop_pending_updates=True)
+    application.run_polling(drop_pending_updates=True)
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
