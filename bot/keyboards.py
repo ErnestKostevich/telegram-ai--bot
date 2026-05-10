@@ -12,23 +12,23 @@ def get_main_keyboard(lang="ru"):
 
 def get_settings_keyboard(lang="ru"):
     keyboard = [
-        [InlineKeyboardButton("⚡ Выбрать провайдера", callback_data="ai_provider")],
-        [InlineKeyboardButton("🧠 Выбрать модель", callback_data="ai_model")],
-        [InlineKeyboardButton("🔑 Настроить ключи", callback_data="ai_keys")]
+        [InlineKeyboardButton(get_text(lang, "ik_provider"), callback_data="ai_provider")],
+        [InlineKeyboardButton(get_text(lang, "ik_model"), callback_data="ai_model")],
+        [InlineKeyboardButton(get_text(lang, "ik_keys"), callback_data="ai_keys")]
     ]
     return InlineKeyboardMarkup(keyboard)
 
 def get_vip_keyboard(lang="ru"):
     keyboard = [
-        [InlineKeyboardButton("⏰ Мои напоминания", callback_data="vip_reminders")],
-        [InlineKeyboardButton("🖼️ Генерация картинок", callback_data="vip_generate")],
-        [InlineKeyboardButton("🛡️ AI Guardian", callback_data="vip_guardian")]
+        [InlineKeyboardButton(get_text(lang, "ik_reminders"), callback_data="vip_reminders")],
+        [InlineKeyboardButton(get_text(lang, "ik_generate"), callback_data="vip_generate")],
+        [InlineKeyboardButton(get_text(lang, "ik_guardian"), callback_data="vip_guardian")]
     ]
     return InlineKeyboardMarkup(keyboard)
 
 def get_help_keyboard(lang="ru", submenu=None):
     if submenu:
-        return InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="help_back")]])
+        return InlineKeyboardMarkup([[InlineKeyboardButton(get_text(lang, "ik_back"), callback_data="help_back")]])
         
     keyboard = [
         [
