@@ -36,6 +36,47 @@ async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text(text, parse_mode="HTML")
 
+async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    user = storage.get_user(user_id)
+    
+    xp = user.get("stats", {}).get("commands", 0) * 10
+    level = xp // 100 + 1
+    next_level_xp = level * 100
+    progress = xp % 100
+    
+    vip_status = "👑 Да" if user.get("vip") else "❌ Нет"
+    
+    text = (
+        f"👤 <b>Ваш профиль (Уровень {level})</b>\n\n"
+        f"✨ Опыт: {xp} / {next_level_xp} XP\n"
+        f"📊 Прогресс: {'▓' * (progress//10)}{'░' * (10 - progress//10)} {progress}%\n\n"
+        f"💎 VIP Статус: {vip_status}\n"
+        f"💬 Отправлено сообщений: {user.get('stats', {}).get('msgs', 0)}\n"
+        f"⚡ BYOK Провайдер: {user.get('ai_provider', 'gemini')}\n"
+        f"🧠 Модель: {user.get('ai_model', 'По умолчанию')}"
+    )
+    await update.message.reply_text(text, parse_mode="HTML")
+
+async def disco_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    user = storage.get_user(user_id)
+    
+    if not context.args:
+        status = "ВКЛЮЧЕН" if user.get("disco_mode") else "ВЫКЛЮЧЕН"
+        await update.message.reply_text(f"🪩 <b>AI Disco Mode</b> сейчас {status}.\nИспользование: /disco [on|off]", parse_mode="HTML")
+        return
+        
+    action = context.args[0].lower()
+    if action == "on":
+        user["disco_mode"] = True
+        await update.message.reply_text("🪩 <b>AI Disco Mode ВКЛЮЧЕН!</b> Бот будет отвечать более творчески, с юмором и использовать много сленга/эмодзи.", parse_mode="HTML")
+    elif action == "off":
+        user["disco_mode"] = False
+        await update.message.reply_text("🪩 AI Disco Mode ВЫКЛЮЧЕН. Бот вернулся в стандартный режим.")
+        
+    storage.save()
+
 async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     users_count = len(storage.data["users"])
     groups_count = len(storage.data["groups"])

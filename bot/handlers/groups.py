@@ -117,3 +117,25 @@ async def setrules_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await storage.save()
     
     await update.message.reply_text("✅ Правила успешно установлены!")
+
+async def guardian_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = str(update.effective_chat.id)
+    if update.effective_chat.type == "private":
+        await update.message.reply_text("Эта команда работает только в группах.")
+        return
+        
+    group = storage.get_group(chat_id)
+    if not context.args:
+        status = "включен" if group.get("guardian", False) else "выключен"
+        await update.message.reply_text(f"🛡️ AI Guardian сейчас {status}.\nИспользование: /guardian [on|off]")
+        return
+        
+    action = context.args[0].lower()
+    if action == "on":
+        group["guardian"] = True
+        await update.message.reply_text("🛡️ AI Guardian успешно ВКЛЮЧЕН! Теперь бот будет следить за порядком и фильтровать спам/токсичность.")
+    elif action == "off":
+        group["guardian"] = False
+        await update.message.reply_text("🛡️ AI Guardian ВЫКЛЮЧЕН.")
+        
+    await storage.save()
