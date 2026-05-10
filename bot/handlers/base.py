@@ -22,7 +22,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = storage.get_user(user_id)
     user["stats"]["commands"] += 1
     lang = user.get("language", "ru")
-    await update.message.reply_text(get_text(lang, "help"), parse_mode="HTML", reply_markup=get_help_keyboard(lang))
+    await update.message.reply_text(get_text(lang, "help"), parse_mode="HTML", reply_markup=get_help_keyboard(lang, user_id=user_id))
 
 async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = storage.get_user(update.effective_user.id).get("language", "ru")
