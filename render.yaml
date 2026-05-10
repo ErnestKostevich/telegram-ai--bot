@@ -1,10 +1,5 @@
-databases:
-  - name: bot_db
-    databaseName: botdb
-    user: botuser
-
 services:
-  - type: web
+  - type: worker
     name: telegram-ai-bot
     env: python
     plan: free
@@ -12,36 +7,12 @@ services:
     startCommand: python main.py
     envVars:
       - key: PYTHON_VERSION
-        value: 3.12.7
-      - key: PG_HOST
-        fromDatabase:
-          name: bot_db
-          property: host
-      - key: PG_PORT
-        fromDatabase:
-          name: bot_db
-          property: port
-      - key: PG_DATABASE
-        fromDatabase:
-          name: bot_db
-          property: database
-      - key: PG_USER
-        fromDatabase:
-          name: bot_db
-          property: user
-      - key: PG_PASSWORD
-        fromDatabase:
-          name: bot_db
-          property: password
+        value: 3.11.0
       - key: BOT_TOKEN
         sync: false
-      - key: GEMINI_API_KEY
+      - key: GITHUB_TOKEN
         sync: false
-      - key: CURRENCY_API_KEY
+      - key: GITHUB_REPO
         sync: false
-      - key: OPENWEATHER_API_KEY
-        sync: false
-      - key: NEWSAPI_KEY
-        sync: false
-      - key: ALPHAVANTAGE_API_KEY
+      - key: CREATOR_ID
         sync: false
