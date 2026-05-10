@@ -10,7 +10,7 @@ from .media import media_message_handler
 from .utils import time_command, weather_command, calc_command, password_command
 
 __all__ = [
-    "start_command", "help_command", "info_command", "status_command",
+    "start_command", "help_command", "info_command", "status_command", "lang_command",
     "setprovider_command", "setkey_command", "ai_command", "memorysave_command", "memoryget_command", "memorylist_command", "memorydel_command",
     "note_command", "notes_command", "delnote_command",
     "vip_command", "remind_command", "reminders_command", "grant_vip_command", "broadcast_command", "stats_command",

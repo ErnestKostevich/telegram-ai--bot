@@ -34,6 +34,7 @@ def main():
     application.add_handler(CommandHandler("help", handlers.help_command))
     application.add_handler(CommandHandler("info", handlers.info_command))
     application.add_handler(CommandHandler("status", handlers.status_command))
+    application.add_handler(CommandHandler("lang", handlers.lang_command))
 
     # AI & Memory
     application.add_handler(CommandHandler("setprovider", handlers.setprovider_command))

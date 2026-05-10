@@ -1,10 +1,12 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
+from bot.i18n import get_text
 
-def get_main_keyboard():
+def get_main_keyboard(lang="ru"):
     keyboard = [
-        [KeyboardButton("💬 AI Чат"), KeyboardButton("🧠 Память")],
-        [KeyboardButton("📝 Заметки"), KeyboardButton("💎 VIP Меню")],
-        [KeyboardButton("⚙️ Настройки AI"), KeyboardButton("👑 Админ")]
+        [KeyboardButton(get_text(lang, "btn_ai")), KeyboardButton(get_text(lang, "btn_mem"))],
+        [KeyboardButton(get_text(lang, "btn_notes")), KeyboardButton(get_text(lang, "btn_vip"))],
+        [KeyboardButton(get_text(lang, "btn_settings")), KeyboardButton(get_text(lang, "btn_admin"))],
+        [KeyboardButton(get_text(lang, "btn_lang"))]
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
