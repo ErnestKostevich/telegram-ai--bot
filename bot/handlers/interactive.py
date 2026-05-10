@@ -44,9 +44,27 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif section == "creator":
             text = "👑 <b>Создатель:</b>\n/grant_vip, /broadcast, /stats"
         elif section == "games":
-            text = "🎮 <b>Игры:</b>\n/dice, /coinflip, /random, /joke"
+            text = "🎮 <b>Игры:</b>\n/dice, /coinflip, /random, /joke\n🛠 <b>Утилиты:</b>\n/time, /weather, /calc, /password"
             
-        await query.edit_message_text(text, parse_mode="HTML")
+        await query.edit_message_text(text, parse_mode="HTML", reply_markup=get_help_keyboard(submenu=True))
+        
+    elif data == "help_back":
+        from bot.i18n import get_text
+        user_id = update.effective_user.id
+        user = storage.get_user(user_id)
+        user_lang = user.get("language", "ru")
+        text = get_text(user_lang, "help")
+        await query.edit_message_text(text, parse_mode="HTML", reply_markup=get_help_keyboard())
+        
+    elif data == "ai_model":
+        await query.edit_message_text(
+            "🧠 <b>Выбор модели</b>\n\n"
+            "Вы можете указать любую конкретную модель вашего провайдера (например, gpt-4o, claude-3-5-sonnet-20240620).\n\n"
+            "Используйте команду: <code>/setmodel [название]</code>",
+            parse_mode="HTML"
+        )
+    elif data == "vip_guardian":
+        await query.edit_message_text("🛡️ <b>AI Guardian</b>\n\nЗащита от спама и токсичности. Включить в группе: <code>/guardian on</code>", parse_mode="HTML")
 
 async def keyboard_message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text

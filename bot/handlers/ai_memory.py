@@ -45,6 +45,21 @@ async def setkey_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception:
         await update.message.reply_text(f"✅ Ключ для {provider} успешно сохранен. Внимание: удаляйте свои ключи из чата для безопасности!")
 
+async def setmodel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    user = storage.get_user(user_id)
+    
+    if not context.args:
+        current_model = user.get("ai_model", "По умолчанию")
+        await update.message.reply_text(f"Использование: /setmodel [название]\nТекущая модель: {current_model}")
+        return
+        
+    model = " ".join(context.args)
+    user["ai_model"] = model
+    await storage.save()
+    
+    await update.message.reply_text(f"🧠 Модель успешно изменена на: {model}")
+
 async def ai_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     user = storage.get_user(user_id)

@@ -10,21 +10,26 @@ def get_main_keyboard(lang="ru"):
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
-def get_settings_keyboard():
+def get_settings_keyboard(lang="ru"):
     keyboard = [
-        [InlineKeyboardButton("Выбрать провайдера", callback_data="ai_provider")],
-        [InlineKeyboardButton("Настроить ключи", callback_data="ai_keys")]
+        [InlineKeyboardButton("⚡ Выбрать провайдера", callback_data="ai_provider")],
+        [InlineKeyboardButton("🧠 Выбрать модель", callback_data="ai_model")],
+        [InlineKeyboardButton("🔑 Настроить ключи", callback_data="ai_keys")]
     ]
     return InlineKeyboardMarkup(keyboard)
 
-def get_vip_keyboard():
+def get_vip_keyboard(lang="ru"):
     keyboard = [
         [InlineKeyboardButton("⏰ Мои напоминания", callback_data="vip_reminders")],
-        [InlineKeyboardButton("🖼️ Генерация картинок", callback_data="vip_generate")]
+        [InlineKeyboardButton("🖼️ Генерация картинок", callback_data="vip_generate")],
+        [InlineKeyboardButton("🛡️ AI Guardian", callback_data="vip_guardian")]
     ]
     return InlineKeyboardMarkup(keyboard)
 
-def get_help_keyboard():
+def get_help_keyboard(lang="ru", submenu=None):
+    if submenu:
+        return InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="help_back")]])
+        
     keyboard = [
         [
             InlineKeyboardButton("🏠 Базовые", callback_data="help_base"),
@@ -38,6 +43,6 @@ def get_help_keyboard():
             InlineKeyboardButton("👥 Группы", callback_data="help_groups"),
             InlineKeyboardButton("👑 Создатель", callback_data="help_creator")
         ],
-        [InlineKeyboardButton("🎮 Игры & Развлечения", callback_data="help_games")]
+        [InlineKeyboardButton("🎮 Игры & Утилиты", callback_data="help_games")]
     ]
     return InlineKeyboardMarkup(keyboard)

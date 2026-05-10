@@ -35,10 +35,13 @@ def main():
     application.add_handler(CommandHandler("info", handlers.info_command))
     application.add_handler(CommandHandler("status", handlers.status_command))
     application.add_handler(CommandHandler("lang", handlers.lang_command))
+    application.add_handler(CommandHandler("profile", handlers.profile_command))
+    application.add_handler(CommandHandler("disco", handlers.disco_command))
 
     # AI & Memory
     application.add_handler(CommandHandler("setprovider", handlers.setprovider_command))
     application.add_handler(CommandHandler("setkey", handlers.setkey_command))
+    application.add_handler(CommandHandler("setmodel", handlers.setmodel_command))
     application.add_handler(CommandHandler("ai", handlers.ai_command))
     application.add_handler(CommandHandler("memorysave", handlers.memorysave_command))
     application.add_handler(CommandHandler("memoryget", handlers.memoryget_command))
@@ -49,6 +52,7 @@ def main():
     application.add_handler(CommandHandler("note", handlers.note_command))
     application.add_handler(CommandHandler("notes", handlers.notes_command))
     application.add_handler(CommandHandler("delnote", handlers.delnote_command))
+    application.add_handler(CommandHandler("todo", handlers.todo_command))
 
     # VIP
     application.add_handler(CommandHandler("vip", handlers.vip_command))
@@ -69,6 +73,7 @@ def main():
     application.add_handler(CommandHandler("weather", handlers.weather_command))
     application.add_handler(CommandHandler("calc", handlers.calc_command))
     application.add_handler(CommandHandler("password", handlers.password_command))
+    application.add_handler(CommandHandler("generate", handlers.generate_command))
 
     # Groups
     application.add_handler(CommandHandler("grouphelp", handlers.grouphelp_command))
@@ -76,6 +81,7 @@ def main():
     application.add_handler(CommandHandler("ask", handlers.ask_command))
     application.add_handler(CommandHandler("rules", handlers.rules_command))
     application.add_handler(CommandHandler("setrules", handlers.setrules_command))
+    application.add_handler(CommandHandler("guardian", handlers.guardian_command))
 
     # Interactive
     from telegram.ext import CallbackQueryHandler
