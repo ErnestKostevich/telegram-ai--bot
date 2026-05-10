@@ -146,9 +146,13 @@ async def keyboard_message_handler(update: Update, context: ContextTypes.DEFAULT
         from bot.handlers.notes import notes_command
         await notes_command(update, context)
     elif text in btn_vip_vals:
-        await update.message.reply_text("💎 VIP Меню:", reply_markup=get_vip_keyboard())
+        from bot.i18n import get_text
+        user_lang = storage.get_user(update.effective_user.id).get("language", "ru")
+        await update.message.reply_text(get_text(user_lang, "vip_menu"), reply_markup=get_vip_keyboard(user_lang))
     elif text in btn_settings_vals:
-        await update.message.reply_text("⚙️ Настройки AI:", reply_markup=get_settings_keyboard())
+        from bot.i18n import get_text
+        user_lang = storage.get_user(update.effective_user.id).get("language", "ru")
+        await update.message.reply_text(get_text(user_lang, "settings_menu"), reply_markup=get_settings_keyboard(user_lang))
     elif text in btn_admin_vals:
         from bot.handlers.vip_creator import stats_command
         await stats_command(update, context)

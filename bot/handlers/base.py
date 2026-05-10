@@ -39,23 +39,29 @@ async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     user = storage.get_user(user_id)
+    user_lang = user.get("language", "ru")
     
     xp = user.get("stats", {}).get("commands", 0) * 10
     level = xp // 100 + 1
     next_level_xp = level * 100
     progress = xp % 100
     
-    vip_status = "👑 Да" if user.get("vip") else "❌ Нет"
+    from bot.i18n import get_text
+    vip_status = get_text(user_lang, "status_yes") if user.get("vip") else get_text(user_lang, "status_no")
     
-    text = (
-        f"👤 <b>Ваш профиль (Уровень {level})</b>\n\n"
-        f"✨ Опыт: {xp} / {next_level_xp} XP\n"
-        f"📊 Прогресс: {'▓' * (progress//10)}{'░' * (10 - progress//10)} {progress}%\n\n"
-        f"💎 VIP Статус: {vip_status}\n"
-        f"💬 Отправлено сообщений: {user.get('stats', {}).get('msgs', 0)}\n"
-        f"⚡ BYOK Провайдер: {user.get('ai_provider', 'gemini')}\n"
-        f"🧠 Модель: {user.get('ai_model', 'По умолчанию')}"
+    template = get_text(user_lang, "profile_title")
+    text = template.format(
+        level=level,
+        xp=xp,
+        next_level_xp=next_level_xp,
+        progress_bar='▓' * (progress//10) + '░' * (10 - progress//10),
+        progress=progress,
+        vip_status=vip_status,
+        msgs=user.get('stats', {}).get('msgs', 0),
+        provider=user.get('ai_provider', 'gemini'),
+        model=user.get('ai_model', 'По умолчанию')
     )
+    
     await update.message.reply_text(text, parse_mode="HTML")
 
 async def disco_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
