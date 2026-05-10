@@ -70,6 +70,14 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_message(chat_id=update.effective_chat.id, text=text, reply_markup=get_main_keyboard(lang))
         
     # Help sections
+    elif data == "help_back":
+        from bot.i18n import get_text
+        user_id = update.effective_user.id
+        user = storage.get_user(user_id)
+        user_lang = user.get("language", "ru")
+        text = get_text(user_lang, "help")
+        await query.edit_message_text(text, parse_mode="HTML", reply_markup=get_help_keyboard(user_lang))
+        
     elif data.startswith("help_"):
         section = data.split("_")[1]
         text = ""
@@ -88,15 +96,10 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif section == "games":
             text = "🎮 <b>Игры:</b>\n/dice, /coinflip, /random, /joke\n🛠 <b>Утилиты:</b>\n/time, /weather, /calc, /password"
             
-        await query.edit_message_text(text, parse_mode="HTML", reply_markup=get_help_keyboard(submenu=True))
-        
-    elif data == "help_back":
-        from bot.i18n import get_text
         user_id = update.effective_user.id
         user = storage.get_user(user_id)
         user_lang = user.get("language", "ru")
-        text = get_text(user_lang, "help")
-        await query.edit_message_text(text, parse_mode="HTML", reply_markup=get_help_keyboard())
+        await query.edit_message_text(text, parse_mode="HTML", reply_markup=get_help_keyboard(user_lang, submenu=True))
         
     elif data == "ai_model":
         user_id = update.effective_user.id
