@@ -82,6 +82,24 @@ def main():
     application.add_handler(CommandHandler("rules", handlers.rules_command))
     application.add_handler(CommandHandler("setrules", handlers.setrules_command))
     application.add_handler(CommandHandler("guardian", handlers.guardian_command))
+    
+    # Extended Missing Commands
+    from bot.handlers import extended
+    application.add_handler(CommandHandler("warn", extended.warn_command))
+    application.add_handler(CommandHandler("mute", extended.mute_command))
+    application.add_handler(CommandHandler("purge", extended.purge_command))
+    application.add_handler(CommandHandler("antispam", extended.antispam_command))
+    application.add_handler(CommandHandler("groupstats", extended.groupstats_command))
+    application.add_handler(CommandHandler("rank", extended.rank_command))
+    application.add_handler(CommandHandler("translate", extended.translate_command))
+    application.add_handler(CommandHandler("daily", extended.daily_command))
+    application.add_handler(CommandHandler("rep", extended.rep_command))
+    application.add_handler(CommandHandler("roast", extended.roast_command))
+    
+    # Generic mock commands for the rest
+    mock_cmds = ["warnings", "unwarn", "unmute", "kick", "antilink", "caps", "leaderboard", "welcome", "goodbye", "summary", "topic", "idea", "rules_ai", "quest", "quiz", "vote", "event", "pin", "unpin", "announce", "slowmode", "logs", "vipgroup", "setpremium", "customwelcome", "autorole", "aivoice"]
+    for cmd in mock_cmds:
+        application.add_handler(CommandHandler(cmd, extended.generic_mock_command))
 
     # Interactive
     from telegram.ext import CallbackQueryHandler
