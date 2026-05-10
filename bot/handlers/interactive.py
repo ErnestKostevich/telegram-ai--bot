@@ -1,6 +1,7 @@
 from telegram import Update
 from telegram.ext import ContextTypes
-from bot.keyboards import get_settings_keyboard, get_vip_keyboard
+from bot.keyboards import get_settings_keyboard, get_vip_keyboard, get_lang_keyboard, get_main_keyboard, get_help_keyboard
+from bot.storage import storage
 
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -25,7 +26,21 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "vip_reminders":
         await query.edit_message_text("Для установки напоминания используйте:\n<code>/remind [минуты] [текст]</code>\nСписок: <code>/reminders</code>", parse_mode="HTML")
     elif data == "vip_generate":
-        await query.edit_message_text("Скоро: Генерация изображений через BYOK!", parse_mode="HTML")
+        await query.edit_message_text("🖼️ <b>Генерация изображений</b>\n\nИспользуйте команду:\n<code>/generate [описание изображения]</code>", parse_mode="HTML")
+        
+    elif data.startswith("lang_"):
+        lang = data.split("_")[1]
+        user_id = update.effective_user.id
+        user = storage.get_user(user_id)
+        user["language"] = lang
+        await storage.save()
+        
+        from bot.i18n import get_text
+        text = get_text(lang, "lang_changed")
+        
+        # We delete the inline keyboard message and send a new one with the updated reply_markup (main keyboard)
+        await query.message.delete()
+        await context.bot.send_message(chat_id=update.effective_chat.id, text=text, reply_markup=get_main_keyboard(lang))
         
     # Help sections
     elif data.startswith("help_"):
@@ -96,7 +111,7 @@ async def keyboard_message_handler(update: Update, context: ContextTypes.DEFAULT
         from bot.handlers.vip_creator import stats_command
         await stats_command(update, context)
     elif text in btn_lang_vals:
-        await update.message.reply_text("🌐 Для смены языка отправьте: /lang [ru|en|it]\n🌐 To change language send: /lang [ru|en|it]")
+        await update.message.reply_text("🌐 Выберите язык / Choose language / Scegli la lingua:", reply_markup=get_lang_keyboard())
     else:
         # Fallback to AI answer if it's a private chat and not a command
         if update.effective_chat.type == 'private' and not text.startswith('/'):

@@ -46,3 +46,11 @@ def get_help_keyboard(lang="ru", submenu=None):
         [InlineKeyboardButton("🎮 Игры & Утилиты", callback_data="help_games")]
     ]
     return InlineKeyboardMarkup(keyboard)
+
+def get_lang_keyboard():
+    keyboard = [
+        [InlineKeyboardButton("🇷🇺 Русский", callback_data="lang_ru")],
+        [InlineKeyboardButton("🇬🇧 English", callback_data="lang_en")],
+        [InlineKeyboardButton("🇮🇹 Italiano", callback_data="lang_it")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
