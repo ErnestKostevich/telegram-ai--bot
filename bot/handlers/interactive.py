@@ -104,15 +104,36 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data.startswith("help_"):
         section = data.split("_")[1]
         sections = {
-            "base":    "🏠 <b>Base:</b>\n/start /help /info /status\n/profile /lang /disco",
-            "ai":      "💬 <b>AI:</b>\n/ai [?] — ask AI\n/setprovider /setkey /setmodel\n/memorysave /memoryget\n/memorylist /memorydel",
-            "notes":   "📝 <b>Notes:</b>\n/note /notes /delnote\n/todo — tasks",
-            "vip":     "💎 <b>VIP:</b>\n/vip /remind /reminders\n/generate — images",
-            "groups":  "👥 <b>Groups:</b>\n/grouphelp /ban /warn /mute /kick\n/ask /summary /translate\n/rules /setrules /guardian\n/groupstats",
-            "games":   "🎮 <b>Games & Tools:</b>\n/dice /coinflip /random /joke\n/daily /roast /rep\n/time /weather /calc /password",
-            "creator": "👑 <b>Creator:</b>\n/grant_vip /broadcast /stats",
+            "ru": {
+                "base": "🏠 <b>Базовые команды</b>\n\n/start — запуск бота\n/help — справка\n/info — о боте\n/status — статус системы\n/profile — ваш профиль и XP\n/lang — смена языка\n/disco on|off — режим вечеринки 🪩",
+                "ai": "💬 <b>AI & Память</b>\n\n🤖 <b>Общение:</b>\n/ai [вопрос] — спросить AI\n\n⚙️ <b>Настройка BYOK:</b>\n/setprovider — выбрать провайдера\n/setkey [пров] [ключ] — API ключ\n/setmodel [модель] — выбрать модель\n\n🧠 <b>Память:</b>\n/memorysave [ключ] [значение]\n/memoryget [ключ]\n/memorylist — все записи\n/memorydel [ключ]",
+                "notes": "📝 <b>Заметки & Задачи</b>\n\n📌 <b>Заметки:</b>\n/note [текст] — создать\n/notes — показать все\n/delnote [#] — удалить\n\n📋 <b>Задачи:</b>\n/todo [текст] — добавить\n/todo — список\n/todo done [#] — завершить\n/todo del [#] — удалить",
+                "vip": "💎 <b>VIP функции</b>\n\n/vip — статус\n/remind [мин] [текст] — напоминание\n/reminders — список\n/generate [описание] — 🖼 генерация картинок\n/daily — ежедневная награда",
+                "groups": "👥 <b>Группы</b>\n\n🛡 <b>Модерация:</b>\n/warn /mute /ban /kick\n/guardian on|off — AI защита\n\n🤖 <b>AI в группах:</b>\n/ask [вопрос]\n/summary — сводка чата\n/translate [язык] [текст]\n@бот [вопрос] — по упоминанию\n\n📢 <b>Управление:</b>\n/rules • /setrules • /groupstats",
+                "games": "🎮 <b>Игры & Утилиты</b>\n\n🎲 /dice — кубик\n🪙 /coinflip — монетка\n🔢 /random [от] [до]\n😄 /joke — шутка\n🎁 /daily — награда\n🔥 /roast — прожарка\n\n🛠 <b>Утилиты:</b>\n⏰ /time [город]\n🌤 /weather [город]\n🧮 /calc [выражение]\n🔑 /password [длина]\n🌍 /translate [язык] [текст]",
+                "creator": "👑 <b>Команды создателя</b>\n\n/grant_vip [user_id] [дни]\n/broadcast [текст] — рассылка\n/stats — статистика бота"
+            },
+            "en": {
+                "base": "🏠 <b>Basic Commands</b>\n\n/start — launch bot\n/help — reference\n/info — about bot\n/status — system status\n/profile — your profile & XP\n/lang — change language\n/disco on|off — party mode 🪩",
+                "ai": "💬 <b>AI & Memory</b>\n\n🤖 <b>Chat:</b>\n/ai [question] — ask AI\n\n⚙️ <b>BYOK Setup:</b>\n/setprovider — pick provider\n/setkey [prov] [key] — API key\n/setmodel [model] — pick model\n\n🧠 <b>Memory:</b>\n/memorysave [key] [value]\n/memoryget [key]\n/memorylist — all entries\n/memorydel [key]",
+                "notes": "📝 <b>Notes & Tasks</b>\n\n📌 <b>Notes:</b>\n/note [text] — create\n/notes — show all\n/delnote [#] — delete\n\n📋 <b>Tasks:</b>\n/todo [text] — add\n/todo — list\n/todo done [#] — complete\n/todo del [#] — delete",
+                "vip": "💎 <b>VIP Features</b>\n\n/vip — status\n/remind [min] [text] — reminder\n/reminders — list\n/generate [prompt] — 🖼 image generation\n/daily — daily reward",
+                "groups": "👥 <b>Groups</b>\n\n🛡 <b>Moderation:</b>\n/warn /mute /ban /kick\n/guardian on|off — AI protection\n\n🤖 <b>Group AI:</b>\n/ask [question]\n/summary — chat summary\n/translate [lang] [text]\n@bot [question] — by mention\n\n📢 <b>Management:</b>\n/rules • /setrules • /groupstats",
+                "games": "🎮 <b>Games & Tools</b>\n\n🎲 /dice — dice roll\n🪙 /coinflip — coin flip\n🔢 /random [min] [max]\n😄 /joke — joke\n🎁 /daily — reward\n🔥 /roast — roast\n\n🛠 <b>Tools:</b>\n⏰ /time [city]\n🌤 /weather [city]\n🧮 /calc [expression]\n🔑 /password [length]\n🌍 /translate [lang] [text]",
+                "creator": "👑 <b>Creator Commands</b>\n\n/grant_vip [user_id] [days]\n/broadcast [text] — mass send\n/stats — bot statistics"
+            },
+            "it": {
+                "base": "🏠 <b>Comandi Base</b>\n\n/start — avvia bot\n/help — guida\n/info — info bot\n/status — stato sistema\n/profile — profilo e XP\n/lang — cambia lingua\n/disco on|off — modalità festa 🪩",
+                "ai": "💬 <b>AI & Memoria</b>\n\n🤖 <b>Chat:</b>\n/ai [domanda] — chiedi all'AI\n\n⚙️ <b>Setup BYOK:</b>\n/setprovider — scegli provider\n/setkey [prov] [chiave] — chiave API\n/setmodel [modello] — scegli modello\n\n🧠 <b>Memoria:</b>\n/memorysave [chiave] [valore]\n/memoryget [chiave]\n/memorylist — tutte le voci\n/memorydel [chiave]",
+                "notes": "📝 <b>Note & Compiti</b>\n\n📌 <b>Note:</b>\n/note [testo] — crea\n/notes — mostra\n/delnote [#] — elimina\n\n📋 <b>Compiti:</b>\n/todo [testo] — aggiungi\n/todo — lista\n/todo done [#] — completa\n/todo del [#] — elimina",
+                "vip": "💎 <b>Funzioni VIP</b>\n\n/vip — stato\n/remind [min] [testo] — promemoria\n/reminders — lista\n/generate [desc] — 🖼 genera immagine\n/daily — premio giornaliero",
+                "groups": "👥 <b>Gruppi</b>\n\n🛡 <b>Moderazione:</b>\n/warn /mute /ban /kick\n/guardian on|off — protezione AI\n\n🤖 <b>AI nel Gruppo:</b>\n/ask [domanda]\n/summary — riassunto chat\n/translate [lingua] [testo]\n@bot [domanda] — per menzione\n\n📢 <b>Gestione:</b>\n/rules • /setrules • /groupstats",
+                "games": "🎮 <b>Giochi & Strumenti</b>\n\n🎲 /dice — dado\n🪙 /coinflip — moneta\n🔢 /random [min] [max]\n😄 /joke — barzelletta\n🎁 /daily — premio\n🔥 /roast — roast\n\n🛠 <b>Strumenti:</b>\n⏰ /time [città]\n🌤 /weather [città]\n🧮 /calc [espressione]\n🔑 /password [lunghezza]\n🌍 /translate [lingua] [testo]",
+                "creator": "👑 <b>Comandi Creatore</b>\n\n/grant_vip [user_id] [giorni]\n/broadcast [testo] — invio massivo\n/stats — statistiche bot"
+            }
         }
-        text = sections.get(section, f"ℹ️ {section}")
+        lang_sections = sections.get(lang, sections["en"])
+        text = lang_sections.get(section, f"ℹ️ {section}")
         await query.edit_message_text(text, parse_mode="HTML", reply_markup=get_help_keyboard(lang, submenu=True))
 
     # === Games buttons ===
