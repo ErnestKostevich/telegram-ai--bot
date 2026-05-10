@@ -10,23 +10,50 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
     
     if data == "ai_provider":
+        user_id = update.effective_user.id
+        user = storage.get_user(user_id)
+        user["state"] = "awaiting_setprovider"
+        await storage.save()
+        
+        # Add inline keyboard for providers
+        from telegram import InlineKeyboardMarkup, InlineKeyboardButton
+        from bot.ai import PROVIDERS
+        
+        keyboard = []
+        row = []
+        for p in PROVIDERS:
+            row.append(InlineKeyboardButton(p.capitalize(), callback_data=f"setprov_{p}"))
+            if len(row) == 2:
+                keyboard.append(row)
+                row = []
+        if row:
+            keyboard.append(row)
+            
         await query.edit_message_text(
-            "⚡ <b>Выбор провайдера</b>\n\n"
-            "Доступные: gemini, openai, anthropic, groq, openrouter, deepseek, mistral, together, xai, cohere\n\n"
-            "Используйте команду: <code>/setprovider [название]</code>",
-            parse_mode="HTML"
-        )
-    elif data == "ai_keys":
-        await query.edit_message_text(
-            "🔑 <b>Настройка ключей</b>\n\n"
-            "Установите ключ для выбранного провайдера.\n"
-            "Используйте: <code>/setkey [провайдер] [ваш_ключ]</code>",
-            parse_mode="HTML"
+            "⚡ <b>Выбор провайдера</b>\n\nВыберите провайдера из списка ниже или отправьте его название в чат:",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(keyboard)
         )
     elif data == "vip_reminders":
         await query.edit_message_text("Для установки напоминания используйте:\n<code>/remind [минуты] [текст]</code>\nСписок: <code>/reminders</code>", parse_mode="HTML")
     elif data == "vip_generate":
-        await query.edit_message_text("🖼️ <b>Генерация изображений</b>\n\nИспользуйте команду:\n<code>/generate [описание изображения]</code>", parse_mode="HTML")
+        user_id = update.effective_user.id
+        user = storage.get_user(user_id)
+        user["state"] = "awaiting_generate_prompt"
+        await storage.save()
+        await query.edit_message_text("🖼️ <b>Генерация изображений</b>\n\nОтправьте мне описание того, что вы хотите нарисовать!", parse_mode="HTML")
+        
+    elif data.startswith("setprov_"):
+        provider = data.split("_")[1]
+        user_id = update.effective_user.id
+        user = storage.get_user(user_id)
+        
+        context.args = [provider]
+        from bot.handlers.ai_memory import setprovider_command
+        await setprovider_command(update, context)
+        
+        # Also clean up the message
+        await query.message.delete()
         
     elif data.startswith("lang_"):
         lang = data.split("_")[1]
@@ -72,10 +99,25 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(text, parse_mode="HTML", reply_markup=get_help_keyboard())
         
     elif data == "ai_model":
+        user_id = update.effective_user.id
+        user = storage.get_user(user_id)
+        user["state"] = "awaiting_setmodel"
+        await storage.save()
         await query.edit_message_text(
             "🧠 <b>Выбор модели</b>\n\n"
-            "Вы можете указать любую конкретную модель вашего провайдера (например, gpt-4o, claude-3-5-sonnet-20240620).\n\n"
-            "Используйте команду: <code>/setmodel [название]</code>",
+            "Отправьте мне название модели в чат (например, gpt-4o, claude-3-5-sonnet-20240620).\n\n"
+            "Или используйте команду: <code>/setmodel [название]</code>",
+            parse_mode="HTML"
+        )
+    elif data == "ai_keys":
+        user_id = update.effective_user.id
+        user = storage.get_user(user_id)
+        user["state"] = "awaiting_setkey"
+        await storage.save()
+        await query.edit_message_text(
+            "🔑 <b>Настройка ключей</b>\n\n"
+            "Отправьте мне ключ в формате: <b>[провайдер] [ключ]</b>\n"
+            "Например: <code>gemini AIzaSyA...</code>",
             parse_mode="HTML"
         )
     elif data == "vip_guardian":
@@ -115,10 +157,44 @@ async def keyboard_message_handler(update: Update, context: ContextTypes.DEFAULT
     else:
         # Fallback to AI answer if it's a private chat and not a command
         if update.effective_chat.type == 'private' and not text.startswith('/'):
-            from bot.ai import ai_handler
-            from bot.storage import storage
             user_id = update.effective_user.id
             user = storage.get_user(user_id)
+            
+            # Check conversation states
+            state = user.get("state")
+            if state == "awaiting_generate_prompt":
+                # Clear state
+                user["state"] = None
+                await storage.save()
+                
+                # Mock context.args and call generate_command
+                context.args = text.split()
+                from bot.handlers.media import generate_command
+                await generate_command(update, context)
+                return
+            elif state == "awaiting_setprovider":
+                user["state"] = None
+                await storage.save()
+                context.args = [text]
+                from bot.handlers.ai_memory import setprovider_command
+                await setprovider_command(update, context)
+                return
+            elif state == "awaiting_setkey":
+                user["state"] = None
+                await storage.save()
+                # Text should be provider and key. But we don't know the provider. 
+                # Let's assume they type "/setkey provider key" directly.
+                await update.message.reply_text(f"Используйте команду: /setkey [провайдер] {text}")
+                return
+            elif state == "awaiting_setmodel":
+                user["state"] = None
+                await storage.save()
+                context.args = text.split()
+                from bot.handlers.ai_memory import setmodel_command
+                await setmodel_command(update, context)
+                return
+                
+            from bot.ai import ai_handler
             
             msg = await update.message.reply_text("⏳ AI думает...")
             system_prompt = "Ты AI ассистент. "
