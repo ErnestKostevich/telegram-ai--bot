@@ -5,19 +5,42 @@ from bot.config import CREATOR_ID
 from bot.i18n import t
 import datetime
 
+# Helper: check if VIP is active (auto-expire)
+def check_vip(user):
+    if not user.get("vip"):
+        return False
+    expires = user.get("vip_expires")
+    if expires is None:
+        return True  # forever
+    if datetime.datetime.now().timestamp() > expires:
+        user["vip"] = False
+        user["vip_expires"] = None
+        return False
+    return True
+
 # VIP Commands
 async def vip_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     user = storage.get_user(uid)
     lang = user.get("language", "ru")
-    status = t(lang, "status_yes") if user["vip"] else t(lang, "status_no")
+    is_vip = check_vip(user)
+    if is_vip:
+        expires = user.get("vip_expires")
+        if expires:
+            exp_date = datetime.datetime.fromtimestamp(expires).strftime("%d.%m.%Y")
+            exp_text = {"ru": f"до {exp_date}", "en": f"until {exp_date}", "it": f"fino al {exp_date}"}.get(lang, f"until {exp_date}")
+        else:
+            exp_text = {"ru": "навсегда ♾️", "en": "forever ♾️", "it": "per sempre ♾️"}.get(lang, "forever ♾️")
+        status = f"👑 {t(lang, 'status_yes')} ({exp_text})"
+    else:
+        status = t(lang, "status_no")
     await update.message.reply_text(t(lang, "vip_status", status=status), parse_mode="HTML")
 
 async def remind_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     user = storage.get_user(uid)
     lang = user.get("language", "ru")
-    if not user["vip"]:
+    if not check_vip(user):
         await update.message.reply_text(t(lang, "gen_vip_only"))
         return
     if len(context.args) < 2:
@@ -41,7 +64,7 @@ async def reminders_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     user = storage.get_user(uid)
     lang = user.get("language", "ru")
-    if not user["vip"]:
+    if not check_vip(user):
         await update.message.reply_text(t(lang, "gen_vip_only"))
         return
     user_reminders = [r for r in storage.data["reminders"] if r["user_id"] == uid]
@@ -61,45 +84,69 @@ async def grant_vip_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     if len(context.args) < 1:
         await update.message.reply_text(
-            "👑 <b>Выдача VIP</b>\n\n"
-            "По ID: <code>/grant_vip 123456789</code>\n"
-            "По username: <code>/grant_vip @username</code>\n"
-            "Забрать: <code>/grant_vip @username remove</code>",
+            "👑 <b>Управление VIP</b>\n\n"
+            "<b>Выдать:</b>\n"
+            "<code>/grant_vip @user week</code> — на неделю\n"
+            "<code>/grant_vip @user month</code> — на месяц\n"
+            "<code>/grant_vip @user year</code> — на год\n"
+            "<code>/grant_vip @user forever</code> — навсегда\n\n"
+            "<b>Забрать:</b>\n"
+            "<code>/grant_vip @user remove</code>\n\n"
+            "Можно использовать @username или числовой ID.",
             parse_mode="HTML"
         )
         return
 
     target_arg = context.args[0]
-    remove = len(context.args) > 1 and context.args[1].lower() == "remove"
+    action = context.args[1].lower() if len(context.args) > 1 else "month"
 
-    # Resolve target: by ID or by @username
+    # Resolve target
     target_id = None
+    target_name = target_arg
     if target_arg.startswith("@"):
         username = target_arg[1:].lower()
-        # Search in our storage for a user with this username
         for uid_str, udata in storage.data["users"].items():
             if udata.get("username", "").lower() == username:
                 target_id = int(uid_str)
                 break
         if not target_id:
-            await update.message.reply_text(f"❌ Пользователь @{username} не найден в базе.\nОн должен хотя бы раз написать боту.")
+            await update.message.reply_text(f"❌ @{username} не найден в базе.")
             return
     else:
         try:
             target_id = int(target_arg)
         except ValueError:
-            await update.message.reply_text("❌ Укажите числовой ID или @username.")
+            await update.message.reply_text("❌ Укажите @username или числовой ID.")
             return
 
     target_user = storage.get_user(target_id)
-    if remove:
+    uname = f"@{target_user.get('username', target_id)}"
+
+    if action == "remove":
         target_user["vip"] = False
+        target_user["vip_expires"] = None
         await storage.save()
-        await update.message.reply_text(f"🚫 VIP снят с пользователя {target_id}.")
+        await update.message.reply_text(f"🚫 VIP снят с <b>{uname}</b>", parse_mode="HTML")
     else:
+        durations = {
+            "week": (7, "7 дней"),
+            "month": (30, "30 дней"),
+            "year": (365, "1 год"),
+            "forever": (0, "навсегда"),
+        }
+        if action not in durations:
+            await update.message.reply_text("❌ Доступно: week, month, year, forever, remove")
+            return
+
+        days, label = durations[action]
         target_user["vip"] = True
+        if days > 0:
+            expires = datetime.datetime.now() + datetime.timedelta(days=days)
+            target_user["vip_expires"] = expires.timestamp()
+        else:
+            target_user["vip_expires"] = None  # forever
         await storage.save()
-        await update.message.reply_text(f"✅ VIP выдан пользователю <b>{target_id}</b>!", parse_mode="HTML")
+        await update.message.reply_text(f"✅ VIP выдан <b>{uname}</b> на <b>{label}</b>!", parse_mode="HTML")
 
 async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != CREATOR_ID:

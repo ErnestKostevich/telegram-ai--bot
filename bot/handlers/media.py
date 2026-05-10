@@ -4,12 +4,13 @@ import base64, aiohttp
 from bot.ai import ai_handler
 from bot.storage import storage
 from bot.i18n import t
+from bot.handlers.vip_creator import check_vip
 
 async def media_message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     user = storage.get_user(uid)
     lang = user.get("language", "ru")
-    if not user.get("vip"):
+    if not check_vip(user):
         await update.message.reply_text(t(lang, "gen_vip_only"))
         return
     msg = await update.message.reply_text("🔍 ...")
@@ -25,7 +26,7 @@ async def generate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     user = storage.get_user(uid)
     lang = user.get("language", "ru")
-    if not user.get("vip"):
+    if not check_vip(user):
         await update.message.reply_text(t(lang, "gen_vip_only"))
         return
     if not context.args:
