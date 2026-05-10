@@ -34,17 +34,51 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif data.startswith("setprov_"):
         provider = data.split("_", 1)[1]
-        from bot.ai import PROVIDERS
+        from bot.ai import PROVIDERS, DEFAULT_MODELS
         if provider in PROVIDERS:
             user["ai_provider"] = provider
+            user["ai_model"] = DEFAULT_MODELS.get(provider, "default")
             user["state"] = None
             await storage.save()
             await query.edit_message_text(t(lang, "provider_set", provider=provider), parse_mode="HTML")
 
     elif data == "ai_model":
-        user["state"] = "awaiting_setmodel"
+        from bot.ai import PROVIDER_MODELS, DEFAULT_MODELS
+        provider = user.get("ai_provider", "gemini")
+        models = PROVIDER_MODELS.get(provider, [])
+        current = user.get("ai_model", DEFAULT_MODELS.get(provider, "default"))
+        kb = []
+        for m in models:
+            label = f"{'✅ ' if m == current else ''}{m}"
+            # Truncate long model names for button display
+            display = label if len(label) <= 40 else label[:37] + "..."
+            kb.append([InlineKeyboardButton(display, callback_data=f"setmodel_{m}")])
+        kb.append([InlineKeyboardButton(get_text(lang, "ik_back"), callback_data="back_settings")])
+        await query.edit_message_text(
+            f"🧠 <b>Model</b> ({provider})\n\n<i>Current: {current}</i>",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(kb)
+        )
+
+    elif data.startswith("setmodel_"):
+        model = data[len("setmodel_"):]
+        user["ai_model"] = model
         await storage.save()
-        await query.edit_message_text("🧠 <b>Model</b>\n\nSend model name in chat\n(<code>gpt-4o</code>, <code>claude-3-5-sonnet</code>...)", parse_mode="HTML")
+        # Re-show model list with updated checkmark
+        from bot.ai import PROVIDER_MODELS, DEFAULT_MODELS
+        provider = user.get("ai_provider", "gemini")
+        models = PROVIDER_MODELS.get(provider, [])
+        kb = []
+        for m in models:
+            label = f"{'✅ ' if m == model else ''}{m}"
+            display = label if len(label) <= 40 else label[:37] + "..."
+            kb.append([InlineKeyboardButton(display, callback_data=f"setmodel_{m}")])
+        kb.append([InlineKeyboardButton(get_text(lang, "ik_back"), callback_data="back_settings")])
+        await query.edit_message_text(
+            f"🧠 <b>Model</b> ({provider})\n\n✅ <b>{model}</b>",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(kb)
+        )
 
     elif data == "ai_keys":
         user["state"] = "awaiting_setkey"
