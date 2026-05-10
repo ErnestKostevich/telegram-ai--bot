@@ -5,52 +5,67 @@ def get_main_keyboard(lang="ru"):
     keyboard = [
         [KeyboardButton(get_text(lang, "btn_ai")), KeyboardButton(get_text(lang, "btn_mem"))],
         [KeyboardButton(get_text(lang, "btn_notes")), KeyboardButton(get_text(lang, "btn_vip"))],
-        [KeyboardButton(get_text(lang, "btn_settings")), KeyboardButton(get_text(lang, "btn_admin"))],
-        [KeyboardButton(get_text(lang, "btn_lang"))]
+        [KeyboardButton(get_text(lang, "btn_settings")), KeyboardButton(get_text(lang, "btn_games"))],
+        [KeyboardButton(get_text(lang, "btn_tools")), KeyboardButton(get_text(lang, "btn_lang"))]
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
 def get_settings_keyboard(lang="ru"):
     keyboard = [
-        [InlineKeyboardButton(get_text(lang, "ik_provider"), callback_data="ai_provider")],
-        [InlineKeyboardButton(get_text(lang, "ik_model"), callback_data="ai_model")],
-        [InlineKeyboardButton(get_text(lang, "ik_keys"), callback_data="ai_keys")]
+        [InlineKeyboardButton(get_text(lang, "ik_provider"), callback_data="ai_provider"),
+         InlineKeyboardButton(get_text(lang, "ik_model"), callback_data="ai_model")],
+        [InlineKeyboardButton(get_text(lang, "ik_keys"), callback_data="ai_keys")],
+        [InlineKeyboardButton(get_text(lang, "ik_profile"), callback_data="show_profile"),
+         InlineKeyboardButton(get_text(lang, "ik_disco"), callback_data="toggle_disco")]
     ]
     return InlineKeyboardMarkup(keyboard)
 
 def get_vip_keyboard(lang="ru"):
     keyboard = [
-        [InlineKeyboardButton(get_text(lang, "ik_reminders"), callback_data="vip_reminders")],
-        [InlineKeyboardButton(get_text(lang, "ik_generate"), callback_data="vip_generate")],
+        [InlineKeyboardButton(get_text(lang, "ik_reminders"), callback_data="vip_reminders"),
+         InlineKeyboardButton(get_text(lang, "ik_generate"), callback_data="vip_generate")],
         [InlineKeyboardButton(get_text(lang, "ik_guardian"), callback_data="vip_guardian")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+def get_games_keyboard(lang="ru"):
+    keyboard = [
+        [InlineKeyboardButton("🎲 Dice", callback_data="game_dice"),
+         InlineKeyboardButton("🪙 Coinflip", callback_data="game_coinflip")],
+        [InlineKeyboardButton("😄 Joke", callback_data="game_joke"),
+         InlineKeyboardButton("🎁 Daily", callback_data="game_daily")],
+        [InlineKeyboardButton("🔥 Roast", callback_data="game_roast")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+def get_tools_keyboard(lang="ru"):
+    keyboard = [
+        [InlineKeyboardButton("⏰ Time", callback_data="tool_time"),
+         InlineKeyboardButton("🌤 Weather", callback_data="tool_weather")],
+        [InlineKeyboardButton("🧮 Calc", callback_data="tool_calc"),
+         InlineKeyboardButton("🔑 Password", callback_data="tool_password")],
+        [InlineKeyboardButton("🌍 Translate", callback_data="tool_translate")]
     ]
     return InlineKeyboardMarkup(keyboard)
 
 def get_help_keyboard(lang="ru", submenu=None):
     if submenu:
         return InlineKeyboardMarkup([[InlineKeyboardButton(get_text(lang, "ik_back"), callback_data="help_back")]])
-        
     keyboard = [
-        [
-            InlineKeyboardButton("🏠 Базовые", callback_data="help_base"),
-            InlineKeyboardButton("💬 AI & Память", callback_data="help_ai")
-        ],
-        [
-            InlineKeyboardButton("📝 Заметки", callback_data="help_notes"),
-            InlineKeyboardButton("💎 VIP", callback_data="help_vip")
-        ],
-        [
-            InlineKeyboardButton("👥 Группы", callback_data="help_groups"),
-            InlineKeyboardButton("👑 Создатель", callback_data="help_creator")
-        ],
-        [InlineKeyboardButton("🎮 Игры & Утилиты", callback_data="help_games")]
+        [InlineKeyboardButton("🏠 Base", callback_data="help_base"),
+         InlineKeyboardButton("💬 AI", callback_data="help_ai")],
+        [InlineKeyboardButton("📝 Notes", callback_data="help_notes"),
+         InlineKeyboardButton("💎 VIP", callback_data="help_vip")],
+        [InlineKeyboardButton("👥 Groups", callback_data="help_groups"),
+         InlineKeyboardButton("🎮 Games", callback_data="help_games")],
+        [InlineKeyboardButton("👑 Creator", callback_data="help_creator")]
     ]
     return InlineKeyboardMarkup(keyboard)
 
 def get_lang_keyboard():
     keyboard = [
-        [InlineKeyboardButton("🇷🇺 Русский", callback_data="lang_ru")],
-        [InlineKeyboardButton("🇬🇧 English", callback_data="lang_en")],
-        [InlineKeyboardButton("🇮🇹 Italiano", callback_data="lang_it")]
+        [InlineKeyboardButton("🇷🇺 Русский", callback_data="lang_ru"),
+         InlineKeyboardButton("🇬🇧 English", callback_data="lang_en"),
+         InlineKeyboardButton("🇮🇹 Italiano", callback_data="lang_it")]
     ]
     return InlineKeyboardMarkup(keyboard)
