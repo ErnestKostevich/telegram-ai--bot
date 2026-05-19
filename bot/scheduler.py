@@ -32,7 +32,9 @@ async def _check_reminders_task(bot):
     except Exception as e:
         logger.error(f"Error in scheduler task: {e}")
 
-def start_scheduler(bot):
+def start_scheduler(bot_or_app):
+    # Accept either a Bot or an Application for compatibility
+    bot = getattr(bot_or_app, "bot", None) or bot_or_app
     scheduler = AsyncIOScheduler()
     scheduler.add_job(_check_reminders_task, 'interval', minutes=1, args=[bot])
     scheduler.start()

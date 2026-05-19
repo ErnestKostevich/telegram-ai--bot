@@ -77,8 +77,15 @@ class Storage:
                 "vip": False,
                 "memory": {},
                 "notes": [],
+                "chat_history": [],
                 "stats": {"msgs": 0, "commands": 0}
             }
+        else:
+            self.data["users"][uid].setdefault("chat_history", [])
+            self.data["users"][uid].setdefault("memory", {})
+            self.data["users"][uid].setdefault("notes", [])
+            self.data["users"][uid].setdefault("api_keys", {})
+            self.data["users"][uid].setdefault("stats", {"msgs": 0, "commands": 0})
         return self.data["users"][uid]
 
     def get_group(self, chat_id: int) -> dict:
@@ -88,17 +95,22 @@ class Storage:
                 "id": chat_id,
                 "vip": False,
                 "welcome_enabled": False,
-                "welcome_msg": "Welcome!",
+                "welcome_msg": "",
                 "goodbye_enabled": False,
-                "goodbye_msg": "Goodbye!",
+                "goodbye_msg": "",
                 "rules": "",
                 "warns": {},
                 "ai_enabled": True,
                 "antilink": False,
                 "antispam": False,
                 "stats": {"msgs": 0, "users": {}},
-                "memory": {}
+                "memory": {},
+                "messages": [],
             }
+        else:
+            self.data["groups"][cid].setdefault("messages", [])
+            self.data["groups"][cid].setdefault("warns", {})
+            self.data["groups"][cid].setdefault("stats", {"msgs": 0, "users": {}})
         return self.data["groups"][cid]
 
 storage = Storage()

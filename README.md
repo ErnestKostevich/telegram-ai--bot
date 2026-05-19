@@ -1,68 +1,97 @@
-# 🤖 Telegram AI Bot
+# 🤖 AI DISCO BOT
 
-Многофункциональный Telegram бот с искусственным интеллектом на базе Google Gemini 2.0.
+Многофункциональный Telegram-бот с искусственным интеллектом, BYOK-архитектурой и памятью диалога.
 
-## ⚡ Возможности
+**Telegram:** [@AI_DISCO_BOT](https://t.me/AI_DISCO_BOT)
 
-- 💬 **AI-чат с контекстом** - умный диалог с запоминанием контекста
-- 🧠 **Система памяти** - сохранение данных между перезапусками
-- 📝 **Заметки** - создание и управление заметками
-- 💎 **VIP система** - расширенные возможности для VIP пользователей
-- ⏰ **Напоминания** - система уведомлений (VIP)
-- 📊 **Статистика** - детальная аналитика использования
-- 🎮 **Развлечения** - игры, шутки, цитаты
-- 🌍 **Утилиты** - время, погода, переводы
+## ⚡ Главное
+
+- 🧠 **Память диалога** — бот помнит последние сообщения, как настоящий чат
+- 🔌 **BYOK** — Bring Your Own Key: 10+ провайдеров (Gemini, OpenAI, Anthropic, Groq, Together, OpenRouter, Mistral, Cohere, xAI, DeepSeek)
+- 👁 **Vision** — анализ фото для OpenAI / Anthropic / Gemini / OpenRouter
+- 📎 **Документы** — разбор `.txt` / `.md` / `.json` / `.xml`
+- 🖼 **Генерация изображений** — DALL·E 3 или Together FLUX
+- 🌐 **3 языка** — RU / EN / IT
+- 💎 **VIP-система** с длительностью (неделя/месяц/год/навсегда) и авто-истечением
+- 👥 **Группы** — модерация (warn → авто-бан на 3-м), antilink, antispam, welcome/goodbye, реальный `/summary` чата
+- ⏰ **Напоминания** с минутной точностью (VIP)
+- 🗄 **Хранилище через GitHub API** — данные переживают рестарт хостинга
 
 ## 🚀 Команды
 
-### 🏠 Базовые:
-- `/start` - Запуск бота
-- `/help` - Список всех команд
-- `/info` - Информация о боте
-- `/status` - Статус системы
+### 🏠 Базовые
+- `/start` — запуск
+- `/help` — справка
+- `/info` — о боте
+- `/status` — состояние
+- `/version` `/changelog` — версия и история обновлений
+- `/profile` — XP, провайдер, статистика
+- `/export` — выгрузить ваши данные JSON
+- `/feedback [текст]` — отправить отзыв создателю
+- `/lang ru|en|it` — язык
 
-### 💬 AI и память:
-- `/ai [вопрос]` - Задать вопрос AI
-- `/memorysave [ключ] [значение]` - Сохранить в память
-- `/memoryget [ключ]` - Получить из памяти
-- `/memorylist` - Показать всю память
-- `/memorydel [ключ]` - Удалить из памяти
+### 💬 AI & память
+- `/ai [вопрос]` — спросить AI
+- В личке просто пишите — бот помнит контекст
+- `/clear` — сбросить контекст диалога
+- `/setprovider /setkey /setmodel` — настройка BYOK
+- `/memorysave /memoryget /memorylist /memorydel` — постоянная память
 
-### 📝 Заметки:
-- `/note [текст]` - Создать заметку
-- `/notes` - Показать все заметки
-- `/delnote [номер]` - Удалить заметку
+### 📝 Заметки и задачи
+- `/note /notes /delnote`
+- `/todo` `/todo done [#]` `/todo del [#]`
 
-### 💎 VIP функции:
-- `/vip` - Статус VIP
-- `/remind [минуты] [текст]` - Создать напоминание
-- `/reminders` - Список напоминаний
+### 💎 VIP
+- `/vip` — статус
+- `/remind [мин] [текст]` — напоминание
+- `/generate [описание]` — картинка
+- Фото / документ в личке — анализ AI
+- `/daily` — ежедневная награда + streak
 
-### 👑 Создатель:
-- `/grant_vip [user_id] [duration]` - Выдать VIP
-- `/broadcast [текст]` - Рассылка всем
-- `/stats` - Полная статистика
+### 👥 Группы
+- `/warn` `/warnings` `/unwarn` (3 варна = автобан)
+- `/mute [мин]` `/unmute` `/ban` `/kick`
+- `/purge [N]` — удалить N сообщений (или в reply)
+- `/antilink on|off` — авто-удаление ссылок от не-админов
+- `/antispam on|off` `/guardian on|off`
+- `/ask` `/summary` `/translate [язык] [текст]` — AI в группе
+- `/welcome on|off [текст]` `/goodbye on|off [текст]` (используйте `{name}` и `{title}`)
+- `/rules` `/setrules` `/groupstats`
+- `@бот [вопрос]` — отвечает по упоминанию
+
+### 🎮 Игры и утилиты
+- `/dice` `/coinflip` `/random` `/joke` `/roast` `/rep`
+- `/time [город]` `/weather [город]` `/calc [выражение]` `/password [длина]`
+
+### 👑 Создатель
+- `/grant_vip [@user] [week|month|year|forever|remove]`
+- `/users` — топ по активности
+- `/broadcast` — рассылка с rate-limit (~25 msg/sec)
+- `/stats` — детальная статистика бота
 
 ## 🔧 Технологии
 
-- **Python 3.11+**
-- **python-telegram-bot** - Telegram Bot API
-- **Google Gemini 2.0** - AI модель
-- **GitHub API** - Хранение данных
-- **APScheduler** - Система напоминаний
-- **Render** - Хостинг
+- Python 3.11+, `python-telegram-bot` ≥ 21.5
+- `aiohttp` для всех HTTP-вызовов AI
+- `apscheduler` — напоминания
+- GitHub API — хранилище JSON (репо `telegram-ai-bot-db`)
+- Render — хостинг (free worker)
 
-## 📊 Статистика
+## ⚙️ Деплой
 
-- 🎯 50+ команд
-- 💾 Постоянное сохранение данных
-- 🔄 24/7 работа с автопингом
-- 📈 Система уровней и достижений
+ENV переменные (на Render):
+
+| Key | Назначение |
+|-----|------------|
+| `BOT_TOKEN` | Токен бота от @BotFather |
+| `GITHUB_TOKEN` | PAT с правом write на репо данных |
+| `GITHUB_REPO` | `username/telegram-ai-bot-db` |
+| `GITHUB_FILE_PATH` | `bot_data.json` (по умолчанию) |
+| `CREATOR_ID` | Telegram ID создателя |
 
 ## 👤 Создатель
 
-**Ernest Kostevich** (@Ernest_Kostevich)  
-Telegram: @AI_DISCO_BOT
+**Ernest Kostevich** ([@Ernest_Kostevich](https://t.me/Ernest_Kostevich))
 
 ---
-*Бот работает на Render с автоматическим деплоем из GitHub*
+*Деплой автоматический из ветки `main` через Render.*
