@@ -15,7 +15,8 @@ def get_settings_keyboard(lang="ru"):
     keyboard = [
         [InlineKeyboardButton(get_text(lang, "ik_provider"), callback_data="ai_provider"),
          InlineKeyboardButton(get_text(lang, "ik_model"), callback_data="ai_model")],
-        [InlineKeyboardButton(get_text(lang, "ik_keys"), callback_data="ai_keys")],
+        [InlineKeyboardButton(get_text(lang, "ik_keys"), callback_data="ai_keys"),
+         InlineKeyboardButton(get_text(lang, "ik_clear"), callback_data="ai_clear")],
         [InlineKeyboardButton(get_text(lang, "ik_profile"), callback_data="show_profile"),
          InlineKeyboardButton(get_text(lang, "ik_disco"), callback_data="toggle_disco")]
     ]
