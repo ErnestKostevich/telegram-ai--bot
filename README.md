@@ -9,6 +9,7 @@
 [![PTB](https://img.shields.io/badge/python--telegram--bot-21+-2CA5E0)](https://docs.python-telegram-bot.org/)
 [![Render](https://img.shields.io/badge/Hosted_on-Render-46E3B7?logo=render&logoColor=white)](https://render.com/)
 [![Version](https://img.shields.io/badge/Version-v2.0.0-brightgreen)](https://github.com/ErnestKostevich/telegram-ai--bot/blob/main/CHANGELOG.md)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/ErnestKostevich/telegram-ai--bot/blob/main/LICENSE)
 
 [Возможности](#-возможности) · [Команды](#-команды) · [Быстрый старт](#-быстрый-старт) · [Деплой](#%EF%B8%8F-деплой-на-render) · [Архитектура](#-архитектура) · [Roadmap](#%EF%B8%8F-roadmap)
 
@@ -344,7 +345,9 @@ services:
 
 ## 📄 Лицензия
 
-Проект распространяется как есть, для образовательных и личных целей.
+[MIT](LICENSE) © 2026 Ernest Kostevich
+
+Свободно используйте, форкайте, модифицируйте — главное сохраните копирайт.
 
 ## 👤 Автор
 
