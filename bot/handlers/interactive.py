@@ -6,6 +6,19 @@ from bot.storage import storage
 from bot.i18n import get_text, t
 
 
+_bot_username_cache: dict = {"value": None}
+
+
+async def _bot_username(context) -> str:
+    if not _bot_username_cache["value"]:
+        try:
+            me = await context.bot.get_me()
+            _bot_username_cache["value"] = me.username
+        except Exception:
+            return ""
+    return _bot_username_cache["value"] or ""
+
+
 def _lang(update):
     return storage.get_user(update.effective_user.id).get("language", "ru")
 
@@ -460,8 +473,8 @@ async def keyboard_message_handler(update: Update, context: ContextTypes.DEFAULT
     is_group = update.effective_chat.type in ["group", "supergroup"]
 
     if is_group:
-        bot_username = (await context.bot.get_me()).username
-        is_mention = f"@{bot_username}" in text
+        bot_username = await _bot_username(context)
+        is_mention = bool(bot_username) and f"@{bot_username}" in text
         is_reply_to_bot = (
             update.message.reply_to_message and
             update.message.reply_to_message.from_user and
@@ -494,6 +507,12 @@ async def keyboard_message_handler(update: Update, context: ContextTypes.DEFAULT
     all_btns = {}
     for key_prefix in ["btn_ai", "btn_mem", "btn_notes", "btn_vip", "btn_settings", "btn_games", "btn_tools", "btn_lang"]:
         all_btns[key_prefix] = [tr[key_prefix] for tr in translations.values() if key_prefix in tr]
+
+    # Any reply-keyboard button press should clear a half-finished interactive flow,
+    # otherwise the next typed message would be eaten by e.g. awaiting_setkey state.
+    if any(text in v for v in all_btns.values()):
+        if user.get("state"):
+            user["state"] = None
 
     if text in all_btns.get("btn_ai", []):
         await update.message.reply_text(t(lang, "ai_chat_hint"), parse_mode="HTML")

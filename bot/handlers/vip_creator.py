@@ -1,5 +1,6 @@
 import asyncio
 import datetime
+import html
 from telegram import Update
 from telegram.ext import ContextTypes
 from bot.storage import storage
@@ -197,7 +198,10 @@ async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
         await update.message.reply_text("Использование: /broadcast [текст]")
         return
-    text = " ".join(context.args)
+    raw = " ".join(context.args)
+    # Escape user input so unbalanced <, >, & don't break HTML parsing for every recipient
+    safe = html.escape(raw)
+    text = f"📢 <b>Объявление:</b>\n\n{safe}"
     users = list(storage.data["users"].keys())
     total = len(users)
     progress = await update.message.reply_text(f"📤 Рассылка для {total} пользователей...")
@@ -205,7 +209,7 @@ async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     failed = 0
     for i, uid in enumerate(users, 1):
         try:
-            await context.bot.send_message(chat_id=int(uid), text=f"📢 <b>Объявление:</b>\n\n{text}", parse_mode="HTML")
+            await context.bot.send_message(chat_id=int(uid), text=text, parse_mode="HTML")
             success += 1
         except Exception:
             failed += 1
