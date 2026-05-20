@@ -91,8 +91,9 @@ class AIHandler:
     def _push_history(self, user_id: int, role: str, content: str):
         user = storage.get_user(user_id)
         hist = user.setdefault("chat_history", [])
-        hist.append({"role": role, "content": content[:4000]})
-        # Keep last N turns (user+assistant pairs)
+        # Truncate each stored message at 1500 chars — keeps storage bounded
+        # (~60KB max per user) while still useful as context.
+        hist.append({"role": role, "content": (content or "")[:1500]})
         max_msgs = CHAT_HISTORY_LIMIT * 2
         if len(hist) > max_msgs:
             user["chat_history"] = hist[-max_msgs:]

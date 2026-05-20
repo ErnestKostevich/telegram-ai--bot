@@ -11,10 +11,11 @@ async def _download_photo_b64(context, file_id: str) -> tuple[str, str]:
     """Download Telegram photo and return (base64, mime)."""
     tg_file = await context.bot.get_file(file_id)
     file_url = tg_file.file_path
-    async with aiohttp.ClientSession() as session:
+    # 30s timeout: a slow CDN must not be able to hang the handler forever
+    timeout = aiohttp.ClientTimeout(total=30)
+    async with aiohttp.ClientSession(timeout=timeout) as session:
         async with session.get(file_url) as resp:
             content = await resp.read()
-    # Telegram delivers photos as JPEG
     return base64.b64encode(content).decode("utf-8"), "image/jpeg"
 
 
@@ -37,15 +38,21 @@ async def media_message_handler(update: Update, context: ContextTypes.DEFAULT_TY
         # Try text extraction
         doc = update.message.document
         if doc.mime_type and (doc.mime_type.startswith("text/") or doc.mime_type in ("application/json", "application/xml")):
+            # If file_size is None (rare) we still refuse oversized uploads at read-time
             if doc.file_size and doc.file_size > 200_000:
                 await update.message.reply_text(t(lang, "doc_too_big"))
                 return
             msg = await update.message.reply_text(t(lang, "doc_reading"))
             try:
                 tg_file = await context.bot.get_file(doc.file_id)
-                async with aiohttp.ClientSession() as s:
+                timeout = aiohttp.ClientTimeout(total=30)
+                async with aiohttp.ClientSession(timeout=timeout) as s:
                     async with s.get(tg_file.file_path) as r:
                         raw = await r.read()
+                # Defensive cap if file_size was missing
+                if len(raw) > 200_000:
+                    await msg.edit_text(t(lang, "doc_too_big"))
+                    return
                 text = raw.decode("utf-8", errors="replace")[:12000]
                 caption = (update.message.caption or t(lang, "doc_default_prompt")).strip()
                 from bot.handlers.ai_memory import _build_system_prompt, _send_long

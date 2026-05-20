@@ -1,3 +1,4 @@
+import html
 import re
 import time
 import datetime
@@ -8,6 +9,8 @@ from bot.storage import storage
 from bot.ai import ai_handler
 from bot.i18n import t
 from bot.config import GROUP_HISTORY_LIMIT
+
+MAX_RULES_LEN = 2000
 
 
 URL_RE = re.compile(r"(?i)\b(https?://|www\.|t\.me/|telegram\.me/|tg://)\S+")
@@ -477,7 +480,11 @@ async def rules_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = storage.get_user(update.effective_user.id).get("language", "ru")
     group = storage.get_group(update.effective_chat.id)
     rules = group.get("rules") or t(lang, "rules_empty")
-    await update.message.reply_text(f"📋 <b>{t(lang, 'rules_title')}</b>\n\n{rules}", parse_mode="HTML")
+    # Escape so admin-set rules with < or & don't break HTML
+    await update.message.reply_text(
+        f"📋 <b>{t(lang, 'rules_title')}</b>\n\n{html.escape(rules)}",
+        parse_mode="HTML",
+    )
 
 
 async def setrules_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -487,7 +494,7 @@ async def setrules_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(t(lang, "setrules_usage"))
         return
     group = storage.get_group(update.effective_chat.id)
-    group["rules"] = " ".join(context.args)
+    group["rules"] = " ".join(context.args)[:MAX_RULES_LEN]
     await storage.save()
     await update.message.reply_text(t(lang, "rules_saved"))
 
