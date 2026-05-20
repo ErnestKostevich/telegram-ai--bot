@@ -33,11 +33,13 @@ async def persona_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = storage.get_user(uid)
     lang = user.get("language", "ru")
     if not context.args:
+        # No args → show interactive picker
+        from bot.keyboards import get_persona_picker_keyboard
         current = user.get("persona", "default")
-        names = ", ".join(PERSONAS.keys())
         await update.message.reply_text(
-            t(lang, "persona_status", current=current, list=names),
+            t(lang, "persona_pick"),
             parse_mode="HTML",
+            reply_markup=get_persona_picker_keyboard(lang, current=current),
         )
         return
     name = context.args[0].lower()

@@ -33,19 +33,13 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # === Provider ===
     if data == "ai_provider":
-        user["state"] = "awaiting_setprovider"
-        await storage.save()
-        from bot.ai import PROVIDERS
-        kb = []
-        row = []
-        for p in PROVIDERS:
-            row.append(InlineKeyboardButton(p.capitalize(), callback_data=f"setprov_{p}"))
-            if len(row) == 2:
-                kb.append(row)
-                row = []
-        if row: kb.append(row)
-        kb.append([InlineKeyboardButton(get_text(lang, "ik_back"), callback_data="back_settings")])
-        await query.edit_message_text("⚡ <b>Provider</b>", parse_mode="HTML", reply_markup=InlineKeyboardMarkup(kb))
+        from bot.keyboards import get_provider_picker_keyboard
+        current = user.get("ai_provider", "gemini")
+        await query.edit_message_text(
+            t(lang, "provider_pick"),
+            parse_mode="HTML",
+            reply_markup=get_provider_picker_keyboard(lang, current=current, action_prefix="setprov"),
+        )
 
     elif data.startswith("setprov_"):
         provider = data.split("_", 1)[1]
@@ -94,11 +88,48 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
     elif data == "ai_keys":
-        user["state"] = "awaiting_setkey"
+        # Step 1: ask WHICH provider the key is for
+        from bot.keyboards import get_provider_picker_keyboard
+        await query.edit_message_text(
+            t(lang, "key_pick_provider"),
+            parse_mode="HTML",
+            reply_markup=get_provider_picker_keyboard(lang, action_prefix="keyfor"),
+        )
+
+    elif data.startswith("keyfor_"):
+        # Step 2: state waiting for the key for that specific provider
+        provider = data.split("_", 1)[1]
+        from bot.ai import PROVIDERS
+        if provider not in PROVIDERS:
+            return
+        user["state"] = f"awaiting_key_for_{provider}"
         await storage.save()
         await query.edit_message_text(
-            "🔑 <b>API Key</b>\n\nSend: <code>provider key</code>\nExample: <code>gemini AIza...</code>",
+            t(lang, "key_send_for", provider=provider),
             parse_mode="HTML",
+        )
+
+    elif data == "ai_persona":
+        from bot.keyboards import get_persona_picker_keyboard
+        current = user.get("persona", "default")
+        await query.edit_message_text(
+            t(lang, "persona_pick"),
+            parse_mode="HTML",
+            reply_markup=get_persona_picker_keyboard(lang, current=current),
+        )
+
+    elif data.startswith("setpersona_"):
+        from bot.handlers.wow import PERSONAS
+        from bot.keyboards import get_persona_picker_keyboard
+        name = data.split("_", 1)[1]
+        if name not in PERSONAS:
+            return
+        user["persona"] = name
+        await storage.save()
+        await query.edit_message_text(
+            t(lang, "persona_set_short", name=name),
+            parse_mode="HTML",
+            reply_markup=get_persona_picker_keyboard(lang, current=name),
         )
 
     elif data == "ai_clear":
@@ -110,7 +141,11 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(get_text(lang, "ik_back"), callback_data="back_settings")]]))
 
     elif data == "back_settings":
-        await query.edit_message_text(get_text(lang, "settings_menu"), parse_mode="HTML", reply_markup=get_settings_keyboard(lang))
+        await query.edit_message_text(
+            get_text(lang, "settings_menu"),
+            parse_mode="HTML",
+            reply_markup=get_settings_keyboard(lang, user=user),
+        )
 
     # === Profile & Disco ===
     elif data == "show_profile":
@@ -410,7 +445,95 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text = lang_sections.get(section, f"ℹ️ {section}")
         await query.edit_message_text(text, parse_mode="HTML", reply_markup=get_help_keyboard(lang, submenu=True, user_id=uid))
 
-    # === Games ===
+    # === Games: WOW dice mini-games ===
+    elif data in ("game_slots", "game_basket", "game_football", "game_dart", "game_bowl"):
+        from bot.handlers.wow import _play_dice_game
+        game_key = data.split("_", 1)[1]
+        # Delete the menu first so the dice animation isn't buried
+        try:
+            await query.message.delete()
+        except Exception:
+            pass
+
+        # Provide a faux Update wrapper: _play_dice_game expects update.message.reply_dice
+        # and update.effective_user.id. We rebuild from query for that purpose.
+        class _Faux:
+            def __init__(self, q):
+                self.message = q.message
+                self.effective_user = q.from_user
+                self.effective_chat = q.message.chat
+
+        faux = _Faux(query)
+        # _play_dice_game uses update.message.reply_dice — but query.message is the
+        # menu message which we just tried to delete. Instead send a fresh dice.
+        from bot.storage import storage as _st
+        user_obj = _st.get_user(uid)
+        emoji_map = {"slots": "🎰", "basket": "🏀", "football": "⚽", "dart": "🎯", "bowl": "🎳"}
+        emoji = emoji_map[game_key]
+        wins_map = {
+            "slots":    {64: "JACKPOT! 🎰", 22: "🍒🍒🍒", 43: "🍋🍋🍋"},
+            "basket":   {4: "🎯 SCORE!", 5: "🎯 SCORE!"},
+            "football": {3: "⚽ GOAL!", 4: "⚽ GOAL!", 5: "⚽ GOAL!"},
+            "dart":     {6: "🎯 BULLSEYE!"},
+            "bowl":     {6: "🎳 STRIKE!"},
+        }
+        sent = await context.bot.send_dice(query.message.chat.id, emoji=emoji)
+        value = sent.dice.value
+        games = user_obj.setdefault("games", {})
+        g = games.setdefault(game_key, {"plays": 0, "wins": 0})
+        g["plays"] += 1
+        wins = wins_map[game_key]
+        import asyncio as _asyncio
+        await _asyncio.sleep(3.5)
+        if value in wins:
+            g["wins"] += 1
+            await storage.save()
+            await context.bot.send_message(
+                query.message.chat.id,
+                t(lang, "game_win", label=wins[value], wins=g["wins"], plays=g["plays"]),
+                parse_mode="HTML",
+            )
+        else:
+            await storage.save()
+            await context.bot.send_message(
+                query.message.chat.id,
+                t(lang, "game_lose", wins=g["wins"], plays=g["plays"]),
+                parse_mode="HTML",
+            )
+
+    elif data == "game_today":
+        from bot.handlers.wow import today_command
+        try: await query.message.delete()
+        except Exception: pass
+
+        class _FauxUpd:
+            def __init__(self, q):
+                self.message = q.message
+                self.effective_user = q.from_user
+                self.effective_chat = q.message.chat
+        class _FauxCtx:
+            def __init__(self, ctx, chat_id):
+                self.bot = ctx.bot
+                self.args = []
+                self._chat = chat_id
+        # today_command uses update.message.reply_text — for callbacks we'll just
+        # invoke it with a stand-in update built from the query.
+        # Simpler: just nudge the user to type /today
+        await context.bot.send_message(
+            query.message.chat.id,
+            {"ru":"🔮 Используйте /today","en":"🔮 Use /today","it":"🔮 Usa /today"}.get(lang,"🔮 /today"),
+        )
+
+    elif data == "game_quiz":
+        try: await query.message.delete()
+        except Exception: pass
+        msgs = {
+            "ru": "🧠 <code>/quiz [тема]</code>\n\nПримеры:\n• <code>/quiz python</code>\n• <code>/quiz история</code>\n• <code>/quiz космос</code>",
+            "en": "🧠 <code>/quiz [topic]</code>\n\nExamples:\n• <code>/quiz python</code>\n• <code>/quiz history</code>\n• <code>/quiz space</code>",
+            "it": "🧠 <code>/quiz [tema]</code>\n\nEsempi:\n• <code>/quiz python</code>\n• <code>/quiz storia</code>\n• <code>/quiz spazio</code>",
+        }
+        await context.bot.send_message(query.message.chat.id, msgs.get(lang, msgs["en"]), parse_mode="HTML")
+
     elif data == "game_dice":
         try:
             await query.message.reply_dice(emoji="🎲")
@@ -534,7 +657,11 @@ async def keyboard_message_handler(update: Update, context: ContextTypes.DEFAULT
         await update.message.reply_text(get_text(lang, "vip_menu"), parse_mode="HTML", reply_markup=get_vip_keyboard(lang))
         return
     elif text in all_btns.get("btn_settings", []):
-        await update.message.reply_text(get_text(lang, "settings_menu"), parse_mode="HTML", reply_markup=get_settings_keyboard(lang))
+        await update.message.reply_text(
+            get_text(lang, "settings_menu"),
+            parse_mode="HTML",
+            reply_markup=get_settings_keyboard(lang, user=user),
+        )
         return
     elif text in all_btns.get("btn_games", []):
         await update.message.reply_text(get_text(lang, "games_menu"), parse_mode="HTML", reply_markup=get_games_keyboard(lang))
@@ -568,6 +695,7 @@ async def keyboard_message_handler(update: Update, context: ContextTypes.DEFAULT
                 await update.message.reply_text(t(lang, "provider_unknown", list=", ".join(PROVIDERS)))
             return
         elif state == "awaiting_setkey":
+            # Legacy single-step flow kept for back-compat
             user["state"] = None
             parts = text.strip().split(maxsplit=1)
             if len(parts) == 2:
@@ -583,6 +711,30 @@ async def keyboard_message_handler(update: Update, context: ContextTypes.DEFAULT
                     await update.message.reply_text(t(lang, "provider_unknown", list=", ".join(PROVIDERS)))
             else:
                 await update.message.reply_text("❌ Format: <code>provider key</code>", parse_mode="HTML")
+            return
+        elif state and state.startswith("awaiting_key_for_"):
+            # New 2-step flow: user already picked the provider via buttons,
+            # now they just send the raw key.
+            provider = state[len("awaiting_key_for_"):]
+            from bot.ai import PROVIDERS
+            user["state"] = None
+            if provider in PROVIDERS:
+                key = text.strip()
+                user["api_keys"][provider] = key
+                await storage.save()
+                # Delete the message containing the secret immediately
+                try:
+                    await update.message.delete()
+                except Exception:
+                    pass
+                await context.bot.send_message(
+                    chat_id=update.effective_chat.id,
+                    text=t(lang, "key_saved", provider=provider),
+                    parse_mode="HTML",
+                    reply_markup=get_settings_keyboard(lang, user=user),
+                )
+            else:
+                await update.message.reply_text(t(lang, "provider_unknown", list=", ".join(PROVIDERS)))
             return
         elif state == "awaiting_setmodel":
             user["state"] = None
