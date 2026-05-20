@@ -12,6 +12,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     user = storage.get_user(user_id)
     user["stats"]["commands"] += 1
+    user["state"] = None  # always reset any lingering interactive state
     if update.effective_user.username:
         user["username"] = update.effective_user.username
     lang = user.get("language", "ru")
@@ -152,21 +153,23 @@ async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     next_xp = level * 100
     progress = xp % 100
     from bot.handlers.vip_creator import check_vip
+    from bot.ai import DEFAULT_MODELS
     is_vip = check_vip(user)
     vip = t(lang, "status_yes") if is_vip else t(lang, "status_no")
-    notes_n = len(user.get("notes", []))
-    tasks_n = len(user.get("tasks", []))
-    mem_n = len(user.get("memory", {}))
-    hist_n = len(user.get("chat_history", []))
+    provider = user.get("ai_provider", "gemini")
+    model = user.get("ai_model") or DEFAULT_MODELS.get(provider, "default")
     text = t(lang, "profile_title",
              level=level, xp=xp, next_level_xp=next_xp,
              progress_bar="▓" * (progress // 10) + "░" * (10 - progress // 10),
              progress=progress,
              vip_status=vip,
              msgs=user.get("stats", {}).get("msgs", 0),
-             provider=user.get("ai_provider", "gemini"),
-             model=user.get("ai_model", "default"),
-             notes=notes_n, tasks=tasks_n, memory=mem_n, history=hist_n)
+             provider=provider,
+             model=model,
+             notes=len(user.get("notes", [])),
+             tasks=len(user.get("tasks", [])),
+             memory=len(user.get("memory", {})),
+             history=len(user.get("chat_history", [])))
     await update.message.reply_text(text, parse_mode="HTML")
 
 

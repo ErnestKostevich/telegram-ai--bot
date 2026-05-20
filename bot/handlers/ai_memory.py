@@ -51,6 +51,22 @@ async def setkey_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     user = storage.get_user(uid)
     lang = user.get("language", "ru")
+
+    # SECURITY: never let users paste keys in groups — bot may not be admin,
+    # so the delete would fail silently and the secret would stay visible.
+    if update.effective_chat.type != "private":
+        # Best-effort delete; if it fails (we're not admin), at least warn the user.
+        try:
+            await update.message.delete()
+        except Exception:
+            pass
+        await update.message.reply_text(t(lang, "key_group_refuse"), parse_mode="HTML")
+        try:
+            await context.bot.send_message(uid, t(lang, "key_group_dm_hint"), parse_mode="HTML")
+        except Exception:
+            pass
+        return
+
     if len(context.args) < 2:
         await update.message.reply_text(t(lang, "key_usage"))
         return
@@ -65,7 +81,11 @@ async def setkey_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.delete()
     except Exception:
         pass
-    await context.bot.send_message(chat_id=update.effective_chat.id, text=t(lang, "key_saved", provider=provider), parse_mode="HTML")
+    await context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text=t(lang, "key_saved", provider=provider),
+        parse_mode="HTML",
+    )
 
 
 async def setmodel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):

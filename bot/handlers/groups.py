@@ -1,6 +1,7 @@
 import re
 import time
 import datetime
+from collections import defaultdict
 from telegram import Update, ChatPermissions
 from telegram.ext import ContextTypes
 from bot.storage import storage
@@ -10,6 +11,13 @@ from bot.config import GROUP_HISTORY_LIMIT
 
 
 URL_RE = re.compile(r"(?i)\b(https?://|www\.|t\.me/|telegram\.me/|tg://)\S+")
+
+# AntiSpam: per (chat_id, user_id) → list of recent (text_hash, ts).
+# A user repeating the same message 3+ times within 30s gets muted for 10 min.
+SPAM_WINDOW_SEC = 30
+SPAM_THRESHOLD = 3
+SPAM_MUTE_MIN = 10
+_spam_cache: dict = defaultdict(list)
 
 
 async def grouphelp_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -577,6 +585,44 @@ async def group_message_tracker(update: Update, context: ContextTypes.DEFAULT_TY
                 return
         except Exception:
             pass
+
+    # AntiSpam: detect rapid repetition of the same message
+    if group.get("antispam") and not text.startswith("/"):
+        key = (chat.id, msg.from_user.id)
+        now = time.time()
+        text_hash = hash(text[:200])
+        bucket = [(h, ts) for (h, ts) in _spam_cache[key] if now - ts < SPAM_WINDOW_SEC]
+        bucket.append((text_hash, now))
+        _spam_cache[key] = bucket
+        same = sum(1 for (h, _) in bucket if h == text_hash)
+        if same >= SPAM_THRESHOLD:
+            try:
+                sender = await context.bot.get_chat_member(chat.id, msg.from_user.id)
+                if sender.status not in ["administrator", "creator"]:
+                    try:
+                        await msg.delete()
+                    except Exception:
+                        pass
+                    until = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=SPAM_MUTE_MIN)
+                    try:
+                        await context.bot.restrict_chat_member(
+                            chat.id, msg.from_user.id,
+                            ChatPermissions(can_send_messages=False),
+                            until_date=until,
+                        )
+                        # Reset the bucket so we don't repeat-fire after unmute
+                        _spam_cache[key] = []
+                        await context.bot.send_message(
+                            chat.id,
+                            t(storage.get_user(msg.from_user.id).get("language", "ru"),
+                              "antispam_muted", user=msg.from_user.first_name, mins=SPAM_MUTE_MIN),
+                            parse_mode="HTML",
+                        )
+                    except Exception:
+                        pass
+                    return
+            except Exception:
+                pass
 
     # Append to history buffer (used by /summary)
     if not text.startswith("/"):
