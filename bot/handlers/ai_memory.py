@@ -153,7 +153,13 @@ async def setprovider_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     user = storage.get_user(uid)
     lang = user.get("language", "ru")
     if not context.args:
-        await update.message.reply_text(t(lang, "provider_usage", list=', '.join(PROVIDERS)))
+        # No args → show inline picker buttons (huge UX improvement vs. plain text)
+        from bot.keyboards import get_provider_picker_keyboard
+        await update.message.reply_text(
+            t(lang, "provider_pick"),
+            parse_mode="HTML",
+            reply_markup=get_provider_picker_keyboard(lang, current=user.get("ai_provider", "gemini"), action_prefix="setprov"),
+        )
         return
     provider = context.args[0].lower()
     if provider not in PROVIDERS:
@@ -172,7 +178,6 @@ async def setkey_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # SECURITY: never let users paste keys in groups — bot may not be admin,
     # so the delete would fail silently and the secret would stay visible.
     if update.effective_chat.type != "private":
-        # Best-effort delete; if it fails (we're not admin), at least warn the user.
         try:
             await update.message.delete()
         except Exception:
@@ -185,7 +190,13 @@ async def setkey_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if len(context.args) < 2:
-        await update.message.reply_text(t(lang, "key_usage"))
+        # No args → start the 2-step button flow
+        from bot.keyboards import get_provider_picker_keyboard
+        await update.message.reply_text(
+            t(lang, "key_pick_provider"),
+            parse_mode="HTML",
+            reply_markup=get_provider_picker_keyboard(lang, action_prefix="keyfor"),
+        )
         return
     provider = context.args[0].lower()
     key = context.args[1]
@@ -210,7 +221,29 @@ async def setmodel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = storage.get_user(uid)
     lang = user.get("language", "ru")
     if not context.args:
-        await update.message.reply_text(t(lang, "model_usage", current=user.get("ai_model", "default")))
+        # No args → show model picker buttons for current provider
+        from bot.ai import PROVIDER_MODELS, DEFAULT_MODELS
+        from telegram import InlineKeyboardMarkup, InlineKeyboardButton
+        provider = user.get("ai_provider", "gemini")
+        models = PROVIDER_MODELS.get(provider, [])
+        current = user.get("ai_model") or DEFAULT_MODELS.get(provider, "default")
+        if not models:
+            await update.message.reply_text(
+                t(lang, "model_usage", current=current),
+                parse_mode="HTML",
+            )
+            return
+        kb = []
+        for m in models:
+            label = f"✅ {m}" if m == current else m
+            display = label if len(label) <= 40 else label[:37] + "…"
+            kb.append([InlineKeyboardButton(display, callback_data=f"setmodel_{m}")])
+        kb.append([InlineKeyboardButton(t(lang, "ik_back"), callback_data="back_settings")])
+        await update.message.reply_text(
+            f"🧠 <b>Model</b> ({provider})\n\n<i>Current: {current}</i>",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(kb),
+        )
         return
     model = " ".join(context.args)
     user["ai_model"] = model
