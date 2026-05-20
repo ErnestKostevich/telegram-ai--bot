@@ -7,6 +7,68 @@ from bot.i18n import t
 from bot.handlers.vip_creator import check_vip
 
 
+async def _transcribe_voice_openai(api_key: str, ogg_bytes: bytes) -> str:
+    """Transcribe a Telegram voice (.ogg/opus) via OpenAI Whisper."""
+    url = "https://api.openai.com/v1/audio/transcriptions"
+    headers = {"Authorization": f"Bearer {api_key}"}
+    form = aiohttp.FormData()
+    form.add_field("file", ogg_bytes, filename="voice.ogg", content_type="audio/ogg")
+    form.add_field("model", "whisper-1")
+    timeout = aiohttp.ClientTimeout(total=60)
+    async with aiohttp.ClientSession(timeout=timeout) as session:
+        async with session.post(url, headers=headers, data=form) as resp:
+            data = await resp.json()
+            if "error" in data:
+                raise Exception(data["error"].get("message", str(data["error"])))
+            return data.get("text", "").strip()
+
+
+async def voice_message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Voice/audio → Whisper transcription → AI response."""
+    msg = update.message
+    if not msg or update.effective_chat.type != "private":
+        return
+    uid = update.effective_user.id
+    user = storage.get_user(uid)
+    lang = user.get("language", "ru")
+
+    api_key = user.get("api_keys", {}).get("openai")
+    if not api_key:
+        await msg.reply_text(t(lang, "voice_needs_openai"), parse_mode="HTML")
+        return
+
+    voice = msg.voice or msg.audio
+    if not voice:
+        return
+    if voice.file_size and voice.file_size > 20_000_000:
+        await msg.reply_text(t(lang, "voice_too_big"))
+        return
+
+    status = await msg.reply_text(t(lang, "voice_transcribing"))
+    try:
+        tg_file = await context.bot.get_file(voice.file_id)
+        timeout = aiohttp.ClientTimeout(total=30)
+        async with aiohttp.ClientSession(timeout=timeout) as s:
+            async with s.get(tg_file.file_path) as r:
+                raw = await r.read()
+        text = await _transcribe_voice_openai(api_key, raw)
+        if not text:
+            await status.edit_text(t(lang, "voice_empty"))
+            return
+        await status.edit_text(t(lang, "voice_got", text=text[:300]))
+
+        # Now send through the regular AI pipeline (streaming!)
+        from bot.handlers.ai_memory import _build_system_prompt, _stream_to_message
+        user["stats"]["msgs"] = user["stats"].get("msgs", 0) + 1
+        await _stream_to_message(update, context, text, _build_system_prompt(user), lang)
+        await storage.save()
+    except Exception as e:
+        try:
+            await status.edit_text(f"❌ {e}")
+        except Exception:
+            pass
+
+
 async def _download_photo_b64(context, file_id: str) -> tuple[str, str]:
     """Download Telegram photo and return (base64, mime)."""
     tg_file = await context.bot.get_file(file_id)

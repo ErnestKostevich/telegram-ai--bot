@@ -13,6 +13,8 @@ from .groups import (grouphelp_command, ban_command, warn_command, warnings_comm
                       guardian_command, groupstats_command, group_message_tracker)
 from .interactive import button_callback, keyboard_message_handler
 from .games import dice_command, coinflip_command, random_command, joke_command
-from .media import media_message_handler, generate_command
+from .media import media_message_handler, generate_command, voice_message_handler
 from .utils import time_command, weather_command, calc_command, password_command
 from .extended import daily_command, rep_command, roast_command
+from .wow import (persona_command, today_command, quiz_command, quiz_callback,
+                   slots_command, basket_command, football_command, dart_command, bowl_command)

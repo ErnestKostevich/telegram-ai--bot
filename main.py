@@ -53,6 +53,15 @@ def main():
         ("generate", handlers.generate_command),
         ("daily", handlers.daily_command), ("rep", handlers.rep_command),
         ("roast", handlers.roast_command),
+        # WOW commands
+        ("persona", handlers.persona_command),
+        ("today", handlers.today_command),
+        ("quiz", handlers.quiz_command),
+        ("slots", handlers.slots_command),
+        ("basket", handlers.basket_command),
+        ("football", handlers.football_command),
+        ("dart", handlers.dart_command),
+        ("bowl", handlers.bowl_command),
     ]
     groups = [
         ("grouphelp", handlers.grouphelp_command),
@@ -81,10 +90,14 @@ def main():
         group=-1,
     )
 
-    # Callback queries and message handlers
+    # Quiz callbacks have their own prefix → dedicated handler
+    application.add_handler(CallbackQueryHandler(handlers.quiz_callback, pattern=r"^quizans_"))
+    # Catch-all callbacks
     application.add_handler(CallbackQueryHandler(handlers.button_callback))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.keyboard_message_handler))
     application.add_handler(MessageHandler(filters.PHOTO | filters.Document.ALL, handlers.media_message_handler))
+    # Voice / audio → Whisper transcribe → AI
+    application.add_handler(MessageHandler(filters.VOICE | filters.AUDIO, handlers.voice_message_handler))
 
     logger.info("Bot is polling...")
     application.run_polling(drop_pending_updates=True)
@@ -122,6 +135,14 @@ async def _set_bot_commands(application):
         BotCommand("remind", "Set reminder (VIP)"),
         BotCommand("profile", "Your profile"),
         BotCommand("daily", "Daily reward"),
+        BotCommand("today", "AI fortune of the day"),
+        BotCommand("quiz", "AI-generated quiz"),
+        BotCommand("persona", "Switch AI persona"),
+        BotCommand("slots", "🎰 Slots mini-game"),
+        BotCommand("basket", "🏀 Basketball game"),
+        BotCommand("football", "⚽ Football game"),
+        BotCommand("dart", "🎯 Darts game"),
+        BotCommand("bowl", "🎳 Bowling game"),
         BotCommand("feedback", "Send feedback"),
         BotCommand("changelog", "What's new"),
         BotCommand("lang", "Change language"),

@@ -6,6 +6,90 @@
 
 ---
 
+## [2.1.0] — 2026-05-20 🎉 "Wow Effect"
+
+### 🌊 Streaming responses
+- AI responses now stream **live** like ChatGPT — text appears word by word
+  with a blinking cursor (`▌`). Supports 9 providers: OpenAI, Anthropic,
+  Gemini, Groq, Together, OpenRouter, Mistral, xAI, DeepSeek.
+- Telegram message is re-edited every ~1.2s to stay within rate limits.
+- Auto-falls-back to single-shot for providers without SSE support.
+- Typing indicator (`...is typing`) is sent before and during AI work.
+
+### 🎙 Voice input (VIP not required)
+- Send a voice message — bot transcribes via **OpenAI Whisper** and answers.
+- Works as long as the user has an OpenAI key set.
+- The transcription is shown back so you see what was heard.
+- Up to 20 MB voice files supported.
+
+### 🎭 AI Personas
+- `/persona [name]` switches the AI's character. Built-ins:
+  `default`, `philosopher`, `comedian`, `teacher`, `coach`, `sarcastic`,
+  `kid`, `pirate`. `/persona off` resets.
+- Persona overlays the system prompt without breaking memory or context.
+
+### 🎰 Telegram dice mini-games
+- `/slots` 🎰 — slot machine. JACKPOT on 64, triples on 22 (🍒) and 43 (🍋).
+- `/basket` 🏀 — score if dice lands 4 or 5.
+- `/football` ⚽ — goal on 3, 4, 5.
+- `/dart` 🎯 — bullseye only on 6.
+- `/bowl` 🎳 — strike on 6.
+- Per-game wins/plays tracked in your profile.
+
+### 🔮 /today
+- AI-generated personal "fortune of the day" with insight + tiny challenge
+  + vibe number. Cached per (day, user), so repeat calls within a day
+  return the same.
+
+### 🧠 /quiz [topic]
+- AI generates a single multiple-choice question on any topic.
+- Answers via inline buttons. Cumulative correct/total score is tracked.
+- Strict JSON parsing of the model's output with fence-stripping fallback.
+
+### Polish
+- `BOT_VERSION` bumped to 2.1.0.
+- 172 i18n keys × 3 languages, no drift.
+- Default-chat path uses streaming too — typing in private chat now
+  feels like a real conversation.
+
+---
+
+## [2.0.3] — 2026-05-20
+
+### Third-pass review fixes
+- HTML-escape user content in `/notes`, `/memorylist`, `/todo`, `/rules`, `/reminders`
+- Strict `/todo done|del` index validator (no more negative-index silent mutations)
+- Per-user caps: notes 100×2000, tasks 100×1000, memory 50 entries
+- `chat_history` per-message cap 4000 → 1500 chars
+- Vision/document downloads: 30s aiohttp timeout, fallback size check
+- `_int_env()` makes the bot resilient to garbage `CREATOR_ID`
+- Memory injection into system prompt capped at 30 entries
+
+## [2.0.2] — 2026-05-20
+
+### Second-pass review fixes
+- HTML-escape provider error details (avoid Telegram parser blowup)
+- HTML-escape `/feedback` content before forwarding to creator
+- Cap `/purge` reply-range at 200 message ids
+- Wrap `reply_dice` and `delete` in try/except
+- `/help` also clears interactive state
+- Periodic spam-cache cleanup every 10 minutes
+
+## [2.0.1] — 2026-05-20
+
+### Ultrareview fixes
+- Storage refuses to save if load never succeeded (prevents prod wipe)
+- Save lock + auto-refresh-sha on 409 conflicts
+- `/setkey` refused in groups (key-exposure protection)
+- `/broadcast` HTML-escapes input
+- Real AntiSpam: repeating same message 3× in 30s → 10-min mute
+- Periodic save every 5 min (so group stats survive restart)
+- `/profile` resolves actual default model
+- `bot.get_me()` cached
+- Interactive state cleared on `/start` and reply-button taps
+
+---
+
 ## [2.0.0] — 2026-05-20
 
 ### 🎉 Major release: "Memory & Vision"

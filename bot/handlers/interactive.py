@@ -489,7 +489,8 @@ async def keyboard_message_handler(update: Update, context: ContextTypes.DEFAULT
             if not query:
                 return
             from bot.ai import ai_handler
-            from bot.handlers.ai_memory import _build_system_prompt
+            from bot.handlers.ai_memory import _build_system_prompt, _typing
+            await _typing(context, update.effective_chat.id)
             msg = await update.message.reply_text(t(lang, "ai_thinking"))
             system = _build_system_prompt(user, "You are AI DISCO BOT inside a Telegram group chat. Be concise (1-4 sentences). ")
             try:
@@ -618,20 +619,8 @@ async def keyboard_message_handler(update: Update, context: ContextTypes.DEFAULT
             await translate_command(update, context)
             return
 
-        # Default: AI chat with conversation history
-        from bot.ai import ai_handler
-        from bot.handlers.ai_memory import _build_system_prompt, _send_long
+        # Default: AI chat with conversation history (streaming!)
+        from bot.handlers.ai_memory import _build_system_prompt, _stream_to_message
         user["stats"]["msgs"] = user["stats"].get("msgs", 0) + 1
-        msg = await update.message.reply_text(t(lang, "ai_thinking"))
-        try:
-            response = await ai_handler.generate_response(uid, text, system_prompt=_build_system_prompt(user))
-            if response.startswith("❌"):
-                await msg.edit_text(response, parse_mode="HTML")
-            elif len(response) > 3800:
-                await msg.delete()
-                await _send_long(update.message, response)
-            else:
-                await msg.edit_text(response, disable_web_page_preview=True)
-        except Exception as e:
-            await msg.edit_text(f"❌ {e}")
+        await _stream_to_message(update, context, text, _build_system_prompt(user), lang)
         await storage.save()
