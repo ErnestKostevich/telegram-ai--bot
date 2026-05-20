@@ -57,7 +57,7 @@ async def remind_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except ValueError:
         await update.message.reply_text(t(lang, "remind_bad_time"))
         return
-    text = " ".join(context.args[1:])
+    text = " ".join(context.args[1:])[:2000]  # cap reminder text
     target_time = datetime.datetime.now() + datetime.timedelta(minutes=minutes)
     storage.data["reminders"].append({
         "user_id": uid, "chat_id": update.effective_chat.id,
@@ -81,7 +81,8 @@ async def reminders_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = t(lang, "reminders_title", count=len(user_reminders))
     for i, r in enumerate(user_reminders, 1):
         dt = datetime.datetime.fromtimestamp(r["time"]).strftime("%Y-%m-%d %H:%M")
-        text += f"<b>#{i}</b> ({dt})\n{r['text']}\n\n"
+        # Escape so user-supplied reminder text can't break HTML rendering
+        text += f"<b>#{i}</b> ({dt})\n{html.escape(r.get('text', ''))}\n\n"
     await update.message.reply_text(text, parse_mode="HTML")
 
 
@@ -92,7 +93,7 @@ async def feedback_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
         await update.message.reply_text(t(lang, "feedback_usage"))
         return
-    text = " ".join(context.args)
+    text = " ".join(context.args)[:2000]
     uname = update.effective_user.username
     uname_disp = f"@{uname}" if uname else (update.effective_user.first_name or str(uid))
     if CREATOR_ID:

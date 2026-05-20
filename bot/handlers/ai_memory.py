@@ -1,9 +1,16 @@
+import html
 from telegram import Update
 from telegram.ext import ContextTypes
-from telegram.helpers import escape_markdown
 from bot.storage import storage
 from bot.ai import ai_handler, PROVIDERS
 from bot.i18n import t
+
+# Per-user cap on long-term memory entries to keep system-prompt size sane
+MAX_MEMORY_ENTRIES = 50
+MAX_MEMORY_KEY_LEN = 100
+MAX_MEMORY_VALUE_LEN = 1000
+# Cap memory entries injected into AI system prompts
+MEMORY_SYSTEM_PROMPT_CAP = 30
 
 
 def _build_system_prompt(user: dict, base: str = "") -> str:
@@ -14,9 +21,11 @@ def _build_system_prompt(user: dict, base: str = "") -> str:
     sp += "Be concise and clear. Use simple line breaks instead of complex markdown. "
     if user.get("disco_mode"):
         sp += "Style: playful, witty, use emojis and humor moderately. "
-    if user.get("memory"):
+    memory = user.get("memory") or {}
+    if memory:
+        # Cap how many entries get injected — otherwise huge memories blow context
         sp += "User's saved memory:\n"
-        for k, v in user["memory"].items():
+        for k, v in list(memory.items())[:MEMORY_SYSTEM_PROMPT_CAP]:
             sp += f"- {k}: {v}\n"
     return sp
 
@@ -143,11 +152,16 @@ async def memorysave_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if len(context.args) < 2:
         await update.message.reply_text(t(lang, "mem_usage"))
         return
-    key = context.args[0]
-    value = " ".join(context.args[1:])
-    user["memory"][key] = value
+    key = context.args[0][:MAX_MEMORY_KEY_LEN]
+    value = " ".join(context.args[1:])[:MAX_MEMORY_VALUE_LEN]
+    memory = user.setdefault("memory", {})
+    # If adding a new key would exceed cap, refuse
+    if key not in memory and len(memory) >= MAX_MEMORY_ENTRIES:
+        await update.message.reply_text(t(lang, "mem_full", max=MAX_MEMORY_ENTRIES))
+        return
+    memory[key] = value
     await storage.save()
-    await update.message.reply_text(t(lang, "mem_saved", key=key, value=value))
+    await update.message.reply_text(t(lang, "mem_saved", key=html.escape(key), value=html.escape(value)))
 
 
 async def memoryget_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -160,9 +174,9 @@ async def memoryget_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     key = context.args[0]
     value = user["memory"].get(key)
     if value:
-        await update.message.reply_text(t(lang, "mem_value", key=key, value=value))
+        await update.message.reply_text(t(lang, "mem_value", key=html.escape(key), value=html.escape(value)))
     else:
-        await update.message.reply_text(t(lang, "mem_not_found", key=key))
+        await update.message.reply_text(t(lang, "mem_not_found", key=html.escape(key)))
 
 
 async def memorylist_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -173,8 +187,9 @@ async def memorylist_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await update.message.reply_text(t(lang, "mem_empty"))
         return
     text = t(lang, "mem_title")
+    # Escape so any < or & in keys/values doesn't crash HTML parser
     for k, v in user["memory"].items():
-        text += f"• <b>{k}</b>: {v}\n"
+        text += f"• <b>{html.escape(k)}</b>: {html.escape(v)}\n"
     await update.message.reply_text(text, parse_mode="HTML")
 
 
@@ -189,6 +204,6 @@ async def memorydel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if key in user["memory"]:
         del user["memory"][key]
         await storage.save()
-        await update.message.reply_text(t(lang, "mem_deleted", key=key))
+        await update.message.reply_text(t(lang, "mem_deleted", key=html.escape(key)))
     else:
-        await update.message.reply_text(t(lang, "mem_not_found", key=key))
+        await update.message.reply_text(t(lang, "mem_not_found", key=html.escape(key)))

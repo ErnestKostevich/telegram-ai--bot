@@ -1,3 +1,4 @@
+import html
 import logging
 import time
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -19,9 +20,11 @@ async def _check_reminders_task(bot):
                     prefix = "⏰ <b>НАПОМИНАНИЕ:</b>"
                     if overdue_min > 5:
                         prefix = f"⏰ <b>НАПОМИНАНИЕ</b> (опоздало на {overdue_min} мин):"
+                    # Escape so a reminder body with < or & doesn't fail delivery
+                    body = html.escape(r.get("text", ""))
                     await bot.send_message(
                         chat_id=r["chat_id"],
-                        text=f"{prefix}\n\n{r['text']}",
+                        text=f"{prefix}\n\n{body}",
                         parse_mode="HTML",
                     )
                     to_remove.append(r)
