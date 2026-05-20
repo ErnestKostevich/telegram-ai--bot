@@ -412,8 +412,14 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # === Games ===
     elif data == "game_dice":
-        await query.message.reply_dice(emoji="🎲")
-        await query.message.delete()
+        try:
+            await query.message.reply_dice(emoji="🎲")
+        except Exception:
+            pass
+        try:
+            await query.message.delete()
+        except Exception:
+            pass
     elif data == "game_coinflip":
         result = get_text(lang, "coinflip_h") if __import__("random").randint(0, 1) else get_text(lang, "coinflip_t")
         await query.edit_message_text(t(lang, "coinflip_text", result=result), parse_mode="HTML")
@@ -429,8 +435,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         }
         await query.edit_message_text(f"😄 {random.choice(jokes.get(lang, jokes['en']))}")
     elif data == "game_daily":
-        from bot.handlers.extended import daily_command
-        # We can't call it directly with query, so just nudge them
         msgs = {"ru": "🎁 Используйте команду /daily", "en": "🎁 Use /daily command", "it": "🎁 Usa il comando /daily"}
         await query.edit_message_text(msgs.get(lang, msgs["en"]))
     elif data == "game_roast":

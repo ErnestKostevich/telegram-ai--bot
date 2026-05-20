@@ -26,6 +26,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     user = storage.get_user(user_id)
     user["stats"]["commands"] += 1
+    user["state"] = None  # reset any half-finished interactive flow
     lang = user.get("language", "ru")
     await update.message.reply_text(get_text(lang, "help"), parse_mode="HTML", reply_markup=get_help_keyboard(lang, user_id=user_id))
 
