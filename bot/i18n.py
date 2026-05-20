@@ -79,6 +79,32 @@ translations = {
         "notes_full": "❌ Лимит заметок: {max}. Удалите старые: /delnote [#]",
         "tasks_full": "❌ Лимит задач: {max}. Очистите: /todo del [#]",
         "mem_full": "❌ Лимит memory-записей: {max}. Удалите старые: /memorydel [ключ]",
+        # WOW: voice
+        "voice_needs_openai": "🎙 Чтобы я распознавал голосовые, добавьте ключ OpenAI:\n<code>/setkey openai sk-...</code>",
+        "voice_transcribing": "🎙 Распознаю голос...",
+        "voice_too_big": "❌ Голосовое слишком большое (>20 MB).",
+        "voice_empty": "🤔 Не удалось распознать речь.",
+        "voice_got": "🎙 <i>«{text}»</i>",
+        # WOW: persona
+        "persona_status": "🎭 <b>Текущая персона:</b> <code>{current}</code>\n\nДоступные: {list}\n\nСменить: <code>/persona [имя]</code> или <code>/persona off</code>",
+        "persona_set": "🎭 Персона установлена: <b>{name}</b>",
+        "persona_off": "🎭 Персона сброшена.",
+        "persona_unknown": "❌ Неизвестная персона.\nДоступные: {list}",
+        # WOW: mini-games
+        "game_win": "🎉 <b>{label}</b>\nПобед: <b>{wins}</b> / {plays}",
+        "game_lose": "🎲 Не повезло в этот раз.\nПобед: {wins} / {plays}",
+        # WOW: today
+        "today_loading": "🔮 Составляю прогноз дня...",
+        "today_text": "🔮 <b>Сегодня — {date}</b>\n\n{body}",
+        # WOW: quiz
+        "quiz_default_topic": "общие знания",
+        "quiz_loading": "🧠 Готовлю вопрос про «{topic}»...",
+        "quiz_error": "❌ Не получилось сгенерировать квиз: {err}",
+        "quiz_question": "🧠 <b>Квиз: {topic}</b>\n\n{q}",
+        "quiz_correct": "✅ <b>Правильно!</b> Ответ <b>{chosen}</b> — {text}",
+        "quiz_wrong": "❌ Неверно. Вы выбрали <b>{chosen}</b> ({chosen_text}).\nПравильный: <b>{correct}</b> — {correct_text}",
+        "quiz_score": "Счёт: <b>{correct}/{total}</b>",
+        "quiz_expired": "⌛ Этот квиз уже завершён или устарел.",
         # Todo
         "todo_empty": "📭 Список задач пуст.\nДобавить: /todo [текст]", "todo_title": "📋 <b>Задачи:</b>\n\n",
         "todo_done": "✅ Задача #{num} выполнена!", "todo_deleted": "🗑 Задача удалена.",
@@ -243,6 +269,32 @@ translations = {
         "notes_full": "❌ Notes limit: {max}. Delete old ones: /delnote [#]",
         "tasks_full": "❌ Tasks limit: {max}. Clean up: /todo del [#]",
         "mem_full": "❌ Memory entries limit: {max}. Delete old: /memorydel [key]",
+        # WOW: voice
+        "voice_needs_openai": "🎙 To transcribe voice messages, add an OpenAI key:\n<code>/setkey openai sk-...</code>",
+        "voice_transcribing": "🎙 Transcribing voice...",
+        "voice_too_big": "❌ Voice file too large (>20 MB).",
+        "voice_empty": "🤔 Couldn't understand the voice message.",
+        "voice_got": "🎙 <i>“{text}”</i>",
+        # WOW: persona
+        "persona_status": "🎭 <b>Current persona:</b> <code>{current}</code>\n\nAvailable: {list}\n\nSwitch: <code>/persona [name]</code> or <code>/persona off</code>",
+        "persona_set": "🎭 Persona set: <b>{name}</b>",
+        "persona_off": "🎭 Persona reset.",
+        "persona_unknown": "❌ Unknown persona.\nAvailable: {list}",
+        # WOW: mini-games
+        "game_win": "🎉 <b>{label}</b>\nWins: <b>{wins}</b> / {plays}",
+        "game_lose": "🎲 Better luck next time.\nWins: {wins} / {plays}",
+        # WOW: today
+        "today_loading": "🔮 Reading the cosmic signals...",
+        "today_text": "🔮 <b>Today — {date}</b>\n\n{body}",
+        # WOW: quiz
+        "quiz_default_topic": "general knowledge",
+        "quiz_loading": "🧠 Cooking up a question about “{topic}”...",
+        "quiz_error": "❌ Couldn't generate quiz: {err}",
+        "quiz_question": "🧠 <b>Quiz: {topic}</b>\n\n{q}",
+        "quiz_correct": "✅ <b>Correct!</b> Answer <b>{chosen}</b> — {text}",
+        "quiz_wrong": "❌ Wrong. You chose <b>{chosen}</b> ({chosen_text}).\nCorrect: <b>{correct}</b> — {correct_text}",
+        "quiz_score": "Score: <b>{correct}/{total}</b>",
+        "quiz_expired": "⌛ This quiz is already done or has expired.",
         "todo_empty": "📭 No tasks.\nAdd: /todo [text]", "todo_title": "📋 <b>Tasks:</b>\n\n",
         "todo_done": "✅ Task #{num} done!", "todo_deleted": "🗑 Task deleted.",
         "todo_added": "✅ Task added!", "todo_bad_num": "❌ Enter a valid number.",
@@ -399,6 +451,32 @@ translations = {
         "notes_full": "❌ Limite note: {max}. Elimina vecchie: /delnote [#]",
         "tasks_full": "❌ Limite compiti: {max}. Pulisci: /todo del [#]",
         "mem_full": "❌ Limite memoria: {max}. Elimina vecchi: /memorydel [chiave]",
+        # WOW: voice
+        "voice_needs_openai": "🎙 Per trascrivere i vocali, aggiungi una chiave OpenAI:\n<code>/setkey openai sk-...</code>",
+        "voice_transcribing": "🎙 Trascrivo la voce...",
+        "voice_too_big": "❌ Vocale troppo grande (>20 MB).",
+        "voice_empty": "🤔 Non sono riuscito a capire il vocale.",
+        "voice_got": "🎙 <i>«{text}»</i>",
+        # WOW: persona
+        "persona_status": "🎭 <b>Persona attuale:</b> <code>{current}</code>\n\nDisponibili: {list}\n\nCambia: <code>/persona [nome]</code> o <code>/persona off</code>",
+        "persona_set": "🎭 Persona impostata: <b>{name}</b>",
+        "persona_off": "🎭 Persona reset.",
+        "persona_unknown": "❌ Persona sconosciuta.\nDisponibili: {list}",
+        # WOW: mini-games
+        "game_win": "🎉 <b>{label}</b>\nVittorie: <b>{wins}</b> / {plays}",
+        "game_lose": "🎲 Più fortuna la prossima volta.\nVittorie: {wins} / {plays}",
+        # WOW: today
+        "today_loading": "🔮 Leggo i segnali cosmici...",
+        "today_text": "🔮 <b>Oggi — {date}</b>\n\n{body}",
+        # WOW: quiz
+        "quiz_default_topic": "cultura generale",
+        "quiz_loading": "🧠 Preparo una domanda su «{topic}»...",
+        "quiz_error": "❌ Impossibile generare il quiz: {err}",
+        "quiz_question": "🧠 <b>Quiz: {topic}</b>\n\n{q}",
+        "quiz_correct": "✅ <b>Esatto!</b> Risposta <b>{chosen}</b> — {text}",
+        "quiz_wrong": "❌ Sbagliato. Hai scelto <b>{chosen}</b> ({chosen_text}).\nCorretta: <b>{correct}</b> — {correct_text}",
+        "quiz_score": "Punteggio: <b>{correct}/{total}</b>",
+        "quiz_expired": "⌛ Quiz già completato o scaduto.",
         "todo_empty": "📭 Nessun compito.\nAggiungi: /todo [testo]", "todo_title": "📋 <b>Compiti:</b>\n\n",
         "todo_done": "✅ Compito #{num} completato!", "todo_deleted": "🗑 Compito eliminato.",
         "todo_added": "✅ Compito aggiunto!", "todo_bad_num": "❌ Inserisci un numero valido.",

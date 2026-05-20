@@ -1,9 +1,16 @@
 import aiohttp
 import base64
 import html
-from typing import Optional, List, Dict, Any
+import json
+from typing import Optional, List, Dict, Any, AsyncIterator
 from bot.storage import storage
 from bot.config import CHAT_HISTORY_LIMIT
+
+# Providers that support our streaming implementation
+STREAMING_PROVIDERS = {
+    "openai", "anthropic", "gemini", "groq", "together",
+    "openrouter", "mistral", "xai", "deepseek",
+}
 
 PROVIDERS = [
     "gemini", "openai", "anthropic", "groq", "together",
@@ -210,6 +217,160 @@ class AIHandler:
                 if "message" in data and "content" in data["message"]:
                     return data["message"]["content"][0]["text"]
                 return str(data)
+
+    # ============== STREAMING ==============
+
+    async def stream_response(
+        self,
+        user_id: int,
+        prompt: str,
+        system_prompt: Optional[str] = None,
+        use_history: bool = True,
+    ) -> AsyncIterator[str]:
+        """Yield text chunks as they arrive from the provider. Caller is
+        responsible for accumulating and persisting the final text to history."""
+        user = storage.get_user(user_id)
+        lang = user.get("language", "ru")
+        provider = user.get("ai_provider", "gemini")
+        api_key = user.get("api_keys", {}).get(provider)
+
+        if not api_key:
+            yield _no_key_msg(lang, provider)
+            return
+        if provider not in STREAMING_PROVIDERS:
+            # Fall back to a single-shot response
+            text = await self.generate_response(user_id, prompt, system_prompt, use_history)
+            yield text
+            return
+
+        model = self._get_model(user_id, provider)
+        history = self._get_history(user_id) if use_history else []
+
+        try:
+            if provider == "gemini":
+                async for chunk in self._stream_gemini(api_key, model, prompt, system_prompt, history):
+                    yield chunk
+            elif provider == "anthropic":
+                async for chunk in self._stream_anthropic(api_key, model, prompt, system_prompt, history):
+                    yield chunk
+            elif provider in PROVIDER_CONFIGS:
+                url, _ = PROVIDER_CONFIGS[provider]
+                async for chunk in self._stream_openai_compat(url, api_key, model, prompt, system_prompt, history):
+                    yield chunk
+        except Exception as e:
+            yield _err_msg(lang, provider, str(e))
+
+    def push_history(self, user_id: int, prompt: str, response: str):
+        """Append a finished user+assistant turn to history (used after streaming)."""
+        if not response or response.startswith("❌"):
+            return
+        self._push_history(user_id, "user", prompt)
+        self._push_history(user_id, "assistant", response)
+
+    async def _stream_openai_compat(self, url, api_key, model, prompt, system_prompt, history):
+        headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+        messages = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        for m in history:
+            messages.append({"role": m["role"], "content": m["content"]})
+        messages.append({"role": "user", "content": prompt})
+        payload = {"model": model, "messages": messages, "max_tokens": 2048, "stream": True}
+        async with aiohttp.ClientSession(timeout=REQUEST_TIMEOUT) as session:
+            async with session.post(url, headers=headers, json=payload) as resp:
+                if resp.status != 200:
+                    body = await resp.text()
+                    try:
+                        err = json.loads(body)
+                        msg = err.get("error", {}).get("message", body) if isinstance(err, dict) else body
+                    except json.JSONDecodeError:
+                        msg = body
+                    raise Exception(str(msg)[:300])
+                async for raw in resp.content:
+                    line = raw.decode("utf-8", errors="ignore").strip()
+                    if not line or not line.startswith("data:"):
+                        continue
+                    data = line[5:].strip()
+                    if data == "[DONE]":
+                        break
+                    try:
+                        obj = json.loads(data)
+                        delta = obj.get("choices", [{}])[0].get("delta", {}).get("content")
+                        if delta:
+                            yield delta
+                    except (json.JSONDecodeError, IndexError, AttributeError):
+                        continue
+
+    async def _stream_anthropic(self, api_key, model, prompt, system_prompt, history):
+        url = "https://api.anthropic.com/v1/messages"
+        headers = {
+            "x-api-key": api_key,
+            "anthropic-version": "2023-06-01",
+            "Content-Type": "application/json",
+        }
+        messages = list(history) + [{"role": "user", "content": prompt}]
+        payload = {"model": model, "max_tokens": 2048, "messages": messages, "stream": True}
+        if system_prompt:
+            payload["system"] = system_prompt
+        async with aiohttp.ClientSession(timeout=REQUEST_TIMEOUT) as session:
+            async with session.post(url, headers=headers, json=payload) as resp:
+                if resp.status != 200:
+                    body = await resp.text()
+                    raise Exception(body[:300])
+                async for raw in resp.content:
+                    line = raw.decode("utf-8", errors="ignore").strip()
+                    if not line.startswith("data:"):
+                        continue
+                    data = line[5:].strip()
+                    if not data:
+                        continue
+                    try:
+                        obj = json.loads(data)
+                        if obj.get("type") == "content_block_delta":
+                            delta = obj.get("delta", {}).get("text")
+                            if delta:
+                                yield delta
+                        elif obj.get("type") == "message_stop":
+                            break
+                    except json.JSONDecodeError:
+                        continue
+
+    async def _stream_gemini(self, api_key, model, prompt, system_prompt, history):
+        # Gemini stream endpoint uses ?alt=sse for line-based SSE
+        url = (f"https://generativelanguage.googleapis.com/v1beta/models/"
+               f"{model}:streamGenerateContent?alt=sse&key={api_key}")
+        contents = []
+        for m in history:
+            role = "model" if m["role"] == "assistant" else "user"
+            contents.append({"role": role, "parts": [{"text": m["content"]}]})
+        contents.append({"role": "user", "parts": [{"text": prompt}]})
+        payload: Dict[str, Any] = {"contents": contents}
+        if system_prompt:
+            payload["systemInstruction"] = {"parts": [{"text": system_prompt}]}
+        async with aiohttp.ClientSession(timeout=REQUEST_TIMEOUT) as session:
+            async with session.post(url, json=payload) as resp:
+                if resp.status != 200:
+                    body = await resp.text()
+                    raise Exception(body[:300])
+                async for raw in resp.content:
+                    line = raw.decode("utf-8", errors="ignore").strip()
+                    if not line.startswith("data:"):
+                        continue
+                    data = line[5:].strip()
+                    if not data:
+                        continue
+                    try:
+                        obj = json.loads(data)
+                        cand = obj.get("candidates", [{}])[0]
+                        parts = cand.get("content", {}).get("parts", [])
+                        for p in parts:
+                            text = p.get("text")
+                            if text:
+                                yield text
+                    except (json.JSONDecodeError, IndexError, AttributeError):
+                        continue
+
+    # ============== END STREAMING ==============
 
     async def _call_openai_compat(self, url, api_key, model, prompt, system_prompt, history, image_b64=None, image_mime="image/jpeg"):
         headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}

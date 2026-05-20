@@ -1,8 +1,12 @@
+import asyncio
 import html
+import time
 from telegram import Update
+from telegram.constants import ChatAction
+from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 from bot.storage import storage
-from bot.ai import ai_handler, PROVIDERS
+from bot.ai import ai_handler, PROVIDERS, STREAMING_PROVIDERS
 from bot.i18n import t
 
 # Per-user cap on long-term memory entries to keep system-prompt size sane
@@ -11,6 +15,102 @@ MAX_MEMORY_KEY_LEN = 100
 MAX_MEMORY_VALUE_LEN = 1000
 # Cap memory entries injected into AI system prompts
 MEMORY_SYSTEM_PROMPT_CAP = 30
+
+# Streaming: re-edit Telegram message at most every N seconds (Telegram caps ~1/sec/chat)
+STREAM_EDIT_INTERVAL = 1.2
+# Stop streaming-edit if accumulated text exceeds this; switch to send_new_chunks
+STREAM_MAX_EDIT_LEN = 3800
+
+
+async def _typing(context, chat_id):
+    """Fire-and-forget typing indicator; failure is silent (user may have blocked the bot)."""
+    try:
+        await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
+    except Exception:
+        pass
+
+
+async def _stream_to_message(update, context, prompt, system_prompt, lang):
+    """Run a streaming AI response and update the Telegram message live.
+    Returns the final accumulated text."""
+    uid = update.effective_user.id
+    chat_id = update.effective_chat.id
+    user = storage.get_user(uid)
+    provider = user.get("ai_provider", "gemini")
+
+    await _typing(context, chat_id)
+    placeholder = await update.message.reply_text(t(lang, "ai_thinking"))
+
+    # If the provider can't stream, do the old single-shot path
+    if provider not in STREAMING_PROVIDERS:
+        response = await ai_handler.generate_response(uid, prompt, system_prompt=system_prompt)
+        if response.startswith("❌"):
+            await placeholder.edit_text(response, parse_mode="HTML")
+        elif len(response) > 3800:
+            await placeholder.delete()
+            await _send_long(update.message, response)
+        else:
+            await placeholder.edit_text(response, disable_web_page_preview=True)
+        return response
+
+    acc = ""
+    last_edit = 0.0
+    last_text = ""
+    error_text = None
+
+    try:
+        async for chunk in ai_handler.stream_response(uid, prompt, system_prompt=system_prompt):
+            if chunk.startswith("❌"):
+                error_text = chunk
+                break
+            acc += chunk
+            now = time.monotonic()
+            if now - last_edit < STREAM_EDIT_INTERVAL:
+                continue
+            if len(acc) > STREAM_MAX_EDIT_LEN:
+                # Too long to keep editing — finalize current placeholder and break to chunked send
+                break
+            preview = (acc + " ▌").strip()
+            if preview == last_text or not preview:
+                continue
+            try:
+                await placeholder.edit_text(preview, disable_web_page_preview=True)
+                last_text = preview
+                last_edit = now
+                # Refresh typing indicator periodically
+                await _typing(context, chat_id)
+            except BadRequest:
+                # Telegram says "message not modified" or rate-limit; ignore and continue
+                continue
+            except Exception:
+                continue
+    except Exception as e:
+        error_text = f"❌ {e}"
+
+    final = error_text or acc.strip()
+    if not final:
+        final = "…"
+
+    try:
+        if len(final) <= 3800:
+            if final != last_text.rstrip(" ▌"):
+                try:
+                    await placeholder.edit_text(final, parse_mode="HTML" if error_text else None,
+                                                 disable_web_page_preview=True)
+                except BadRequest:
+                    pass
+        else:
+            try:
+                await placeholder.delete()
+            except Exception:
+                pass
+            await _send_long(update.message, final)
+    except Exception:
+        pass
+
+    if not error_text:
+        ai_handler.push_history(uid, prompt, acc)
+    return final
 
 
 def _build_system_prompt(user: dict, base: str = "") -> str:
@@ -21,6 +121,14 @@ def _build_system_prompt(user: dict, base: str = "") -> str:
     sp += "Be concise and clear. Use simple line breaks instead of complex markdown. "
     if user.get("disco_mode"):
         sp += "Style: playful, witty, use emojis and humor moderately. "
+    # Persona overlay
+    try:
+        from bot.handlers.wow import get_persona_addon
+        persona = get_persona_addon(user)
+        if persona:
+            sp += persona + " "
+    except Exception:
+        pass
     memory = user.get("memory") or {}
     if memory:
         # Cap how many entries get injected — otherwise huge memories blow context
@@ -120,18 +228,7 @@ async def ai_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(t(lang, "ai_no_query"))
         return
     prompt = " ".join(context.args)
-    msg = await update.message.reply_text(t(lang, "ai_thinking"))
-    try:
-        response = await ai_handler.generate_response(uid, prompt, system_prompt=_build_system_prompt(user))
-        if response.startswith("❌"):
-            await msg.edit_text(response, parse_mode="HTML")
-        elif len(response) > 3800:
-            await msg.delete()
-            await _send_long(update.message, response)
-        else:
-            await msg.edit_text(response, disable_web_page_preview=True)
-    except Exception as e:
-        await msg.edit_text(f"❌ {e}")
+    await _stream_to_message(update, context, prompt, _build_system_prompt(user), lang)
     await storage.save()
 
 
