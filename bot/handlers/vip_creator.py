@@ -97,9 +97,10 @@ async def feedback_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uname_disp = f"@{uname}" if uname else (update.effective_user.first_name or str(uid))
     if CREATOR_ID:
         try:
+            # Escape user-supplied text & username so notification renders safely
             await context.bot.send_message(
                 CREATOR_ID,
-                f"💬 <b>Feedback</b>\nFrom: {uname_disp} (<code>{uid}</code>)\nLang: {lang}\n\n{text}",
+                f"💬 <b>Feedback</b>\nFrom: {html.escape(uname_disp)} (<code>{uid}</code>)\nLang: {lang}\n\n{html.escape(text)}",
                 parse_mode="HTML",
             )
         except Exception:

@@ -52,11 +52,30 @@ async def _periodic_save_task():
         logger.error(f"Periodic save failed: {e}")
 
 
+async def _spam_cache_cleanup_task():
+    """Drop antispam buckets that haven't been touched in 5 minutes so the cache
+    doesn't grow forever in long-lived groups."""
+    try:
+        from bot.handlers import groups
+        cutoff = time.time() - 300
+        to_drop = [
+            key for key, bucket in groups._spam_cache.items()
+            if not bucket or bucket[-1][1] < cutoff
+        ]
+        for key in to_drop:
+            groups._spam_cache.pop(key, None)
+        if to_drop:
+            logger.debug(f"Spam-cache cleanup: dropped {len(to_drop)} stale buckets.")
+    except Exception as e:
+        logger.error(f"Spam-cache cleanup failed: {e}")
+
+
 def start_scheduler(bot_or_app):
     # Accept either a Bot or an Application for compatibility
     bot = getattr(bot_or_app, "bot", None) or bot_or_app
     scheduler = AsyncIOScheduler()
     scheduler.add_job(_check_reminders_task, "interval", minutes=1, args=[bot])
     scheduler.add_job(_periodic_save_task, "interval", minutes=5)
+    scheduler.add_job(_spam_cache_cleanup_task, "interval", minutes=10)
     scheduler.start()
-    logger.info("APScheduler started: reminders (1m) + periodic save (5m).")
+    logger.info("APScheduler started: reminders (1m) + save (5m) + spam cleanup (10m).")

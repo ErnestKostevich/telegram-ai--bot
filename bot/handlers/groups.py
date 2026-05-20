@@ -256,6 +256,10 @@ async def purge_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message.reply_to_message:
         from_id = update.message.reply_to_message.message_id
         to_id = update.message.message_id
+        # Safety cap: replying to a very old message shouldn't fire thousands
+        # of delete API calls. Bound the range to the last 200 message ids.
+        if to_id - from_id > 200:
+            from_id = to_id - 200
         for mid in range(from_id, to_id + 1):
             try:
                 await context.bot.delete_message(chat_id, mid)

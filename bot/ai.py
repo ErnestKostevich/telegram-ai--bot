@@ -1,5 +1,6 @@
 import aiohttp
 import base64
+import html
 from typing import Optional, List, Dict, Any
 from bot.storage import storage
 from bot.config import CHAT_HISTORY_LIMIT
@@ -64,10 +65,13 @@ def _no_key_msg(lang: str, provider: str) -> str:
 
 
 def _err_msg(lang: str, provider: str, detail: str) -> str:
+    # Provider error strings can contain <, >, & — escape so HTML parsers
+    # downstream (we send these with parse_mode="HTML") don't blow up.
+    safe = html.escape(str(detail))[:600]
     msgs = {
-        "ru": f"❌ Ошибка API ({provider}): {detail}",
-        "en": f"❌ API error ({provider}): {detail}",
-        "it": f"❌ Errore API ({provider}): {detail}",
+        "ru": f"❌ Ошибка API ({provider}): {safe}",
+        "en": f"❌ API error ({provider}): {safe}",
+        "it": f"❌ Errore API ({provider}): {safe}",
     }
     return msgs.get(lang, msgs["en"])
 
