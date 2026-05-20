@@ -175,14 +175,55 @@ async def setkey_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = storage.get_user(uid)
     lang = user.get("language", "ru")
 
-    # SECURITY: never let users paste keys in groups — bot may not be admin,
-    # so the delete would fail silently and the secret would stay visible.
+    # SECURITY: in groups we MUST scrub the message first. If we successfully
+    # delete it the key is safe to save and we confirm via DM. If we couldn't
+    # delete (bot isn't admin) we refuse and tell the user to use a private chat.
     if update.effective_chat.type != "private":
+        deleted_ok = False
         try:
             await update.message.delete()
+            deleted_ok = True
         except Exception:
             pass
-        await update.message.reply_text(t(lang, "key_group_refuse"), parse_mode="HTML")
+
+        if deleted_ok and len(context.args) >= 2:
+            provider = context.args[0].lower()
+            key = context.args[1]
+            if provider in PROVIDERS:
+                user["api_keys"][provider] = key
+                await storage.save()
+                # The original message is gone — try to DM the user privately
+                try:
+                    await context.bot.send_message(
+                        uid,
+                        t(lang, "key_saved_dm", provider=provider),
+                        parse_mode="HTML",
+                    )
+                    return
+                except Exception:
+                    # User hasn't started a private chat with the bot yet.
+                    # Post a generic confirmation in the group (no key contents).
+                    try:
+                        await context.bot.send_message(
+                            chat_id=update.effective_chat.id,
+                            text=t(lang, "key_saved_no_dm", provider=provider),
+                            parse_mode="HTML",
+                        )
+                    except Exception:
+                        pass
+                    return
+
+        # Either delete failed (key still visible) or args were missing.
+        # Refuse loudly via a normal send_message — reply_text would target
+        # the now-deleted message.
+        try:
+            await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text=t(lang, "key_group_refuse"),
+                parse_mode="HTML",
+            )
+        except Exception:
+            pass
         try:
             await context.bot.send_message(uid, t(lang, "key_group_dm_hint"), parse_mode="HTML")
         except Exception:
