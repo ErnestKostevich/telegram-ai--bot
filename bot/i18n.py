@@ -1,14 +1,20 @@
 translations = {
     "ru": {
         # === Welcome / Main ===
-        "welcome": ("🤖 <b>Добро пожаловать в AI DISCO BOT!</b>\n\n"
-                     "Я — многофункциональный ИИ-ассистент с памятью диалога.\n"
-                     "Система <b>BYOK</b> даёт свободу выбора из 10+ провайдеров.\n\n"
+        "welcome": ("🤖 <b>Добро пожаловать в AI DISCO BOT v2.1!</b>\n\n"
+                     "Я — AI-ассистент со <b>стримингом ответов</b>, как ChatGPT,\n"
+                     "прямо внутри Telegram.\n\n"
                      "<b>С чего начать:</b>\n"
-                     "1️⃣ ⚙️ Настройки → Провайдер\n"
-                     "2️⃣ 🔑 Установить API-ключ\n"
-                     "3️⃣ Просто пишите — бот помнит контекст\n\n"
-                     "💎 <b>VIP:</b> анализ фото, документов, генерация картинок, напоминания.\n\n"
+                     "1️⃣ ⚙️ Настройки → ⚡ Провайдер (выбери AI)\n"
+                     "2️⃣ 🔑 API Ключ (выбери провайдера → пришли ключ)\n"
+                     "3️⃣ Просто пиши — бот помнит контекст\n\n"
+                     "<b>Что попробовать:</b>\n"
+                     "🎙 Голосовое сообщение → распознаю и отвечу\n"
+                     "🎭 /persona → 8 характеров AI\n"
+                     "🎰 /slots /basket /football → мини-игры\n"
+                     "🔮 /today → AI-прогноз дня\n"
+                     "🧠 /quiz [тема] → квиз с кнопками\n\n"
+                     "💎 <b>VIP:</b> картинки, анализ фото/документов, напоминания.\n\n"
                      "📜 /changelog — что нового\n👇 <i>Меню ниже:</i>"),
         "help": "📚 <b>Справка по командам:</b>\n\nВыберите нужный раздел:",
         "lang_changed": "🇷🇺 Язык изменён на Русский.",
@@ -67,6 +73,23 @@ translations = {
         "key_group_dm_hint": "👋 Пишите ключи мне сюда. Формат: <code>/setkey gemini ВАШ_КЛЮЧ</code>",
         "key_saved_dm": "🔐 Ключ для <b>{provider}</b> сохранён и сообщение в группе удалено. Можно пользоваться!",
         "key_saved_no_dm": "🔐 Ключ для пользователя сохранён, сообщение удалено. (Откройте бот в личке чтобы получать подтверждения там.)",
+        # v2.1.x additions
+        "reminders_hint": "Отменить: /unremind [#] или /unremind all",
+        "unremind_usage": "Использование: /unremind [номер] или /unremind all",
+        "unremind_ok": "✅ Напоминание #{num} удалено.",
+        "unremind_bad_num": "❌ Введите номер от 1 до {max}.",
+        "unremind_all": "🗑 Удалено напоминаний: {count}",
+        "cancel_done": "✅ Текущее действие отменено.",
+        "cancel_nothing": "ℹ️ Сейчас ничего не выполняется.",
+        "leaderboard_empty": "📭 Пока никого в рейтинге.",
+        "leaderboard_title": "🏆 <b>Топ пользователей:</b>\n",
+        "reset_warn": ("⚠️ <b>Сброс данных</b>\n\nЭто <b>навсегда</b> удалит:\n"
+                       "• Все ваши заметки, задачи и memory\n"
+                       "• Историю диалога и настройки AI\n"
+                       "• Все ваши напоминания\n\n"
+                       "Перед удалением я отправлю вам экспорт JSON.\n\n"
+                       "Подтвердить: <code>/reset confirm</code>"),
+        "reset_done": "🗑 Все ваши данные удалены. Чтобы начать заново — /start",
         "model_set": "🧠 Модель: <b>{model}</b>",
         "model_usage": "Использование: /setmodel [модель]\nТекущая: {current}",
         # Memory
@@ -210,14 +233,20 @@ translations = {
         "translate_generating": "🌍 Перевожу...",
     },
     "en": {
-        "welcome": ("🤖 <b>Welcome to AI DISCO BOT!</b>\n\n"
-                     "I'm a multi-functional AI assistant with conversation memory.\n"
-                     "The <b>BYOK</b> system lets you pick from 10+ providers.\n\n"
+        "welcome": ("🤖 <b>Welcome to AI DISCO BOT v2.1!</b>\n\n"
+                     "AI assistant with <b>streaming responses</b> like ChatGPT,\n"
+                     "right inside Telegram.\n\n"
                      "<b>Quick start:</b>\n"
-                     "1️⃣ ⚙️ Settings → Provider\n"
-                     "2️⃣ 🔑 Set your API key\n"
+                     "1️⃣ ⚙️ Settings → ⚡ Provider (pick an AI)\n"
+                     "2️⃣ 🔑 API Key (pick provider → send the key)\n"
                      "3️⃣ Just type — I remember context\n\n"
-                     "💎 <b>VIP:</b> photo & document analysis, image generation, reminders.\n\n"
+                     "<b>Try this:</b>\n"
+                     "🎙 Voice message → I'll transcribe and answer\n"
+                     "🎭 /persona → 8 AI characters\n"
+                     "🎰 /slots /basket /football → mini-games\n"
+                     "🔮 /today → AI fortune of the day\n"
+                     "🧠 /quiz [topic] → quiz with buttons\n\n"
+                     "💎 <b>VIP:</b> image gen, photo/doc analysis, reminders.\n\n"
                      "📜 /changelog — what's new\n👇 <i>Menu below:</i>"),
         "help": "📚 <b>Command Reference:</b>\n\nPick a section:",
         "lang_changed": "🇬🇧 Language changed to English.",
@@ -269,6 +298,23 @@ translations = {
         "key_group_dm_hint": "👋 Send keys here. Format: <code>/setkey gemini YOUR_KEY</code>",
         "key_saved_dm": "🔐 Key for <b>{provider}</b> saved and the group message was deleted. You're good to go!",
         "key_saved_no_dm": "🔐 Key saved, message deleted. (Open me in a DM to get confirmations there instead.)",
+        # v2.1.x additions
+        "reminders_hint": "Cancel: /unremind [#] or /unremind all",
+        "unremind_usage": "Usage: /unremind [number] or /unremind all",
+        "unremind_ok": "✅ Reminder #{num} cancelled.",
+        "unremind_bad_num": "❌ Enter a number from 1 to {max}.",
+        "unremind_all": "🗑 Cancelled reminders: {count}",
+        "cancel_done": "✅ Current action cancelled.",
+        "cancel_nothing": "ℹ️ Nothing in progress.",
+        "leaderboard_empty": "📭 No one on the leaderboard yet.",
+        "leaderboard_title": "🏆 <b>Top users:</b>\n",
+        "reset_warn": ("⚠️ <b>Reset data</b>\n\nThis will <b>permanently</b> delete:\n"
+                       "• All your notes, tasks and memory\n"
+                       "• Chat history and AI settings\n"
+                       "• All your reminders\n\n"
+                       "I'll send you a JSON export first.\n\n"
+                       "Confirm: <code>/reset confirm</code>"),
+        "reset_done": "🗑 All your data has been deleted. To start again — /start",
         "model_set": "🧠 Model: <b>{model}</b>", "model_usage": "Usage: /setmodel [model]\nCurrent: {current}",
         "mem_saved": "✅ Saved: {key} = {value}", "mem_usage": "Usage: /memorysave [key] [value]",
         "mem_value": "🧠 {key}: {value}", "mem_not_found": "❌ Key '{key}' not found.",
@@ -400,14 +446,20 @@ translations = {
         "translate_generating": "🌍 Translating...",
     },
     "it": {
-        "welcome": ("🤖 <b>Benvenuto in AI DISCO BOT!</b>\n\n"
-                     "Sono un assistente AI con memoria della conversazione.\n"
-                     "Il sistema <b>BYOK</b> ti permette di scegliere tra 10+ provider.\n\n"
+        "welcome": ("🤖 <b>Benvenuto in AI DISCO BOT v2.1!</b>\n\n"
+                     "Assistente AI con <b>risposte in streaming</b> come ChatGPT,\n"
+                     "dentro Telegram.\n\n"
                      "<b>Come iniziare:</b>\n"
-                     "1️⃣ ⚙️ Impostazioni → Provider\n"
-                     "2️⃣ 🔑 Imposta la chiave\n"
+                     "1️⃣ ⚙️ Impostazioni → ⚡ Provider\n"
+                     "2️⃣ 🔑 Chiave API (scegli provider → invia chiave)\n"
                      "3️⃣ Scrivi — ricordo il contesto\n\n"
-                     "💎 <b>VIP:</b> analisi foto, documenti, generazione immagini, promemoria.\n\n"
+                     "<b>Da provare:</b>\n"
+                     "🎙 Messaggio vocale → trascrivo e rispondo\n"
+                     "🎭 /persona → 8 personaggi AI\n"
+                     "🎰 /slots /basket /football → mini-giochi\n"
+                     "🔮 /today → oroscopo AI del giorno\n"
+                     "🧠 /quiz [tema] → quiz con bottoni\n\n"
+                     "💎 <b>VIP:</b> generazione immagini, analisi foto/doc, promemoria.\n\n"
                      "📜 /changelog — novità\n👇 <i>Menu sotto:</i>"),
         "help": "📚 <b>Guida comandi:</b>\n\nSeleziona una sezione:",
         "lang_changed": "🇮🇹 Lingua cambiata in Italiano.",
@@ -460,6 +512,23 @@ translations = {
         "key_group_dm_hint": "👋 Invia le chiavi qui. Formato: <code>/setkey gemini TUA_CHIAVE</code>",
         "key_saved_dm": "🔐 Chiave per <b>{provider}</b> salvata e messaggio del gruppo eliminato. Pronto!",
         "key_saved_no_dm": "🔐 Chiave salvata, messaggio eliminato. (Apri il bot in privato per ricevere conferme lì.)",
+        # v2.1.x additions
+        "reminders_hint": "Annulla: /unremind [#] o /unremind all",
+        "unremind_usage": "Uso: /unremind [numero] o /unremind all",
+        "unremind_ok": "✅ Promemoria #{num} annullato.",
+        "unremind_bad_num": "❌ Inserisci un numero da 1 a {max}.",
+        "unremind_all": "🗑 Promemoria annullati: {count}",
+        "cancel_done": "✅ Azione corrente annullata.",
+        "cancel_nothing": "ℹ️ Nessuna azione in corso.",
+        "leaderboard_empty": "📭 Nessuno in classifica.",
+        "leaderboard_title": "🏆 <b>Top utenti:</b>\n",
+        "reset_warn": ("⚠️ <b>Reset dati</b>\n\nVerranno <b>permanentemente</b> eliminati:\n"
+                       "• Tutte note, compiti e memoria\n"
+                       "• Cronologia chat e impostazioni AI\n"
+                       "• Tutti i promemoria\n\n"
+                       "Prima ti invio un export JSON.\n\n"
+                       "Conferma: <code>/reset confirm</code>"),
+        "reset_done": "🗑 Tutti i tuoi dati sono stati eliminati. Per ricominciare — /start",
         "model_set": "🧠 Modello: <b>{model}</b>", "model_usage": "Uso: /setmodel [modello]\nAttuale: {current}",
         "mem_saved": "✅ Salvato: {key} = {value}", "mem_usage": "Uso: /memorysave [chiave] [valore]",
         "mem_value": "🧠 {key}: {value}", "mem_not_found": "❌ Chiave '{key}' non trovata.",

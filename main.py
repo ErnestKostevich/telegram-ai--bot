@@ -26,6 +26,9 @@ def main():
         ("version", handlers.version_command),
         ("changelog", handlers.changelog_command),
         ("export", handlers.export_command),
+        ("cancel", handlers.cancel_command),
+        ("leaderboard", handlers.leaderboard_command),
+        ("reset", handlers.reset_command),
     ]
     ai_mem = [
         ("setprovider", handlers.setprovider_command), ("setkey", handlers.setkey_command),
@@ -40,7 +43,7 @@ def main():
     ]
     vip_creator = [
         ("vip", handlers.vip_command), ("remind", handlers.remind_command),
-        ("reminders", handlers.reminders_command),
+        ("reminders", handlers.reminders_command), ("unremind", handlers.unremind_command),
         ("feedback", handlers.feedback_command),
         ("grant_vip", handlers.grant_vip_command), ("broadcast", handlers.broadcast_command),
         ("stats", handlers.stats_command), ("users", handlers.users_command),
@@ -145,6 +148,8 @@ async def _set_bot_commands(application):
         BotCommand("bowl", "🎳 Bowling game"),
         BotCommand("feedback", "Send feedback"),
         BotCommand("changelog", "What's new"),
+        BotCommand("leaderboard", "Top users"),
+        BotCommand("cancel", "Cancel current action"),
         BotCommand("lang", "Change language"),
     ]
     group_cmds = [

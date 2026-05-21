@@ -386,6 +386,12 @@ async def ask_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(t(lang, "ask_usage"))
         return
     prompt = " ".join(context.args)
+    # Typing indicator for groups (we don't stream-edit in groups to avoid noise)
+    try:
+        from telegram.constants import ChatAction
+        await context.bot.send_chat_action(update.effective_chat.id, ChatAction.TYPING)
+    except Exception:
+        pass
     msg = await update.message.reply_text(t(lang, "ai_thinking"))
     try:
         response = await ai_handler.generate_response(

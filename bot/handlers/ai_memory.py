@@ -16,8 +16,10 @@ MAX_MEMORY_VALUE_LEN = 1000
 # Cap memory entries injected into AI system prompts
 MEMORY_SYSTEM_PROMPT_CAP = 30
 
-# Streaming: re-edit Telegram message at most every N seconds (Telegram caps ~1/sec/chat)
-STREAM_EDIT_INTERVAL = 1.2
+# Streaming: re-edit Telegram message at most every N seconds.
+# Telegram allows ~30 edits/min per chat → 2s is the safe floor; 1.5s gives
+# us margin while still feeling live.
+STREAM_EDIT_INTERVAL = 1.5
 # Stop streaming-edit if accumulated text exceeds this; switch to send_new_chunks
 STREAM_MAX_EDIT_LEN = 3800
 
