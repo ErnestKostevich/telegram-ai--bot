@@ -81,9 +81,43 @@ async def reminders_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = t(lang, "reminders_title", count=len(user_reminders))
     for i, r in enumerate(user_reminders, 1):
         dt = datetime.datetime.fromtimestamp(r["time"]).strftime("%Y-%m-%d %H:%M")
-        # Escape so user-supplied reminder text can't break HTML rendering
         text += f"<b>#{i}</b> ({dt})\n{html.escape(r.get('text', ''))}\n\n"
+    text += "\n<i>" + t(lang, "reminders_hint") + "</i>"
     await update.message.reply_text(text, parse_mode="HTML")
+
+
+async def unremind_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    uid = update.effective_user.id
+    user = storage.get_user(uid)
+    lang = user.get("language", "ru")
+    user_reminders = [r for r in storage.data["reminders"] if r["user_id"] == uid]
+    if not user_reminders:
+        await update.message.reply_text(t(lang, "reminders_empty"))
+        return
+    # /unremind all
+    if context.args and context.args[0].lower() == "all":
+        storage.data["reminders"] = [r for r in storage.data["reminders"] if r["user_id"] != uid]
+        await storage.save()
+        await update.message.reply_text(t(lang, "unremind_all", count=len(user_reminders)))
+        return
+    if not context.args:
+        await update.message.reply_text(t(lang, "unremind_usage"))
+        return
+    try:
+        num = int(context.args[0])
+    except ValueError:
+        await update.message.reply_text(t(lang, "unremind_usage"))
+        return
+    if num < 1 or num > len(user_reminders):
+        await update.message.reply_text(t(lang, "unremind_bad_num", max=len(user_reminders)))
+        return
+    target = user_reminders[num - 1]
+    try:
+        storage.data["reminders"].remove(target)
+        await storage.save()
+        await update.message.reply_text(t(lang, "unremind_ok", num=num))
+    except ValueError:
+        await update.message.reply_text(t(lang, "unremind_bad_num", max=len(user_reminders)))
 
 
 async def feedback_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
