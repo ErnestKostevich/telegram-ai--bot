@@ -1,0 +1,23 @@
+# Keep the Docker context small — speeds up `fly deploy` a lot.
+.git
+.github
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.venv
+venv
+env
+.env
+.env.local
+.env.*
+*.md
+ROADMAP.md
+CHANGELOG.md
+README.md
+LICENSE
+.dockerignore
+Dockerfile
+fly.toml
+.gitignore
+_*.py

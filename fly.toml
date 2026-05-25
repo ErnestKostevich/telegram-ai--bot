@@ -1,0 +1,26 @@
+# Fly.io configuration for AI DISCO BOT.
+# Run `flyctl launch` once locally to create the app; this file is the result.
+# After that, `flyctl deploy` (or the GitHub Actions workflow) reads this file.
+#
+# IMPORTANT: pick a unique `app` name (the one below is a placeholder).
+# Edit it after `fly launch` puts your real name here.
+
+app = "ai-disco-bot"            # change to whatever fly suggests during `fly launch`
+primary_region = "fra"          # Frankfurt — closest to Russia/Europe; pick yours
+
+# Single VM, no HTTP ports, no autoscaling.
+# Bot uses long polling — must stay alive 24/7. auto_stop_machines = false keeps it on.
+[[vm]]
+  size = "shared-cpu-1x"        # free tier
+  memory = "256mb"              # plenty for a polling bot
+
+[build]
+  # Use the Dockerfile in repo root
+  dockerfile = "Dockerfile"
+
+[deploy]
+  # If a new release fails health-checks, roll back automatically
+  strategy = "immediate"
+
+[experimental]
+  auto_rollback = true

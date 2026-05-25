@@ -291,7 +291,18 @@ python main.py
 | `GITHUB_TOKEN` | [github.com/settings/tokens](https://github.com/settings/tokens) — fine-grained PAT с правом write на репо данных |
 | `GITHUB_REPO` | Создайте репо для хранения JSON, например `username/telegram-ai-bot-db` |
 
-## ☁️ Деплой на Render
+## ☁️ Деплой
+
+### Fly.io (рекомендуется — бесплатно)
+
+Подробный гайд миграции с Render → Fly.io в **[docs/FLY_MIGRATION.md](docs/FLY_MIGRATION.md)**.
+
+Краткая суть:
+- `Dockerfile`, `fly.toml`, `.github/workflows/fly-deploy.yml` уже в репо
+- `flyctl launch --no-deploy` → `flyctl secrets set BOT_TOKEN=... ...` → `flyctl deploy`
+- GitHub Actions подхватывает push в `main` и автоматически передеплоивает
+
+### Render (старый вариант)
 
 1. Форкните репозиторий
 2. На [Render](https://dashboard.render.com/) создайте новый **Background Worker** из этого репо
