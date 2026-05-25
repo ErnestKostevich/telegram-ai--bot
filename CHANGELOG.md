@@ -6,6 +6,51 @@
 
 ---
 
+## [2.2.0] — 2026-05-25 🚀 "Friction-killer" (Phase 1 from ROADMAP)
+
+### 🆓 Free Tier — главный барьер снят
+- Creator can set fallback API keys via env vars (`FALLBACK_GROQ_KEY`,
+  `FALLBACK_GEMINI_KEY`, etc.). New users without their own key get
+  10 free messages/day automatically.
+- Smart provider resolution: if user's selected provider has no shared
+  key, auto-falls-back to the best available (defaults to Groq —
+  fastest free option).
+- Daily counter resets at UTC midnight. Per-user, tracked in
+  `user["free_tier"] = {"date": "YYYY-MM-DD", "count": N}`.
+- Counter only debits on successful responses (errors don't burn quota).
+- Clear localized message when limit hit, pointing to /setkey or /vip.
+
+### 🔘 Action buttons под AI ответом
+- After every AI reply in private chat: 🔄 **Regenerate** and 💾 **Save as note**.
+- Regenerate re-runs the same prompt + system_prompt, edits the message
+  in place. Buttons re-attach on the new response.
+- Save-as-note creates a regular note from the AI text (subject to the
+  100-note cap from v2.0.3). Toast confirmation via `query.answer`.
+- `last_ai_turn` (prompt + response + system_prompt) stored per user
+  for these actions to work across sessions.
+
+### 🤝 Referral system + /share
+- `/share` generates a personal deep-link
+  (`https://t.me/AI_DISCO_BOT?start=ref_USERID`) ready to forward.
+- New users who join via the link have `referred_by` recorded; the
+  inviter's `referrals` counter increments and they receive a
+  notification: "🎉 Bob joined via your link! Total: 3"
+- Anti-cheat: can't refer yourself; can't be referred twice.
+- `/referrals` shows your invite count.
+
+### Polish
+- `BOT_VERSION` bumped to 2.2.0.
+- `.env.example` documents all FALLBACK_*_KEY vars.
+- 200 i18n keys × 3 langs (added btn_regen/btn_save_note/regen_*/
+  saved_as_note/share_text/ref_*).
+- 20 functional tests added in-session covering: i18n parity, format
+  strings, free tier config & counter (including reset, cap, idempotence),
+  key resolution in all 3 cases (own/shared-direct/shared-fallback),
+  action button rendering, callback uniqueness, referral parsing edges,
+  /share link generation end-to-end.
+
+---
+
 ## [2.1.0] — 2026-05-20 🎉 "Wow Effect"
 
 ### 🌊 Streaming responses

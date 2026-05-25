@@ -1,10 +1,12 @@
 import aiohttp
 import base64
+import datetime
 import html
 import json
-from typing import Optional, List, Dict, Any, AsyncIterator
+from typing import Optional, List, Dict, Any, AsyncIterator, Tuple
 from bot.storage import storage
-from bot.config import CHAT_HISTORY_LIMIT
+from bot.config import (CHAT_HISTORY_LIMIT, SHARED_KEYS, FREE_TIER_DAILY_LIMIT,
+                         FREE_TIER_FALLBACK_PROVIDER, has_shared_key_for, best_shared_key)
 
 # Providers that support our streaming implementation
 STREAMING_PROVIDERS = {
@@ -71,6 +73,76 @@ def _no_key_msg(lang: str, provider: str) -> str:
     return msgs.get(lang, msgs["en"])
 
 
+def _free_tier_limit_msg(lang: str, limit: int) -> str:
+    msgs = {
+        "ru": (f"⏳ <b>Бесплатный лимит исчерпан</b> ({limit}/{limit} сегодня).\n\n"
+               f"Чтобы продолжить без ожидания:\n"
+               f"🔑 Установите свой ключ: ⚙️ Настройки → API Ключ\n"
+               f"💎 Или получите VIP: /vip"),
+        "en": (f"⏳ <b>Free tier limit reached</b> ({limit}/{limit} today).\n\n"
+               f"To keep chatting without waiting:\n"
+               f"🔑 Set your own key: ⚙️ Settings → API Key\n"
+               f"💎 Or upgrade to VIP: /vip"),
+        "it": (f"⏳ <b>Limite gratuito raggiunto</b> ({limit}/{limit} oggi).\n\n"
+               f"Per continuare senza aspettare:\n"
+               f"🔑 Imposta la tua chiave: ⚙️ Impostazioni → Chiave API\n"
+               f"💎 O passa a VIP: /vip"),
+    }
+    return msgs.get(lang, msgs["en"])
+
+
+def _today_utc() -> str:
+    return datetime.datetime.utcnow().strftime("%Y-%m-%d")
+
+
+def _resolve_key(user_id: int) -> Tuple[str, str, str, bool]:
+    """Decide which (provider, key, source) to use for a request.
+    Returns (provider, api_key, source, is_free_tier).
+      source: "user" — user's own key
+              "shared" — creator-provided shared key (free tier)
+              "" — no key available
+      is_free_tier: True if we should debit the free-tier counter.
+    """
+    user = storage.get_user(user_id)
+    preferred = user.get("ai_provider", "gemini")
+
+    # 1) User's own key for their selected provider
+    own = user.get("api_keys", {}).get(preferred)
+    if own:
+        return preferred, own, "user", False
+
+    # 2) Shared key for their selected provider
+    if has_shared_key_for(preferred) and FREE_TIER_DAILY_LIMIT > 0:
+        return preferred, SHARED_KEYS[preferred], "shared", True
+
+    # 3) Best available shared key on any provider (auto-switch)
+    sp, sk = best_shared_key()
+    if sk and FREE_TIER_DAILY_LIMIT > 0:
+        return sp, sk, "shared", True
+
+    return "", "", "", False
+
+
+def _free_tier_remaining(user: dict) -> int:
+    ft = user.setdefault("free_tier", {"date": "", "count": 0})
+    today = _today_utc()
+    if ft.get("date") != today:
+        return FREE_TIER_DAILY_LIMIT  # fresh day
+    used = int(ft.get("count", 0))
+    return max(0, FREE_TIER_DAILY_LIMIT - used)
+
+
+def _free_tier_consume(user: dict) -> int:
+    """Increment usage. Returns remaining after this call (>=0)."""
+    ft = user.setdefault("free_tier", {"date": "", "count": 0})
+    today = _today_utc()
+    if ft.get("date") != today:
+        ft["date"] = today
+        ft["count"] = 0
+    ft["count"] = int(ft.get("count", 0)) + 1
+    return max(0, FREE_TIER_DAILY_LIMIT - ft["count"])
+
+
 def _err_msg(lang: str, provider: str, detail: str) -> str:
     # Provider error strings can contain <, >, & — escape so HTML parsers
     # downstream (we send these with parse_mode="HTML") don't blow up.
@@ -120,11 +192,14 @@ class AIHandler:
     ) -> str:
         user = storage.get_user(user_id)
         lang = user.get("language", "ru")
-        provider = user.get("ai_provider", "gemini")
-        api_key = user.get("api_keys", {}).get(provider)
 
+        provider, api_key, source, is_free_tier = _resolve_key(user_id)
         if not api_key:
-            return _no_key_msg(lang, provider)
+            return _no_key_msg(lang, user.get("ai_provider", "gemini"))
+
+        # Enforce free-tier daily cap before making the request
+        if is_free_tier and _free_tier_remaining(user) <= 0:
+            return _free_tier_limit_msg(lang, FREE_TIER_DAILY_LIMIT)
 
         if image_b64 and provider not in VISION_PROVIDERS:
             return _err_msg(lang, provider, {
@@ -152,6 +227,9 @@ class AIHandler:
             if use_history and response and not response.startswith("❌"):
                 self._push_history(user_id, "user", prompt)
                 self._push_history(user_id, "assistant", response)
+            # Debit free-tier counter only on successful (non-error) responses
+            if is_free_tier and response and not response.startswith("❌"):
+                _free_tier_consume(user)
             return response
         except aiohttp.ClientError as e:
             return _err_msg(lang, provider, f"network: {e}")
@@ -231,34 +309,50 @@ class AIHandler:
         responsible for accumulating and persisting the final text to history."""
         user = storage.get_user(user_id)
         lang = user.get("language", "ru")
-        provider = user.get("ai_provider", "gemini")
-        api_key = user.get("api_keys", {}).get(provider)
 
+        provider, api_key, source, is_free_tier = _resolve_key(user_id)
         if not api_key:
-            yield _no_key_msg(lang, provider)
+            yield _no_key_msg(lang, user.get("ai_provider", "gemini"))
+            return
+        if is_free_tier and _free_tier_remaining(user) <= 0:
+            yield _free_tier_limit_msg(lang, FREE_TIER_DAILY_LIMIT)
             return
         if provider not in STREAMING_PROVIDERS:
-            # Fall back to a single-shot response
+            # Fall back to a single-shot response (which also accounts for free-tier)
             text = await self.generate_response(user_id, prompt, system_prompt, use_history)
             yield text
             return
 
         model = self._get_model(user_id, provider)
+        # If the active provider was switched to shared-key fallback, use that
+        # provider's default model (user's chosen model probably belongs to a
+        # different provider).
+        if source == "shared" and provider != user.get("ai_provider"):
+            model = DEFAULT_MODELS.get(provider, model)
         history = self._get_history(user_id) if use_history else []
 
+        got_anything = False
         try:
             if provider == "gemini":
                 async for chunk in self._stream_gemini(api_key, model, prompt, system_prompt, history):
+                    got_anything = True
                     yield chunk
             elif provider == "anthropic":
                 async for chunk in self._stream_anthropic(api_key, model, prompt, system_prompt, history):
+                    got_anything = True
                     yield chunk
             elif provider in PROVIDER_CONFIGS:
                 url, _ = PROVIDER_CONFIGS[provider]
                 async for chunk in self._stream_openai_compat(url, api_key, model, prompt, system_prompt, history):
+                    got_anything = True
                     yield chunk
         except Exception as e:
             yield _err_msg(lang, provider, str(e))
+            return
+
+        # Debit free-tier counter only if we actually got content from the provider
+        if is_free_tier and got_anything:
+            _free_tier_consume(user)
 
     def push_history(self, user_id: int, prompt: str, response: str):
         """Append a finished user+assistant turn to history (used after streaming)."""

@@ -29,6 +29,8 @@ def main():
         ("cancel", handlers.cancel_command),
         ("leaderboard", handlers.leaderboard_command),
         ("reset", handlers.reset_command),
+        ("share", handlers.share_command),
+        ("referrals", handlers.referrals_command),
     ]
     ai_mem = [
         ("setprovider", handlers.setprovider_command), ("setkey", handlers.setkey_command),
@@ -149,6 +151,7 @@ async def _set_bot_commands(application):
         BotCommand("feedback", "Send feedback"),
         BotCommand("changelog", "What's new"),
         BotCommand("leaderboard", "Top users"),
+        BotCommand("share", "Invite friends — earn bonuses"),
         BotCommand("cancel", "Cancel current action"),
         BotCommand("lang", "Change language"),
     ]
