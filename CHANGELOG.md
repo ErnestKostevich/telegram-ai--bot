@@ -6,6 +6,78 @@
 
 ---
 
+## [2.3.0] — 2026-05-25 🌐 Inline mode (Phase 1.3 — Phase 1 COMPLETE)
+
+### 💬 @AI_DISCO_BOT works in any Telegram chat
+- Type `@AI_DISCO_BOT [question]` in any chat (DM, group, channel
+  comments) → bot pops up an article card.
+- Pick the card → a placeholder message with an **✨ Generate** button
+  lands in the chat.
+- Tap **Generate** → AI runs (using the asker's own key) → message is
+  edited in place with the answer + "via @AI_DISCO_BOT" footer.
+
+### BYOK respected
+- If the user invoking inline has no API key, results are empty and
+  Telegram's `switch_pm_text` opens the bot in DM with parameter
+  `from_inline` → automatically starts the onboarding wizard, with a
+  small intro line "set up your key to use me anywhere".
+- Generate button rejects non-askers with a polite alert ("only the
+  original asker can generate, uses their key").
+
+### Implementation
+- New module `bot/handlers/inline.py` (~180 lines).
+- 2-step UX because inline queries must answer within ~3s but AI takes
+  much longer: the placeholder + Generate-button pattern works without
+  needing BotFather's inline-feedback setting enabled.
+- In-memory query cache (`_QUERY_CACHE`), `short_id` via `secrets.token_urlsafe(8)`,
+  guaranteed to fit in Telegram's 64-byte callback_data limit when
+  prefixed with `ig_`. 1-hour TTL, opportunistic GC on insert, hard cap
+  at 5000 entries.
+- User-supplied query is HTML-escaped before rendering in the placeholder.
+- `_user_has_any_key()` detects empty strings as "no key" — supports
+  partial state from older user records.
+
+### Plumbing
+- `main.py`: registers `InlineQueryHandler` and a dedicated
+  `CallbackQueryHandler(pattern=r"^ig_")` BEFORE the catch-all.
+- `start_command`: detects `/start from_inline` and shows a focused
+  intro line before launching the wizard.
+- 12 new i18n keys × 3 languages (220 keys total per lang, parity
+  verified).
+- `BOT_VERSION` 2.2.2 → 2.3.0 (Phase 1 complete = minor bump).
+
+### Tested (16 in-session verifications)
+1. inline module imports cleanly; main.py loads
+2. i18n parity: 220 keys × 3 langs, 12 new inline keys present
+3. `inline_ask_title` interpolates `{q}` correctly
+4. Cache stores `(author_uid, query, ts)` and returns short_id
+5. short_id is URL-safe and `ig_<sid>` fits in 64 bytes
+6. `_gc_cache` drops entries older than TTL, keeps fresh ones
+7. Cache hard-capped at 5000 entries
+8. `_user_has_any_key` correctly detects empty-string-as-no-key
+9. Keyless user → empty results + `switch_pm_text` + `from_inline` param
+10. Empty query → hint card returned
+11. Real query → article card with callback button, query cached
+12. Non-asker tapping Generate → rejected with alert, cache entry preserved
+13. Missing/expired cache entry → expired alert, no edit attempted
+14. Successful generation: edit_message_text called with AI answer +
+    "via @bot" footer, cache entry popped (consumed once)
+15. BOT_VERSION == 2.3.0
+16. HTML injection in user query (`<script>alert(1)</script>`) is
+    escaped before being rendered in the placeholder
+
+### ROADMAP Phase 1 status
+- ~~1.1 Free Tier~~ — Not doing (BYOK)
+- ✅ 1.2 Onboarding wizard (v2.2.2)
+- ✅ 1.3 Inline mode (v2.3.0)
+- ✅ 1.4 Action buttons (v2.2.0)
+- ✅ 1.5 /share + referrals (v2.2.0)
+
+**Phase 1 = COMPLETE.** Next: Phase 2 (retention) or pause to
+collect user feedback first.
+
+---
+
 ## [2.2.2] — 2026-05-25 — Onboarding wizard (Phase 1.2 from ROADMAP)
 
 ### 🎬 BYOK-first onboarding wizard

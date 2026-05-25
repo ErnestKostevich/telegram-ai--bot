@@ -1,7 +1,8 @@
 import logging
 import os
 from dotenv import load_dotenv
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, filters
+from telegram.ext import (ApplicationBuilder, CommandHandler, MessageHandler,
+                          CallbackQueryHandler, InlineQueryHandler, filters)
 
 load_dotenv()
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -95,6 +96,12 @@ def main():
                        handlers.group_message_tracker),
         group=-1,
     )
+
+    # Inline mode: @bot <query> in any chat
+    from bot.handlers.inline import inline_query_handler, inline_generate_callback
+    application.add_handler(InlineQueryHandler(inline_query_handler))
+    # Inline "Generate" button callbacks have their own prefix → dedicated handler
+    application.add_handler(CallbackQueryHandler(inline_generate_callback, pattern=r"^ig_"))
 
     # Quiz callbacks have their own prefix → dedicated handler
     application.add_handler(CallbackQueryHandler(handlers.quiz_callback, pattern=r"^quizans_"))
