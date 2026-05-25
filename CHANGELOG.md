@@ -6,7 +6,47 @@
 
 ---
 
-## [2.2.0] — 2026-05-25 🚀 "Friction-killer" (Phase 1 from ROADMAP)
+## [2.2.1] — 2026-05-25 — Revert Free Tier (BYOK reaffirmed)
+
+### Reverted from v2.2.0
+- Removed the creator-funded **Free Tier** entirely. The whole reason
+  this bot is BYOK is so the creator doesn't pay for users' AI usage.
+  Adding a shared-key fallback contradicted that intent.
+
+What was removed:
+- `bot/config.py`: `SHARED_KEYS`, `FREE_TIER_DAILY_LIMIT`,
+  `FREE_TIER_FALLBACK_PROVIDER`, `has_shared_key_for()`,
+  `best_shared_key()`.
+- `bot/ai.py`: `_resolve_key()`, `_free_tier_remaining()`,
+  `_free_tier_consume()`, `_free_tier_limit_msg()`. Restored
+  `generate_response` and `stream_response` to read only from
+  `user["api_keys"][provider]`.
+- `bot/storage.py`: removed `free_tier` from new-user shape and from
+  legacy backfill (referrals counter remains — that's a viral
+  feature, not a cost feature).
+- `.env.example`: removed all `FALLBACK_*_KEY` and `FREE_TIER_*` lines.
+- `bot/i18n.py`: removed unused limit-reached message keys.
+
+What was kept from v2.2.0:
+- 🔘 **Action buttons** under AI replies (🔄 Regenerate, 💾 Save as note)
+- 🤝 **Referral system** (`/share`, `/referrals`)
+
+Verified post-revert (8 tests):
+- main.py loads with real PTB v21
+- No-key error returns cleanly (no free-tier path executed)
+- Streaming with no key returns no-key error (no counter touched)
+- BOT_VERSION = 2.2.1
+- `SHARED_KEYS` is gone (ImportError if anything tried to use it)
+- i18n parity holds (200 keys × 3 langs)
+- /share and /referrals still wired
+- Action buttons still attached to AI responses
+
+---
+
+## [2.2.0] — 2026-05-25 (PARTIALLY REVERTED in 2.2.1)
+
+> Free Tier section below was added in v2.2.0 and reverted in v2.2.1.
+> Action Buttons and Referral System sections remain in effect.
 
 ### 🆓 Free Tier — главный барьер снят
 - Creator can set fallback API keys via env vars (`FALLBACK_GROQ_KEY`,
