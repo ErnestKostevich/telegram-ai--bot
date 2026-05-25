@@ -31,6 +31,12 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = storage.get_user(uid)
     lang = user.get("language", "ru")
 
+    # === Onboarding wizard ===
+    if data.startswith("onb_"):
+        from bot.handlers.onboarding import onboarding_callback
+        await onboarding_callback(update, context)
+        return
+
     # === AI action buttons (under streaming response) ===
     if data == "ai_regen":
         last = user.get("last_ai_turn") or {}
@@ -790,11 +796,17 @@ async def keyboard_message_handler(update: Update, context: ContextTypes.DEFAULT
                 await update.message.reply_text("❌ Format: <code>provider key</code>", parse_mode="HTML")
             return
         elif state and state.startswith("awaiting_key_for_"):
-            # New 2-step flow: user already picked the provider via buttons,
+            # 2-step flow: user already picked the provider via buttons,
             # now they just send the raw key.
             provider = state[len("awaiting_key_for_"):]
             from bot.ai import PROVIDERS
             user["state"] = None
+
+            # Was this key flow part of onboarding? If user has no OTHER keys
+            # yet, treat this as the wizard's final step and fire the tour.
+            other_keys = {p: v for p, v in user.get("api_keys", {}).items() if v}
+            came_from_onboarding = not other_keys
+
             if provider in PROVIDERS:
                 key = text.strip()
                 user["api_keys"][provider] = key
@@ -810,6 +822,9 @@ async def keyboard_message_handler(update: Update, context: ContextTypes.DEFAULT
                     parse_mode="HTML",
                     reply_markup=get_settings_keyboard(lang, user=user),
                 )
+                if came_from_onboarding:
+                    from bot.handlers.onboarding import onboarding_finished_hook
+                    await onboarding_finished_hook(update.effective_chat.id, context, user, lang)
             else:
                 await update.message.reply_text(t(lang, "provider_unknown", list=", ".join(PROVIDERS)))
             return

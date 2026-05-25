@@ -40,10 +40,24 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except (ValueError, IndexError):
             pass
 
+    # Brand-new user with no API key yet AND in private chat → auto-launch wizard.
+    # A user is considered "fresh" if they've never set ANY api key.
+    is_fresh = not user.get("api_keys") or not any(user["api_keys"].values())
+    if update.effective_chat.type == "private" and is_fresh:
+        from bot.handlers.onboarding import onboarding_start
+        await onboarding_start(update, context)
+        return
+
     if update.effective_chat.type == "private":
         await update.message.reply_text(get_text(lang, "welcome"), parse_mode="HTML", reply_markup=get_main_keyboard(lang))
     else:
         await update.message.reply_text(get_text(lang, "welcome"), parse_mode="HTML")
+
+
+async def onboard_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Manual /onboard — re-runs the wizard regardless of state."""
+    from bot.handlers.onboarding import onboarding_start
+    await onboarding_start(update, context)
 
 
 async def share_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
