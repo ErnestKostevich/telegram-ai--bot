@@ -235,6 +235,29 @@ translations = {
                               "Установи: ⚙️ Настройки → 🔑 API Ключ\n"
                               "Или используй короткий формат: <code>/remind 30 текст</code>"),
         "remind_set_smart": "⏰ Напоминание через <b>{when}</b>:\n<i>{text}</i>",
+        # v2.5.0: TTS voice reply
+        "voice_status": "🎙 Голосовые ответы: <b>{status}</b>\nГолос: <code>{voice}</code>\n\nДоступные: {voices}\n\n<code>/voice on</code> · <code>/voice off</code> · <code>/voice [имя]</code>",
+        "voice_on": "🎙 Голосовые ответы ВКЛ. Я буду отвечать и текстом, и голосом.",
+        "voice_off": "🔇 Голосовые ответы выключены.",
+        "voice_picked": "🎙 Голос: <b>{voice}</b>",
+        "voice_bad_arg": "❌ Неизвестный аргумент.\nИспользуй: on / off / один из: {voices}",
+        "tts_needs_openai": "❌ Для голосовых ответов нужен ключ OpenAI.\nУстанови: ⚙️ Настройки → 🔑 API Ключ → OpenAI",
+        # v2.5.0: multi-quiz session
+        "quizgame_start": "🧠 <b>Квиз-сессия начинается!</b>\nТема: <b>{topic}</b> · Вопросов: <b>{total}</b>\n\nГотов? Поехали 👇",
+        "quiz_session_progress": "Прогресс: {done}/{total} · Правильных: {score}",
+        "quizgame_done": "{medal} <b>Финал!</b>\nТема: <b>{topic}</b>\nПравильных: <b>{correct}/{total}</b> ({pct}%)\n\n+XP за каждый правильный · /leaderboard weekly",
+        # v2.5.0: weekly leaderboard
+        "leaderboard_weekly_title": "🏆 <b>Топ недели ({week}):</b>\n",
+        "leaderboard_weekly_hint": "Посмотреть недельный: /leaderboard weekly",
+        "leaderboard_total_hint": "Посмотреть общий: /leaderboard",
+        # v2.5.0: proactive memory
+        "mem_suggest_header": "💭 <b>Сохранить в долгую память?</b>\nЯ заметил эти факты — пригодятся для будущих диалогов:\n",
+        "mem_suggest_save": "💾 {key}",
+        "mem_suggest_save_all": "💾 Сохранить все",
+        "mem_suggest_skip": "✕ Пропустить",
+        "mem_suggest_saved_all": "✅ Сохранено в память: {count} фактов.\nПосмотреть: /memorylist",
+        "mem_suggest_skipped": "👌 Пропущено.",
+        "mem_suggest_stale": "⌛ Подсказка устарела.",
         "reminders_empty": "📭 Нет активных напоминаний.",
         "reminders_title": "⏰ <b>Напоминания ({count}):</b>\n\n",
         "feedback_usage": "💬 Использование: /feedback [текст]\nВаш отзыв уйдёт создателю.",
@@ -523,6 +546,29 @@ translations = {
                               "Set one: ⚙️ Settings → 🔑 API Key\n"
                               "Or use short form: <code>/remind 30 text</code>"),
         "remind_set_smart": "⏰ Reminder in <b>{when}</b>:\n<i>{text}</i>",
+        # v2.5.0: TTS voice reply
+        "voice_status": "🎙 Voice replies: <b>{status}</b>\nVoice: <code>{voice}</code>\n\nAvailable: {voices}\n\n<code>/voice on</code> · <code>/voice off</code> · <code>/voice [name]</code>",
+        "voice_on": "🎙 Voice replies ON. I'll answer in text AND voice.",
+        "voice_off": "🔇 Voice replies OFF.",
+        "voice_picked": "🎙 Voice: <b>{voice}</b>",
+        "voice_bad_arg": "❌ Unknown argument.\nUse: on / off / one of: {voices}",
+        "tts_needs_openai": "❌ Voice replies need an OpenAI key.\nSet it: ⚙️ Settings → 🔑 API Key → OpenAI",
+        # v2.5.0: multi-quiz session
+        "quizgame_start": "🧠 <b>Quiz session starting!</b>\nTopic: <b>{topic}</b> · Questions: <b>{total}</b>\n\nReady? Let's go 👇",
+        "quiz_session_progress": "Progress: {done}/{total} · Correct: {score}",
+        "quizgame_done": "{medal} <b>Done!</b>\nTopic: <b>{topic}</b>\nCorrect: <b>{correct}/{total}</b> ({pct}%)\n\n+XP per correct · /leaderboard weekly",
+        # v2.5.0: weekly leaderboard
+        "leaderboard_weekly_title": "🏆 <b>This week's top ({week}):</b>\n",
+        "leaderboard_weekly_hint": "See weekly: /leaderboard weekly",
+        "leaderboard_total_hint": "See all-time: /leaderboard",
+        # v2.5.0: proactive memory
+        "mem_suggest_header": "💭 <b>Save to long-term memory?</b>\nI noticed these facts — they'd help future conversations:\n",
+        "mem_suggest_save": "💾 {key}",
+        "mem_suggest_save_all": "💾 Save all",
+        "mem_suggest_skip": "✕ Skip",
+        "mem_suggest_saved_all": "✅ Saved to memory: {count} facts.\nSee: /memorylist",
+        "mem_suggest_skipped": "👌 Skipped.",
+        "mem_suggest_stale": "⌛ This suggestion is stale.",
         "reminders_empty": "📭 No active reminders.",
         "reminders_title": "⏰ <b>Reminders ({count}):</b>\n\n",
         "feedback_usage": "💬 Usage: /feedback [text]\nYour message goes to the creator.",
@@ -808,6 +854,29 @@ translations = {
                               "Imposta: ⚙️ Impostazioni → 🔑 Chiave API\n"
                               "O usa il formato breve: <code>/remind 30 testo</code>"),
         "remind_set_smart": "⏰ Promemoria tra <b>{when}</b>:\n<i>{text}</i>",
+        # v2.5.0: TTS voice reply
+        "voice_status": "🎙 Risposte vocali: <b>{status}</b>\nVoce: <code>{voice}</code>\n\nDisponibili: {voices}\n\n<code>/voice on</code> · <code>/voice off</code> · <code>/voice [nome]</code>",
+        "voice_on": "🎙 Risposte vocali ON. Risponderò sia testo che voce.",
+        "voice_off": "🔇 Risposte vocali OFF.",
+        "voice_picked": "🎙 Voce: <b>{voice}</b>",
+        "voice_bad_arg": "❌ Argomento sconosciuto.\nUsa: on / off / uno tra: {voices}",
+        "tts_needs_openai": "❌ Le risposte vocali richiedono una chiave OpenAI.\nImposta: ⚙️ Impostazioni → 🔑 Chiave API → OpenAI",
+        # v2.5.0: multi-quiz session
+        "quizgame_start": "🧠 <b>Quiz session in corso!</b>\nTema: <b>{topic}</b> · Domande: <b>{total}</b>\n\nPronto? Via 👇",
+        "quiz_session_progress": "Avanzamento: {done}/{total} · Corrette: {score}",
+        "quizgame_done": "{medal} <b>Fine!</b>\nTema: <b>{topic}</b>\nCorrette: <b>{correct}/{total}</b> ({pct}%)\n\n+XP per ogni corretta · /leaderboard weekly",
+        # v2.5.0: weekly leaderboard
+        "leaderboard_weekly_title": "🏆 <b>Top settimanale ({week}):</b>\n",
+        "leaderboard_weekly_hint": "Vedi settimanale: /leaderboard weekly",
+        "leaderboard_total_hint": "Vedi totale: /leaderboard",
+        # v2.5.0: proactive memory
+        "mem_suggest_header": "💭 <b>Salvare in memoria a lungo termine?</b>\nHo notato questi fatti utili per future conversazioni:\n",
+        "mem_suggest_save": "💾 {key}",
+        "mem_suggest_save_all": "💾 Salva tutto",
+        "mem_suggest_skip": "✕ Salta",
+        "mem_suggest_saved_all": "✅ Salvati in memoria: {count} fatti.\nVedi: /memorylist",
+        "mem_suggest_skipped": "👌 Saltato.",
+        "mem_suggest_stale": "⌛ Suggerimento scaduto.",
         "reminders_empty": "📭 Nessun promemoria attivo.",
         "reminders_title": "⏰ <b>Promemoria ({count}):</b>\n\n",
         "feedback_usage": "💬 Uso: /feedback [testo]\nIl tuo messaggio va al creatore.",
@@ -880,14 +949,23 @@ def get_text(user_lang: str, key: str) -> str:
     return translations[lang].get(key, translations["ru"].get(key, key))
 
 
-def t(user_id_or_lang, key, **kwargs):
+def t(user_id_or_lang, i18n_key, **kwargs):
+    """Format an i18n string.
+
+    The second parameter is the i18n KEY NAME (which translation to look up).
+    `i18n_key` (instead of plain `key`) so that callers can also pass a `key=...`
+    kwarg as a format value (used by /memorysave templates etc.) without colliding.
+    Pre-v2.5.1 used `key` here, which silently broke /memorysave whenever the
+    template contained `{key}` — the outer try/except in callers swallowed the
+    resulting TypeError.
+    """
     from bot.storage import storage
     if isinstance(user_id_or_lang, int):
         user = storage.get_user(user_id_or_lang)
         lang = user.get("language", "ru")
     else:
         lang = user_id_or_lang
-    text = get_text(lang, key)
+    text = get_text(lang, i18n_key)
     if kwargs:
         try:
             text = text.format(**kwargs)

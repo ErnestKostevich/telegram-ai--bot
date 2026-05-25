@@ -131,12 +131,31 @@ async def _stream_to_message(update, context, prompt, system_prompt, lang):
 
     if not error_text:
         ai_handler.push_history(uid, prompt, acc)
+        # Award weekly XP for a successful AI turn (small reward, builds streak feel)
+        try:
+            from bot.handlers.base import award_weekly_xp
+            award_weekly_xp(user, 5)
+        except Exception:
+            pass
         # Stash the turn so action buttons can act on it.
         if is_private:
             user["last_ai_turn"] = {"prompt": prompt[:2000], "response": acc[:3800],
                                      "system_prompt": (system_prompt or "")[:1500]}
             try:
                 await storage.save()
+            except Exception:
+                pass
+            # Voice reply if user enabled it
+            try:
+                from bot.handlers.media import maybe_speak_response
+                await maybe_speak_response(context, chat_id, user, acc)
+            except Exception:
+                pass
+            # Proactive memory: occasionally offer to save stable facts
+            try:
+                from bot.handlers.proactive import maybe_suggest_memory
+                # Fire-and-forget — never blocks the reply
+                asyncio.create_task(maybe_suggest_memory(context, chat_id, user))
             except Exception:
                 pass
     return final
