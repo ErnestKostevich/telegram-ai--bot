@@ -64,6 +64,8 @@ def main():
         ("persona", handlers.persona_command),
         ("today", handlers.today_command),
         ("quiz", handlers.quiz_command),
+        ("quizgame", handlers.quizgame_command),
+        ("voice", handlers.voice_command),
         ("slots", handlers.slots_command),
         ("basket", handlers.basket_command),
         ("football", handlers.football_command),
@@ -105,6 +107,9 @@ def main():
 
     # Quiz callbacks have their own prefix → dedicated handler
     application.add_handler(CallbackQueryHandler(handlers.quiz_callback, pattern=r"^quizans_"))
+    # Proactive memory suggestion callbacks
+    application.add_handler(CallbackQueryHandler(handlers.memory_suggest_callback,
+                                                  pattern=r"^(msave_|msaveall_|mskip_)"))
     # Catch-all callbacks
     application.add_handler(CallbackQueryHandler(handlers.button_callback))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.keyboard_message_handler))

@@ -1,10 +1,92 @@
 from telegram import Update
 from telegram.ext import ContextTypes
-import base64, aiohttp
+import base64, io, aiohttp
 from bot.ai import ai_handler, VISION_PROVIDERS
 from bot.storage import storage
 from bot.i18n import t
 from bot.handlers.vip_creator import check_vip
+
+
+# TTS voice characters supported by OpenAI's tts-1
+TTS_VOICES = ("alloy", "echo", "fable", "onyx", "nova", "shimmer")
+TTS_MAX_CHARS = 4000  # OpenAI hard limit is 4096
+
+
+async def tts_speak(api_key: str, text: str, voice: str = "alloy") -> bytes:
+    """Synthesize speech via OpenAI TTS. Returns OGG/opus bytes Telegram accepts."""
+    url = "https://api.openai.com/v1/audio/speech"
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    payload = {
+        "model": "tts-1",
+        "voice": voice if voice in TTS_VOICES else "alloy",
+        "input": text[:TTS_MAX_CHARS],
+        "response_format": "opus",  # Telegram's native voice format
+    }
+    timeout = aiohttp.ClientTimeout(total=60)
+    async with aiohttp.ClientSession(timeout=timeout) as s:
+        async with s.post(url, headers=headers, json=payload) as resp:
+            if resp.status != 200:
+                body = await resp.text()
+                raise RuntimeError(f"TTS HTTP {resp.status}: {body[:300]}")
+            return await resp.read()
+
+
+async def voice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """/voice on|off|<voice_name> — toggle TTS voice replies."""
+    uid = update.effective_user.id
+    user = storage.get_user(uid)
+    lang = user.get("language", "ru")
+
+    if not context.args:
+        cur = user.get("voice_reply", False)
+        v = user.get("voice_name", "alloy")
+        await update.message.reply_text(
+            t(lang, "voice_status",
+              status="ON ✅" if cur else "OFF ❌",
+              voice=v,
+              voices=", ".join(TTS_VOICES)),
+            parse_mode="HTML",
+        )
+        return
+
+    arg = context.args[0].lower()
+    if arg in ("on", "вкл"):
+        if not user.get("api_keys", {}).get("openai"):
+            await update.message.reply_text(t(lang, "tts_needs_openai"), parse_mode="HTML")
+            return
+        user["voice_reply"] = True
+        await storage.save()
+        await update.message.reply_text(t(lang, "voice_on"))
+    elif arg in ("off", "выкл"):
+        user["voice_reply"] = False
+        await storage.save()
+        await update.message.reply_text(t(lang, "voice_off"))
+    elif arg in TTS_VOICES:
+        user["voice_name"] = arg
+        await storage.save()
+        await update.message.reply_text(t(lang, "voice_picked", voice=arg))
+    else:
+        await update.message.reply_text(t(lang, "voice_bad_arg", voices=", ".join(TTS_VOICES)))
+
+
+async def maybe_speak_response(context, chat_id: int, user: dict, text: str):
+    """If user has voice_reply enabled and we're in private chat, synthesize and send."""
+    if not user.get("voice_reply"):
+        return
+    api_key = user.get("api_keys", {}).get("openai")
+    if not api_key:
+        return  # disabled silently if key was removed since toggle
+    # Telegram voice messages max ~50MB but TTS is bounded anyway
+    if not text or len(text.strip()) < 2 or text.startswith("❌"):
+        return
+    try:
+        audio = await tts_speak(api_key, text, voice=user.get("voice_name", "alloy"))
+        bio = io.BytesIO(audio)
+        bio.name = "voice.ogg"
+        await context.bot.send_voice(chat_id=chat_id, voice=bio)
+    except Exception:
+        # Voice is a nice-to-have; never fail the whole reply if TTS hiccups
+        pass
 
 
 async def _transcribe_voice_openai(api_key: str, ogg_bytes: bytes) -> str:

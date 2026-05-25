@@ -26,7 +26,7 @@ GITHUB_REPO = os.getenv("GITHUB_REPO", "")  # e.g. username/repo
 GITHUB_FILE_PATH = os.getenv("GITHUB_FILE_PATH", "bot_data.json")
 CREATOR_ID = _int_env("CREATOR_ID", 0)
 
-BOT_VERSION = "2.4.0"
+BOT_VERSION = "2.5.0"
 BOT_BUILD_DATE = "2026-05-25"
 
 # Chat memory: how many last user/assistant turns to keep

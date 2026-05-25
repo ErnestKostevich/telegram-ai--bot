@@ -6,6 +6,72 @@
 
 ---
 
+## [2.5.0] — 2026-05-25 🎤 Phase 2 closeout — TTS + multi-quiz + weekly LB + proactive memory
+
+### 🎙 TTS voice reply (Phase 2.3)
+- `/voice on|off` — bot speaks every AI answer as a Telegram voice message
+- `/voice <name>` picks one of 6 OpenAI voices (alloy/echo/fable/onyx/nova/shimmer)
+- Uses user's own OpenAI key (BYOK), OGG/opus format Telegram accepts natively
+- Silent fallbacks if key missing or TTS errors — never breaks the text reply
+
+### 🧠 Multi-question quiz session (Phase 2.2)
+- `/quizgame [topic] [N]` — N questions on a topic (2 ≤ N ≤ 10, default 5)
+- Each correct answer awards XP, weekly stats tracked
+- Final scoreboard with medal (🏆/🥇/🥈/🥉/📚) based on % correct
+- Auto-generates next question after each answer
+
+### 🏆 Weekly leaderboard (Phase 2.5)
+- `/leaderboard` — all-time top
+- `/leaderboard weekly` — current ISO week only
+- `award_weekly_xp()` fires +5 per successful AI turn
+- `xp_by_week` capped at last 8 weeks per user (storage-bounded)
+
+### 💾 Proactive memory (Phase 2.6) — the killer differentiator vs ChatGPT
+- After every 6 message-pairs, bot quietly asks AI: "did the user reveal stable facts?"
+- Suggests up to 3 with inline buttons: 💾 Save individually, 💾 Save all, ✕ Skip
+- Sanitizes keys to snake_case, skips ones already in memory
+- Fire-and-forget — never blocks AI replies
+- Hard caps: 3 pending batches per user, 50 memory entries total
+
+### 🐛 Critical bug fix (silent since v2.0.3)
+- `t(lang, "key_name", key=value)` crashed silently with TypeError because the
+  `t()` function parameter was also named `key`. The outer try/except in callers
+  swallowed it, so /memorysave, /memoryget, /memorydel, /mem_value, /mem_not_found
+  had been broken for HTML-escape paths for weeks.
+- Fix: renamed `t()`'s second parameter from `key` → `i18n_key`. Callers unchanged.
+
+### Plumbing
+- New `bot/handlers/proactive.py` (~200 lines)
+- TTS hooks at end of streaming reply (`media.maybe_speak_response`)
+- Proactive memory hook via `asyncio.create_task(...)` — non-blocking
+- `bot/handlers/__init__.py`, `main.py` updated with new commands and callback patterns
+- 19 new i18n keys × 3 langs (243 keys/lang total, parity verified)
+- BOT_VERSION 2.4.0 → 2.5.0
+
+### Tested (23 in-session checks, all green)
+1. main.py loads with v2.5.0 additions
+2-4. i18n parity, version, handler exports
+5-9. TTS module: 6 voices, no-ops when off / no key / error / errors swallowed
+10-12. /voice command: on, off, refused without key, pick voice
+13-14. award_weekly_xp accumulates in ISO week, caps at 8 weeks, ignores ≤ 0
+15. /leaderboard weekly sorts by current-week XP
+16-17. /quizgame creates session, N clamped [2..10] with default 5
+18-19. Proactive memory: triggers after N turns, sanitizes keys, sends UI
+20-22. memory_suggest_callback: msave/msaveall/mskip work correctly
+23. No callback_data collisions with 40+ existing handlers
+
+### ROADMAP Phase 2 status
+- ✅ 2.2 Multi-quiz
+- ✅ 2.3 TTS
+- ✅ 2.4 Smart reminders (v2.4.0)
+- ✅ 2.5 Weekly leaderboard
+- ✅ 2.6 Proactive memory
+- ⏳ 2.1 Morning digest (deferred — needs per-user timezone)
+
+**Phase 2 effectively COMPLETE** (5 of 6 items; morning digest deferred).
+
+---
+
 ## [2.4.0] — 2026-05-25 🔔 Smart reminders (Phase 2.4 from ROADMAP)
 
 ### Natural-language `/remind`

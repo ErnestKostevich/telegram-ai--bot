@@ -134,6 +134,7 @@ class Storage:
                 "chat_history": [],
                 "stats": {"msgs": 0, "commands": 0},
                 "referrals": 0,
+                "xp_by_week": {},   # {"2026-W21": 50, ...}
             }
         else:
             u = self.data["users"][uid]
@@ -143,6 +144,7 @@ class Storage:
             u.setdefault("api_keys", {})
             u.setdefault("stats", {"msgs": 0, "commands": 0})
             u.setdefault("referrals", 0)
+            u.setdefault("xp_by_week", {})
         return self.data["users"][uid]
 
     def get_group(self, chat_id: int) -> dict:

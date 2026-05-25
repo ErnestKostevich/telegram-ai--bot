@@ -301,31 +301,61 @@ async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(t(lang, "cancel_nothing"))
 
 
+def _iso_week_key(dt=None) -> str:
+    """Return ISO week label like '2026-W21'."""
+    import datetime as _dt
+    d = dt or _dt.datetime.utcnow()
+    iso = d.isocalendar()
+    return f"{iso[0]}-W{iso[1]:02d}"
+
+
+def award_weekly_xp(user: dict, xp: int):
+    """Increment the user's XP for the current ISO week."""
+    if xp <= 0:
+        return
+    wk = _iso_week_key()
+    wxp = user.setdefault("xp_by_week", {})
+    wxp[wk] = int(wxp.get(wk, 0)) + xp
+    # Keep only last 8 weeks to bound storage
+    if len(wxp) > 8:
+        for k in sorted(wxp.keys())[: len(wxp) - 8]:
+            wxp.pop(k, None)
+
+
 async def leaderboard_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Top users by command activity. Public-safe — only first names + position."""
+    """/leaderboard [weekly] — top users by total or current-week XP."""
     lang = storage.get_user(update.effective_user.id).get("language", "ru")
     users = storage.data.get("users", {})
-    ranked = sorted(
-        users.items(),
-        key=lambda kv: kv[1].get("stats", {}).get("commands", 0),
-        reverse=True,
-    )
+    weekly = bool(context.args and context.args[0].lower() in ("weekly", "week", "неделя", "settimana"))
+
+    if weekly:
+        wk = _iso_week_key()
+        def score(u):
+            return int(u.get("xp_by_week", {}).get(wk, 0))
+        title_key = "leaderboard_weekly_title"
+    else:
+        def score(u):
+            return u.get("stats", {}).get("commands", 0) * 10
+        title_key = "leaderboard_title"
+
+    ranked = sorted(users.items(), key=lambda kv: score(kv[1]), reverse=True)
+    # Drop users with zero score
+    ranked = [(u, d) for (u, d) in ranked if score(d) > 0]
     if not ranked:
         await update.message.reply_text(t(lang, "leaderboard_empty"))
         return
+
     medals = ["🥇", "🥈", "🥉"] + ["▫️"] * 17
     own_uid = str(update.effective_user.id)
-    lines = [t(lang, "leaderboard_title")]
+    lines = [t(lang, title_key, week=_iso_week_key()) if weekly else t(lang, title_key)]
     own_rank = None
     for i, (uid_str, udata) in enumerate(ranked[:10], 1):
         name = udata.get("username") or f"user{uid_str[-4:]}"
         if uid_str == own_uid:
-            name = f"<b>{name}</b> (вы)" if lang == "ru" else f"<b>{name}</b> (you)" if lang == "en" else f"<b>{name}</b> (tu)"
+            tag = "вы" if lang == "ru" else "you" if lang == "en" else "tu"
+            name = f"<b>{name}</b> ({tag})"
             own_rank = i
-        cmds = udata.get("stats", {}).get("commands", 0)
-        xp = cmds * 10
-        lines.append(f"{medals[i-1]} <b>{i}.</b> {name} — {xp} XP")
-    # Show user's own rank if outside top 10
+        lines.append(f"{medals[i-1]} <b>{i}.</b> {name} — {score(udata)} XP")
     if own_rank is None:
         for i, (uid_str, _) in enumerate(ranked, 1):
             if uid_str == own_uid:
@@ -334,10 +364,10 @@ async def leaderboard_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         if own_rank:
             lines.append("…")
             udata = ranked[own_rank - 1][1]
-            cmds = udata.get("stats", {}).get("commands", 0)
-            you = "вы" if lang == "ru" else ("you" if lang == "en" else "tu")
-            lines.append(f"▫️ <b>{own_rank}.</b> ({you}) — {cmds * 10} XP")
-    await update.message.reply_text("\n".join(lines), parse_mode="HTML")
+            tag = "вы" if lang == "ru" else "you" if lang == "en" else "tu"
+            lines.append(f"▫️ <b>{own_rank}.</b> ({tag}) — {score(udata)} XP")
+    suffix = "\n\n<i>" + (t(lang, "leaderboard_weekly_hint") if not weekly else t(lang, "leaderboard_total_hint")) + "</i>"
+    await update.message.reply_text("\n".join(lines) + suffix, parse_mode="HTML")
 
 
 async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
