@@ -12,14 +12,61 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     user = storage.get_user(user_id)
     user["stats"]["commands"] += 1
-    user["state"] = None  # always reset any lingering interactive state
+    user["state"] = None
     if update.effective_user.username:
         user["username"] = update.effective_user.username
     lang = user.get("language", "ru")
+
+    # Referral parsing: /start ref_<inviter_uid>
+    if context.args and context.args[0].startswith("ref_") and not user.get("referred_by"):
+        try:
+            inviter_uid = int(context.args[0][4:])
+            if inviter_uid != user_id:
+                inviter = storage.data.get("users", {}).get(str(inviter_uid))
+                if inviter is not None:
+                    user["referred_by"] = inviter_uid
+                    inviter["referrals"] = int(inviter.get("referrals", 0)) + 1
+                    # Notify the inviter
+                    try:
+                        new_name = update.effective_user.first_name or "Friend"
+                        inv_lang = inviter.get("language", "ru")
+                        await context.bot.send_message(
+                            inviter_uid,
+                            t(inv_lang, "ref_inviter_notify", name=new_name, total=inviter["referrals"]),
+                            parse_mode="HTML",
+                        )
+                    except Exception:
+                        pass
+        except (ValueError, IndexError):
+            pass
+
     if update.effective_chat.type == "private":
         await update.message.reply_text(get_text(lang, "welcome"), parse_mode="HTML", reply_markup=get_main_keyboard(lang))
     else:
         await update.message.reply_text(get_text(lang, "welcome"), parse_mode="HTML")
+
+
+async def share_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Show a ready-to-share invite message with the user's referral link."""
+    user = storage.get_user(update.effective_user.id)
+    lang = user.get("language", "ru")
+    try:
+        me = await context.bot.get_me()
+        bot_username = me.username
+    except Exception:
+        bot_username = "AI_DISCO_BOT"
+    link = f"https://t.me/{bot_username}?start=ref_{update.effective_user.id}"
+    body = t(lang, "share_text", link=link)
+    refs = int(user.get("referrals", 0))
+    body += "\n\n" + t(lang, "share_stats", count=refs)
+    await update.message.reply_text(body, parse_mode="HTML", disable_web_page_preview=True)
+
+
+async def referrals_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = storage.get_user(update.effective_user.id)
+    lang = user.get("language", "ru")
+    refs = int(user.get("referrals", 0))
+    await update.message.reply_text(t(lang, "ref_stats", count=refs), parse_mode="HTML")
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):

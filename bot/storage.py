@@ -133,6 +133,8 @@ class Storage:
                 "notes": [],
                 "chat_history": [],
                 "stats": {"msgs": 0, "commands": 0},
+                "free_tier": {"date": "", "count": 0},
+                "referrals": 0,
             }
         else:
             u = self.data["users"][uid]
@@ -141,6 +143,8 @@ class Storage:
             u.setdefault("notes", [])
             u.setdefault("api_keys", {})
             u.setdefault("stats", {"msgs": 0, "commands": 0})
+            u.setdefault("free_tier", {"date": "", "count": 0})
+            u.setdefault("referrals", 0)
         return self.data["users"][uid]
 
     def get_group(self, chat_id: int) -> dict:

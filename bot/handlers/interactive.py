@@ -31,6 +31,83 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = storage.get_user(uid)
     lang = user.get("language", "ru")
 
+    # === AI action buttons (under streaming response) ===
+    if data == "ai_regen":
+        last = user.get("last_ai_turn") or {}
+        prompt = last.get("prompt")
+        system_prompt = last.get("system_prompt") or ""
+        if not prompt:
+            try:
+                await query.answer(t(lang, "regen_no_turn"), show_alert=True)
+            except Exception:
+                pass
+            return
+        # Edit the old response to a "regenerating…" placeholder, then stream a new one
+        try:
+            await query.edit_message_text(t(lang, "regen_loading"))
+        except Exception:
+            pass
+        # Use the standard streaming path so the new reply also gets buttons.
+        # We synthesize a faux update so _stream_to_message can reply normally
+        # in the same chat.
+        from bot.handlers.ai_memory import _stream_to_message
+        from bot.ai import ai_handler
+        try:
+            response = await ai_handler.generate_response(uid, prompt, system_prompt=system_prompt or None)
+        except Exception as e:
+            response = f"❌ {e}"
+        if response.startswith("❌"):
+            try:
+                await query.edit_message_text(response, parse_mode="HTML")
+            except Exception:
+                pass
+            return
+        kb = InlineKeyboardMarkup([[
+            InlineKeyboardButton(t(lang, "btn_regen"), callback_data="ai_regen"),
+            InlineKeyboardButton(t(lang, "btn_save_note"), callback_data="ai_save_note"),
+        ]])
+        # Replace the previous response in place
+        try:
+            await query.edit_message_text(response[:3800], disable_web_page_preview=True, reply_markup=kb)
+        except Exception:
+            # If the message is too old / can't be edited, send a fresh one
+            try:
+                await context.bot.send_message(query.message.chat.id, response[:3800],
+                                               disable_web_page_preview=True, reply_markup=kb)
+            except Exception:
+                pass
+        # Update stored turn
+        user["last_ai_turn"] = {"prompt": prompt[:2000], "response": response[:3800],
+                                 "system_prompt": (system_prompt or "")[:1500]}
+        await storage.save()
+        return
+
+    if data == "ai_save_note":
+        import datetime
+        from bot.handlers.notes import MAX_NOTES, MAX_NOTE_LEN
+        last = user.get("last_ai_turn") or {}
+        body = last.get("response") or query.message.text or ""
+        if not body:
+            try:
+                await query.answer(t(lang, "regen_no_turn"), show_alert=True)
+            except Exception:
+                pass
+            return
+        notes = user.setdefault("notes", [])
+        if len(notes) >= MAX_NOTES:
+            try:
+                await query.answer(t(lang, "notes_full", max=MAX_NOTES), show_alert=True)
+            except Exception:
+                pass
+            return
+        notes.append({"text": body[:MAX_NOTE_LEN], "date": datetime.datetime.now().strftime("%Y-%m-%d %H:%M")})
+        await storage.save()
+        try:
+            await query.answer(t(lang, "saved_as_note", num=len(notes)), show_alert=False)
+        except Exception:
+            pass
+        return
+
     # === Provider ===
     if data == "ai_provider":
         from bot.keyboards import get_provider_picker_keyboard

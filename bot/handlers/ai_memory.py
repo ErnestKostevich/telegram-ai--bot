@@ -1,13 +1,21 @@
 import asyncio
 import html
 import time
-from telegram import Update
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ChatAction
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 from bot.storage import storage
 from bot.ai import ai_handler, PROVIDERS, STREAMING_PROVIDERS
 from bot.i18n import t
+
+
+def _action_buttons(lang: str) -> InlineKeyboardMarkup:
+    """Inline keyboard attached under a finished AI response."""
+    return InlineKeyboardMarkup([[
+        InlineKeyboardButton(t(lang, "btn_regen"), callback_data="ai_regen"),
+        InlineKeyboardButton(t(lang, "btn_save_note"), callback_data="ai_save_note"),
+    ]])
 
 # Per-user cap on long-term memory entries to keep system-prompt size sane
 MAX_MEMORY_ENTRIES = 50
@@ -34,11 +42,13 @@ async def _typing(context, chat_id):
 
 async def _stream_to_message(update, context, prompt, system_prompt, lang):
     """Run a streaming AI response and update the Telegram message live.
-    Returns the final accumulated text."""
+    Returns the final accumulated text. Also stores last_ai_turn on the user
+    and attaches action buttons (regenerate / save as note)."""
     uid = update.effective_user.id
     chat_id = update.effective_chat.id
     user = storage.get_user(uid)
     provider = user.get("ai_provider", "gemini")
+    is_private = update.effective_chat.type == "private"
 
     await _typing(context, chat_id)
     placeholder = await update.message.reply_text(t(lang, "ai_thinking"))
@@ -52,7 +62,11 @@ async def _stream_to_message(update, context, prompt, system_prompt, lang):
             await placeholder.delete()
             await _send_long(update.message, response)
         else:
-            await placeholder.edit_text(response, disable_web_page_preview=True)
+            kb = _action_buttons(lang) if is_private else None
+            await placeholder.edit_text(response, disable_web_page_preview=True, reply_markup=kb)
+            user["last_ai_turn"] = {"prompt": prompt[:2000], "response": response[:3800],
+                                     "system_prompt": (system_prompt or "")[:1500]}
+            await storage.save()
         return response
 
     acc = ""
@@ -95,12 +109,17 @@ async def _stream_to_message(update, context, prompt, system_prompt, lang):
 
     try:
         if len(final) <= 3800:
-            if final != last_text.rstrip(" ▌"):
-                try:
-                    await placeholder.edit_text(final, parse_mode="HTML" if error_text else None,
-                                                 disable_web_page_preview=True)
-                except BadRequest:
-                    pass
+            kb = _action_buttons(lang) if (is_private and not error_text) else None
+            # Always do a final edit (without cursor, with buttons if applicable)
+            try:
+                await placeholder.edit_text(
+                    final,
+                    parse_mode="HTML" if error_text else None,
+                    disable_web_page_preview=True,
+                    reply_markup=kb,
+                )
+            except BadRequest:
+                pass
         else:
             try:
                 await placeholder.delete()
@@ -112,6 +131,14 @@ async def _stream_to_message(update, context, prompt, system_prompt, lang):
 
     if not error_text:
         ai_handler.push_history(uid, prompt, acc)
+        # Stash the turn so action buttons can act on it.
+        if is_private:
+            user["last_ai_turn"] = {"prompt": prompt[:2000], "response": acc[:3800],
+                                     "system_prompt": (system_prompt or "")[:1500]}
+            try:
+                await storage.save()
+            except Exception:
+                pass
     return final
 
 

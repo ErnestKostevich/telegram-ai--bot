@@ -90,6 +90,21 @@ translations = {
                        "Перед удалением я отправлю вам экспорт JSON.\n\n"
                        "Подтвердить: <code>/reset confirm</code>"),
         "reset_done": "🗑 Все ваши данные удалены. Чтобы начать заново — /start",
+        # v2.2.0: action buttons under AI reply
+        "btn_regen": "🔄 Ещё раз",
+        "btn_save_note": "💾 В заметки",
+        "regen_no_turn": "Нечего регенерировать — сначала задайте вопрос.",
+        "regen_loading": "🔄 Генерирую заново...",
+        "saved_as_note": "💾 Сохранено как заметка #{num}",
+        # v2.2.0: share / referrals
+        "share_text": ("👋 <b>Поделись AI DISCO BOT с друзьями!</b>\n\n"
+                       "AI-ассистент со стримингом ответов как в ChatGPT, "
+                       "10+ моделей на выбор, голосовой ввод, мини-игры — внутри Telegram.\n\n"
+                       "🔗 Твоя реферальная ссылка:\n{link}\n\n"
+                       "<i>Перешли друзьям — за активных рефералов будут бонусы.</i>"),
+        "share_stats": "📊 Уже пригласили: <b>{count}</b>",
+        "ref_stats": "🤝 <b>Ваши приглашения:</b> {count}\n\nПолучить ссылку: /share",
+        "ref_inviter_notify": "🎉 <b>{name}</b> присоединился по вашей ссылке!\nВсего рефералов: <b>{total}</b>",
         "model_set": "🧠 Модель: <b>{model}</b>",
         "model_usage": "Использование: /setmodel [модель]\nТекущая: {current}",
         # Memory
@@ -315,6 +330,21 @@ translations = {
                        "I'll send you a JSON export first.\n\n"
                        "Confirm: <code>/reset confirm</code>"),
         "reset_done": "🗑 All your data has been deleted. To start again — /start",
+        # v2.2.0: action buttons under AI reply
+        "btn_regen": "🔄 Regenerate",
+        "btn_save_note": "💾 Save as note",
+        "regen_no_turn": "Nothing to regenerate — ask a question first.",
+        "regen_loading": "🔄 Regenerating...",
+        "saved_as_note": "💾 Saved as note #{num}",
+        # v2.2.0: share / referrals
+        "share_text": ("👋 <b>Share AI DISCO BOT with friends!</b>\n\n"
+                       "AI assistant with ChatGPT-style streaming, 10+ models, "
+                       "voice input, mini-games — right inside Telegram.\n\n"
+                       "🔗 Your referral link:\n{link}\n\n"
+                       "<i>Forward to friends — active referrals earn bonuses.</i>"),
+        "share_stats": "📊 Invited so far: <b>{count}</b>",
+        "ref_stats": "🤝 <b>Your invites:</b> {count}\n\nGet link: /share",
+        "ref_inviter_notify": "🎉 <b>{name}</b> joined via your link!\nTotal referrals: <b>{total}</b>",
         "model_set": "🧠 Model: <b>{model}</b>", "model_usage": "Usage: /setmodel [model]\nCurrent: {current}",
         "mem_saved": "✅ Saved: {key} = {value}", "mem_usage": "Usage: /memorysave [key] [value]",
         "mem_value": "🧠 {key}: {value}", "mem_not_found": "❌ Key '{key}' not found.",
@@ -529,6 +559,21 @@ translations = {
                        "Prima ti invio un export JSON.\n\n"
                        "Conferma: <code>/reset confirm</code>"),
         "reset_done": "🗑 Tutti i tuoi dati sono stati eliminati. Per ricominciare — /start",
+        # v2.2.0: action buttons under AI reply
+        "btn_regen": "🔄 Rigenera",
+        "btn_save_note": "💾 Salva come nota",
+        "regen_no_turn": "Niente da rigenerare — fai prima una domanda.",
+        "regen_loading": "🔄 Rigenero...",
+        "saved_as_note": "💾 Salvato come nota #{num}",
+        # v2.2.0: share / referrals
+        "share_text": ("👋 <b>Condividi AI DISCO BOT con gli amici!</b>\n\n"
+                       "Assistente AI con risposte streaming stile ChatGPT, 10+ modelli, "
+                       "voce, mini-giochi — dentro Telegram.\n\n"
+                       "🔗 Il tuo link di invito:\n{link}\n\n"
+                       "<i>Inoltralo agli amici — referral attivi sbloccano bonus.</i>"),
+        "share_stats": "📊 Invitati finora: <b>{count}</b>",
+        "ref_stats": "🤝 <b>I tuoi inviti:</b> {count}\n\nLink: /share",
+        "ref_inviter_notify": "🎉 <b>{name}</b> si è unito tramite il tuo link!\nReferral totali: <b>{total}</b>",
         "model_set": "🧠 Modello: <b>{model}</b>", "model_usage": "Uso: /setmodel [modello]\nAttuale: {current}",
         "mem_saved": "✅ Salvato: {key} = {value}", "mem_usage": "Uso: /memorysave [chiave] [valore]",
         "mem_value": "🧠 {key}: {value}", "mem_not_found": "❌ Chiave '{key}' non trovata.",

@@ -1,7 +1,8 @@
 from .base import (start_command, help_command, info_command, status_command,
                     lang_command, profile_command, disco_command,
                     version_command, changelog_command, export_command,
-                    cancel_command, leaderboard_command, reset_command)
+                    cancel_command, leaderboard_command, reset_command,
+                    share_command, referrals_command)
 from .ai_memory import (setprovider_command, setkey_command, setmodel_command, ai_command, clear_command,
                          memorysave_command, memoryget_command, memorylist_command, memorydel_command)
 from .notes import note_command, notes_command, delnote_command, todo_command
