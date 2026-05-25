@@ -321,13 +321,13 @@ services:
 
 ## 🗺️ Roadmap
 
-- [ ] 🎙 Голосовые сообщения (Whisper)
-- [ ] 📊 Web-дашборд для создателя
-- [ ] 🤝 Multi-creator support
-- [ ] 📚 Сохранение и поиск по истории диалогов
-- [ ] 🧩 Плагины / кастомные команды
-- [ ] 💳 Опциональные платные подписки (Stars)
-- [ ] 🌐 Больше языков (DE / ES / FR / ZH)
+Полный план развития в **[ROADMAP.md](ROADMAP.md)** — 5 фаз с приоритетами:
+
+- **Phase 1** Friction-killer (1–2 нед): free tier, onboarding wizard, inline mode, action buttons, /share
+- **Phase 2** Retention (2–4 нед): morning digest, multi-quiz, TTS, smart reminders, weekly leaderboard
+- **Phase 3** Differentiation (1–2 мес): web search, image2image, code sandbox, Telegram Mini App
+- **Phase 4** Monetization (1 мес): Telegram Stars, tiers, image credits, partner program
+- **Phase 5** Scale (когда >500 active): Postgres, CI/tests, monitoring
 
 ## 📜 Changelog
 
