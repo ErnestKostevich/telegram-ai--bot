@@ -31,6 +31,7 @@ def main():
         ("reset", handlers.reset_command),
         ("share", handlers.share_command),
         ("referrals", handlers.referrals_command),
+        ("onboard", handlers.onboard_command),
     ]
     ai_mem = [
         ("setprovider", handlers.setprovider_command), ("setkey", handlers.setkey_command),

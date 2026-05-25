@@ -105,6 +105,39 @@ translations = {
         "share_stats": "📊 Уже пригласили: <b>{count}</b>",
         "ref_stats": "🤝 <b>Ваши приглашения:</b> {count}\n\nПолучить ссылку: /share",
         "ref_inviter_notify": "🎉 <b>{name}</b> присоединился по вашей ссылке!\nВсего рефералов: <b>{total}</b>",
+        # v2.2.2: onboarding wizard
+        "onb_step2_text": ("✅ Язык: <b>Русский</b>\n\n"
+                            "🔑 <b>Шаг 2/3: Получи бесплатный API-ключ</b>\n\n"
+                            "Я работаю по системе <b>BYOK</b> — ты используешь свой ключ "
+                            "от AI-провайдера. Это значит:\n"
+                            "• Запросы идут <b>напрямую</b> к AI, минуя меня\n"
+                            "• Никто не видит твои данные кроме тебя\n"
+                            "• На бесплатных тарифах — <b>$0/мес</b>\n\n"
+                            "<b>Самые быстрые бесплатные опции:</b>\n"
+                            "• ⚡ <b>Groq</b> — реально быстро, Llama 3.3 70B\n"
+                            "• ✨ <b>Gemini</b> — от Google, 60 запросов/мин\n"
+                            "• 🌐 <b>OpenRouter</b> — каталог моделей, есть бесплатные\n\n"
+                            "Жми <b>🌐</b> чтобы открыть страницу регистрации, "
+                            "потом <b>Использовать</b> когда получишь ключ:"),
+        "onb_use_btn": "Использовать ✅",
+        "onb_have_key": "🔑 У меня уже есть ключ",
+        "onb_skip": "⏭ Пропустить",
+        "onb_step3_text": ("🔑 <b>Шаг 3/3: Пришли ключ от {provider}</b>\n\n"
+                            "Скопируй ключ со страницы провайдера и пришли его сюда "
+                            "одним сообщением.\n\n"
+                            "<i>Сообщение с ключом удалится автоматически — никто его не увидит.</i>"),
+        "onb_back_btn": "🔙 Назад к выбору",
+        "onb_skipped": ("👌 Хорошо, настроишь позже.\n\n"
+                         "Когда будешь готов — /onboard или ⚙️ Настройки → 🔑 API Ключ"),
+        "onb_done": ("🎉 <b>Готово! Ты в строю.</b>\n\n"
+                      "Теперь можно:\n"
+                      "💬 Просто писать сообщения — бот помнит контекст\n"
+                      "🎙 Прислать голосовое — распознаю и отвечу\n"
+                      "🎭 /persona — сменить характер AI\n"
+                      "🔮 /today — получить AI-прогноз дня\n"
+                      "🧠 /quiz [тема] — сгенерировать квиз\n"
+                      "🎰 /slots /basket /football — мини-игры\n\n"
+                      "/help — полный список команд"),
         "model_set": "🧠 Модель: <b>{model}</b>",
         "model_usage": "Использование: /setmodel [модель]\nТекущая: {current}",
         # Memory
@@ -345,6 +378,39 @@ translations = {
         "share_stats": "📊 Invited so far: <b>{count}</b>",
         "ref_stats": "🤝 <b>Your invites:</b> {count}\n\nGet link: /share",
         "ref_inviter_notify": "🎉 <b>{name}</b> joined via your link!\nTotal referrals: <b>{total}</b>",
+        # v2.2.2: onboarding wizard
+        "onb_step2_text": ("✅ Language: <b>English</b>\n\n"
+                            "🔑 <b>Step 2/3: Get a free API key</b>\n\n"
+                            "I work on a <b>BYOK</b> system — you use your own key "
+                            "from an AI provider. That means:\n"
+                            "• Requests go <b>directly</b> to the AI, not through me\n"
+                            "• Nobody sees your data but you\n"
+                            "• On free tiers — <b>$0/month</b>\n\n"
+                            "<b>Fastest free options:</b>\n"
+                            "• ⚡ <b>Groq</b> — actually fast, Llama 3.3 70B\n"
+                            "• ✨ <b>Gemini</b> — from Google, 60 req/min\n"
+                            "• 🌐 <b>OpenRouter</b> — model catalog, free ones included\n\n"
+                            "Tap <b>🌐</b> to open the signup page, "
+                            "then <b>Use</b> once you have a key:"),
+        "onb_use_btn": "Use ✅",
+        "onb_have_key": "🔑 I already have a key",
+        "onb_skip": "⏭ Skip",
+        "onb_step3_text": ("🔑 <b>Step 3/3: Send your {provider} key</b>\n\n"
+                            "Copy the key from the provider's page and send it here "
+                            "as a single message.\n\n"
+                            "<i>The message with the key will be deleted automatically — nobody will see it.</i>"),
+        "onb_back_btn": "🔙 Back to providers",
+        "onb_skipped": ("👌 OK, you can set it up later.\n\n"
+                         "When you're ready — /onboard or ⚙️ Settings → 🔑 API Key"),
+        "onb_done": ("🎉 <b>All set! You're good to go.</b>\n\n"
+                      "Now you can:\n"
+                      "💬 Just type messages — I remember context\n"
+                      "🎙 Send a voice message — I'll transcribe & answer\n"
+                      "🎭 /persona — switch AI character\n"
+                      "🔮 /today — get an AI fortune of the day\n"
+                      "🧠 /quiz [topic] — generate a quiz\n"
+                      "🎰 /slots /basket /football — mini-games\n\n"
+                      "/help — full list of commands"),
         "model_set": "🧠 Model: <b>{model}</b>", "model_usage": "Usage: /setmodel [model]\nCurrent: {current}",
         "mem_saved": "✅ Saved: {key} = {value}", "mem_usage": "Usage: /memorysave [key] [value]",
         "mem_value": "🧠 {key}: {value}", "mem_not_found": "❌ Key '{key}' not found.",
@@ -574,6 +640,39 @@ translations = {
         "share_stats": "📊 Invitati finora: <b>{count}</b>",
         "ref_stats": "🤝 <b>I tuoi inviti:</b> {count}\n\nLink: /share",
         "ref_inviter_notify": "🎉 <b>{name}</b> si è unito tramite il tuo link!\nReferral totali: <b>{total}</b>",
+        # v2.2.2: onboarding wizard
+        "onb_step2_text": ("✅ Lingua: <b>Italiano</b>\n\n"
+                            "🔑 <b>Passo 2/3: Ottieni una chiave API gratuita</b>\n\n"
+                            "Lavoro con il sistema <b>BYOK</b> — usi la tua chiave "
+                            "di un provider AI. Significa:\n"
+                            "• Le richieste vanno <b>direttamente</b> all'AI, non passano da me\n"
+                            "• Nessuno vede i tuoi dati tranne te\n"
+                            "• Sui piani gratuiti — <b>$0/mese</b>\n\n"
+                            "<b>Opzioni gratuite più veloci:</b>\n"
+                            "• ⚡ <b>Groq</b> — davvero veloce, Llama 3.3 70B\n"
+                            "• ✨ <b>Gemini</b> — di Google, 60 req/min\n"
+                            "• 🌐 <b>OpenRouter</b> — catalogo modelli, alcuni gratis\n\n"
+                            "Tocca <b>🌐</b> per aprire la pagina di registrazione, "
+                            "poi <b>Usa</b> quando hai la chiave:"),
+        "onb_use_btn": "Usa ✅",
+        "onb_have_key": "🔑 Ho già una chiave",
+        "onb_skip": "⏭ Salta",
+        "onb_step3_text": ("🔑 <b>Passo 3/3: Invia la chiave per {provider}</b>\n\n"
+                            "Copia la chiave dalla pagina del provider e inviala qui "
+                            "come messaggio singolo.\n\n"
+                            "<i>Il messaggio con la chiave verrà eliminato automaticamente.</i>"),
+        "onb_back_btn": "🔙 Torna ai provider",
+        "onb_skipped": ("👌 OK, lo configurerai più tardi.\n\n"
+                         "Quando sei pronto — /onboard o ⚙️ Impostazioni → 🔑 Chiave API"),
+        "onb_done": ("🎉 <b>Tutto pronto! Sei a posto.</b>\n\n"
+                      "Ora puoi:\n"
+                      "💬 Scrivere messaggi — ricordo il contesto\n"
+                      "🎙 Inviare un vocale — lo trascrivo e rispondo\n"
+                      "🎭 /persona — cambia personaggio AI\n"
+                      "🔮 /today — oroscopo AI del giorno\n"
+                      "🧠 /quiz [tema] — genera un quiz\n"
+                      "🎰 /slots /basket /football — mini-giochi\n\n"
+                      "/help — lista completa dei comandi"),
         "model_set": "🧠 Modello: <b>{model}</b>", "model_usage": "Uso: /setmodel [modello]\nAttuale: {current}",
         "mem_saved": "✅ Salvato: {key} = {value}", "mem_usage": "Uso: /memorysave [chiave] [valore]",
         "mem_value": "🧠 {key}: {value}", "mem_not_found": "❌ Chiave '{key}' non trovata.",

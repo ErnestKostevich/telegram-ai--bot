@@ -6,6 +6,60 @@
 
 ---
 
+## [2.2.2] — 2026-05-25 — Onboarding wizard (Phase 1.2 from ROADMAP)
+
+### 🎬 BYOK-first onboarding wizard
+- New users (no API key set) who type `/start` in private chat are
+  automatically dropped into an interactive 3-step wizard:
+  - **Step 1:** language picker (RU / EN / IT) — done in inline buttons
+  - **Step 2:** "get a free key" explainer card with three curated
+    providers, each with a 🌐 signup-link button and a "✅ Use" pick
+    button:
+      - ⚡ **Groq** — fastest, Llama 3.3 70B
+      - ✨ **Gemini** — Google, 60 req/min free
+      - 🌐 **OpenRouter** — model catalog with free options
+    Plus shortcuts: "🔑 I already have a key" and "⏭ Skip"
+  - **Step 3:** bot puts the user in `awaiting_key_for_<provider>`
+    state and shows a friendly send-the-key prompt
+- After the user sends their first key, the bot fires a post-onboarding
+  tour message and pins the main reply keyboard.
+- The whole wizard is also runnable on demand via `/onboard`.
+
+### Why this matters
+- The Free Tier in v2.2.0 violated the BYOK principle (creator's money
+  on the line). Reverted in v2.2.1.
+- This wizard solves the same friction problem **without** creator-funded
+  API costs: it makes getting a personal free key trivial by pointing at
+  providers that genuinely have free tiers and pre-selecting them.
+
+### Plumbing
+- New module `bot/handlers/onboarding.py` (~100 lines, all callbacks
+  prefixed `onb_*`).
+- `start_command` checks `user["api_keys"]` — if empty and chat is
+  private, auto-runs the wizard instead of the standard welcome.
+- `awaiting_key_for_<provider>` handler now detects "this is the user's
+  first key ever" and triggers the post-onboarding tour.
+- `button_callback` dispatches all `onb_*` data to `onboarding_callback`.
+- 8 new i18n keys × 3 languages (208 keys total per lang).
+- `BOT_VERSION` bumped to 2.2.2.
+
+### Tested (13 in-session verifications)
+1. main.py loads with real PTB v21; /onboard registered
+2. i18n parity (208 keys × 3 langs)
+3. All 8 new onboarding keys present in ru/en/it
+4. Provider placeholder interpolates correctly in onb_step3_text
+5. 3 free providers configured with HTTPS signup URLs
+6. Step-1 keyboard: 3 language buttons with correct callback_data
+7. Step-2 keyboard: 3 provider rows × 2 buttons + have_key + skip
+8. All callback_data within Telegram's 64-byte limit
+9. No callback_data collisions with existing 40+ handlers
+10. End-to-end simulated flow: lang → pick → back → skip
+11. /start on fresh user auto-launches wizard (user.state="onboarding")
+12. /start on existing user (with keys) does NOT trigger wizard
+13. BOT_VERSION == 2.2.2
+
+---
+
 ## [2.2.1] — 2026-05-25 — Revert Free Tier (BYOK reaffirmed)
 
 ### Reverted from v2.2.0
