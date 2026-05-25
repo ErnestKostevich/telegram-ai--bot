@@ -224,8 +224,17 @@ translations = {
                        "⏰ Напоминаниям\n\n"
                        "Получить VIP: напишите создателю /feedback"),
         "remind_set": "⏰ Напоминание через {mins} мин!",
-        "remind_usage": "Использование: /remind [минуты] [текст]\nПример: /remind 30 позвонить маме",
+        "remind_usage": ("Использование:\n"
+                          "• <code>/remind 30 позвонить маме</code> — через 30 минут\n"
+                          "• <code>/remind завтра в 9 утра позвонить маме</code> — естественным языком\n"
+                          "• <code>/remind через 2 часа купить хлеб</code>"),
         "remind_bad_time": "❌ Введите минуты от 1 до 43200 (30 дней).",
+        "remind_parsing": "🧠 Разбираю время...",
+        "remind_parse_fail": "❌ Не смог распознать время.\n<code>{err}</code>\n\nПопробуй: <code>/remind 30 текст</code>",
+        "remind_needs_key": ("❌ Для распознавания естественного языка нужен AI-ключ.\n"
+                              "Установи: ⚙️ Настройки → 🔑 API Ключ\n"
+                              "Или используй короткий формат: <code>/remind 30 текст</code>"),
+        "remind_set_smart": "⏰ Напоминание через <b>{when}</b>:\n<i>{text}</i>",
         "reminders_empty": "📭 Нет активных напоминаний.",
         "reminders_title": "⏰ <b>Напоминания ({count}):</b>\n\n",
         "feedback_usage": "💬 Использование: /feedback [текст]\nВаш отзыв уйдёт создателю.",
@@ -503,8 +512,17 @@ translations = {
                        "⏰ Reminders\n\n"
                        "Get VIP: message the creator via /feedback"),
         "remind_set": "⏰ Reminder in {mins} min!",
-        "remind_usage": "Usage: /remind [minutes] [text]\nExample: /remind 30 call mom",
+        "remind_usage": ("Usage:\n"
+                          "• <code>/remind 30 call mom</code> — in 30 minutes\n"
+                          "• <code>/remind tomorrow at 9am call mom</code> — natural language\n"
+                          "• <code>/remind in 2 hours buy bread</code>"),
         "remind_bad_time": "❌ Minutes must be 1-43200 (30 days).",
+        "remind_parsing": "🧠 Parsing the time...",
+        "remind_parse_fail": "❌ Couldn't parse the time.\n<code>{err}</code>\n\nTry: <code>/remind 30 text</code>",
+        "remind_needs_key": ("❌ Natural language parsing needs an AI key.\n"
+                              "Set one: ⚙️ Settings → 🔑 API Key\n"
+                              "Or use short form: <code>/remind 30 text</code>"),
+        "remind_set_smart": "⏰ Reminder in <b>{when}</b>:\n<i>{text}</i>",
         "reminders_empty": "📭 No active reminders.",
         "reminders_title": "⏰ <b>Reminders ({count}):</b>\n\n",
         "feedback_usage": "💬 Usage: /feedback [text]\nYour message goes to the creator.",
@@ -779,8 +797,17 @@ translations = {
                        "⏰ Promemoria\n\n"
                        "Per ottenere VIP: scrivi al creatore via /feedback"),
         "remind_set": "⏰ Promemoria tra {mins} min!",
-        "remind_usage": "Uso: /remind [minuti] [testo]\nEsempio: /remind 30 chiama mamma",
+        "remind_usage": ("Uso:\n"
+                          "• <code>/remind 30 chiama mamma</code> — tra 30 minuti\n"
+                          "• <code>/remind domani alle 9 chiama mamma</code> — linguaggio naturale\n"
+                          "• <code>/remind tra 2 ore compra il pane</code>"),
         "remind_bad_time": "❌ Minuti 1-43200 (30 giorni).",
+        "remind_parsing": "🧠 Analizzo l'orario...",
+        "remind_parse_fail": "❌ Non sono riuscito a capire l'orario.\n<code>{err}</code>\n\nProva: <code>/remind 30 testo</code>",
+        "remind_needs_key": ("❌ Per il parsing in linguaggio naturale serve una chiave AI.\n"
+                              "Imposta: ⚙️ Impostazioni → 🔑 Chiave API\n"
+                              "O usa il formato breve: <code>/remind 30 testo</code>"),
+        "remind_set_smart": "⏰ Promemoria tra <b>{when}</b>:\n<i>{text}</i>",
         "reminders_empty": "📭 Nessun promemoria attivo.",
         "reminders_title": "⏰ <b>Promemoria ({count}):</b>\n\n",
         "feedback_usage": "💬 Uso: /feedback [testo]\nIl tuo messaggio va al creatore.",
