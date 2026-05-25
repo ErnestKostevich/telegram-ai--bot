@@ -1,7 +1,9 @@
-# fly.toml app configuration file generated for telegram-ai--bot on 2026-05-25T12:39:26Z
+# fly.toml — AI DISCO BOT (Telegram polling worker, no HTTP).
 #
-# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
-#
+# IMPORTANT: do NOT re-add [http_service]! Our bot doesn't listen on HTTP.
+# Fly's HTTP health-check would fail and roll back every deploy after ~50s.
+# If you ever re-run `fly launch`, it will add [http_service] back —
+# delete it again before deploying.
 
 app = 'telegram-ai--bot'
 primary_region = 'fra'
@@ -14,14 +16,6 @@ primary_region = 'fra'
 
 [deploy]
   strategy = 'immediate'
-
-[http_service]
-  internal_port = 8080
-  force_https = true
-  auto_stop_machines = 'stop'
-  auto_start_machines = true
-  min_machines_running = 0
-  processes = ['app']
 
 [[vm]]
   size = 'shared-cpu-1x'
