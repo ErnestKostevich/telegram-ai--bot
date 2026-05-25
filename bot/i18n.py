@@ -136,8 +136,22 @@ translations = {
                       "🎭 /persona — сменить характер AI\n"
                       "🔮 /today — получить AI-прогноз дня\n"
                       "🧠 /quiz [тема] — сгенерировать квиз\n"
-                      "🎰 /slots /basket /football — мини-игры\n\n"
+                      "🎰 /slots /basket /football — мини-игры\n"
+                      "💬 <code>@AI_DISCO_BOT [вопрос]</code> — спрашивай меня прямо в любом чате\n\n"
                       "/help — полный список команд"),
+        # v2.3.0: inline mode
+        "inline_setup_btn": "🔑 Открой бот и установи ключ — это бесплатно",
+        "inline_hint_title": "💬 Напиши вопрос после @AI_DISCO_BOT",
+        "inline_hint_desc": "Например: @AI_DISCO_BOT как работают словари в Python",
+        "inline_hint_msg": "💡 Использование: @AI_DISCO_BOT [вопрос]\n\nНапиши вопрос — AI ответит inline.",
+        "inline_ask_title": "🤖 Спросить AI: «{q}»",
+        "inline_ask_desc": "Отправить плейсхолдер. Жми «Сгенерировать» в чате — AI ответит.",
+        "inline_tap_to_generate": "Жми кнопку чтобы получить ответ AI...",
+        "inline_generate_btn": "✨ Сгенерировать",
+        "inline_working": "🤖 Генерирую...",
+        "inline_expired": "⌛ Запрос устарел. Открой inline снова: @AI_DISCO_BOT [вопрос]",
+        "inline_not_author": "🔐 Только тот, кто задал вопрос, может сгенерировать ответ (используется его ключ).",
+        "from_inline_intro": "👋 Привет! Чтобы пользоваться <code>@AI_DISCO_BOT</code> в любом чате, нужно настроить свой AI-ключ:",
         "model_set": "🧠 Модель: <b>{model}</b>",
         "model_usage": "Использование: /setmodel [модель]\nТекущая: {current}",
         # Memory
@@ -409,8 +423,22 @@ translations = {
                       "🎭 /persona — switch AI character\n"
                       "🔮 /today — get an AI fortune of the day\n"
                       "🧠 /quiz [topic] — generate a quiz\n"
-                      "🎰 /slots /basket /football — mini-games\n\n"
+                      "🎰 /slots /basket /football — mini-games\n"
+                      "💬 <code>@AI_DISCO_BOT [question]</code> — ask me right inside any chat\n\n"
                       "/help — full list of commands"),
+        # v2.3.0: inline mode
+        "inline_setup_btn": "🔑 Open bot and set your key — it's free",
+        "inline_hint_title": "💬 Type a question after @AI_DISCO_BOT",
+        "inline_hint_desc": "Example: @AI_DISCO_BOT how do dicts work in Python",
+        "inline_hint_msg": "💡 Usage: @AI_DISCO_BOT [question]\n\nType a question — AI will answer inline.",
+        "inline_ask_title": "🤖 Ask AI: \"{q}\"",
+        "inline_ask_desc": "Send a placeholder. Tap \"Generate\" in chat — AI will reply.",
+        "inline_tap_to_generate": "Tap the button to get the AI answer...",
+        "inline_generate_btn": "✨ Generate",
+        "inline_working": "🤖 Generating...",
+        "inline_expired": "⌛ This query is stale. Open inline again: @AI_DISCO_BOT [question]",
+        "inline_not_author": "🔐 Only the original asker can generate (uses their key).",
+        "from_inline_intro": "👋 Hi! To use <code>@AI_DISCO_BOT</code> in any chat, you need to set up your AI key first:",
         "model_set": "🧠 Model: <b>{model}</b>", "model_usage": "Usage: /setmodel [model]\nCurrent: {current}",
         "mem_saved": "✅ Saved: {key} = {value}", "mem_usage": "Usage: /memorysave [key] [value]",
         "mem_value": "🧠 {key}: {value}", "mem_not_found": "❌ Key '{key}' not found.",
@@ -671,8 +699,22 @@ translations = {
                       "🎭 /persona — cambia personaggio AI\n"
                       "🔮 /today — oroscopo AI del giorno\n"
                       "🧠 /quiz [tema] — genera un quiz\n"
-                      "🎰 /slots /basket /football — mini-giochi\n\n"
+                      "🎰 /slots /basket /football — mini-giochi\n"
+                      "💬 <code>@AI_DISCO_BOT [domanda]</code> — chiedi in qualsiasi chat\n\n"
                       "/help — lista completa dei comandi"),
+        # v2.3.0: inline mode
+        "inline_setup_btn": "🔑 Apri il bot e imposta la chiave — è gratis",
+        "inline_hint_title": "💬 Scrivi una domanda dopo @AI_DISCO_BOT",
+        "inline_hint_desc": "Esempio: @AI_DISCO_BOT come funzionano i dizionari in Python",
+        "inline_hint_msg": "💡 Uso: @AI_DISCO_BOT [domanda]\n\nScrivi una domanda — l'AI risponde inline.",
+        "inline_ask_title": "🤖 Chiedi all'AI: «{q}»",
+        "inline_ask_desc": "Invia un placeholder. Tocca «Genera» in chat — l'AI risponderà.",
+        "inline_tap_to_generate": "Tocca il bottone per la risposta AI...",
+        "inline_generate_btn": "✨ Genera",
+        "inline_working": "🤖 Genero...",
+        "inline_expired": "⌛ Richiesta scaduta. Riapri inline: @AI_DISCO_BOT [domanda]",
+        "inline_not_author": "🔐 Solo chi ha posto la domanda può generare (usa la sua chiave).",
+        "from_inline_intro": "👋 Ciao! Per usare <code>@AI_DISCO_BOT</code> in qualsiasi chat, devi prima configurare la tua chiave AI:",
         "model_set": "🧠 Modello: <b>{model}</b>", "model_usage": "Uso: /setmodel [modello]\nAttuale: {current}",
         "mem_saved": "✅ Salvato: {key} = {value}", "mem_usage": "Uso: /memorysave [chiave] [valore]",
         "mem_value": "🧠 {key}: {value}", "mem_not_found": "❌ Chiave '{key}' non trovata.",

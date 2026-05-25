@@ -43,7 +43,20 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Brand-new user with no API key yet AND in private chat → auto-launch wizard.
     # A user is considered "fresh" if they've never set ANY api key.
     is_fresh = not user.get("api_keys") or not any(user["api_keys"].values())
-    if update.effective_chat.type == "private" and is_fresh:
+    arrived_from_inline = context.args and context.args[0] == "from_inline"
+    if update.effective_chat.type == "private" and (is_fresh or arrived_from_inline):
+        if arrived_from_inline:
+            # Give the inline-redirected user a short context line
+            from bot.handlers.onboarding import onboarding_start
+            try:
+                await update.message.reply_text(
+                    t(lang, "from_inline_intro"),
+                    parse_mode="HTML",
+                )
+            except Exception:
+                pass
+            await onboarding_start(update, context)
+            return
         from bot.handlers.onboarding import onboarding_start
         await onboarding_start(update, context)
         return
