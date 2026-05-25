@@ -6,6 +6,57 @@
 
 ---
 
+## [2.4.0] — 2026-05-25 🔔 Smart reminders (Phase 2.4 from ROADMAP)
+
+### Natural-language `/remind`
+- `/remind завтра в 9 утра позвонить маме` — works
+- `/remind tomorrow at 9am call mom` — works
+- `/remind in 2 hours buy bread` — works
+- Plus the classic `/remind 30 текст` still works as a fast path
+  (no AI call when the first arg is a valid integer)
+
+### Implementation
+- New `_ai_parse_reminder()` asks the user's AI (uses their own key,
+  BYOK-consistent) to extract `{minutes, text}` as strict JSON.
+- Markdown-fence stripping fallback (some models love wrapping JSON in
+  ```json …``` despite instructions).
+- Validation: `minutes >= 1`, `minutes <= MAX_REMIND_MINUTES`
+  (1 year — generous for NL dates like "next Christmas").
+- AI is bypassed entirely when the user uses the classic numeric form —
+  saves a key call and keeps things instant.
+
+### UX
+- "Parsing the time..." indicator while AI thinks (1-3 sec usually).
+- Friendly error if AI returns 0 minutes or bad JSON.
+- "Needs AI key" hint with `/setkey` shortcut for users without a key.
+- Success message renders human time ("⏰ Reminder in 1h 30min").
+- `/remind` with no args shows the new triple-example usage card.
+
+### Plumbing
+- Cleaner `_humanize_minutes()` — handles 5m / 1h / 1h30m / 1d / 3d
+  in all 3 langs.
+- 4 new i18n keys × 3 langs (224 keys total per lang, parity verified).
+- `BOT_VERSION` 2.3.0 → 2.4.0.
+
+### Tested (15 in-session verifications, all green)
+1. Symbols import; main.py loads
+2. i18n parity 224 × 3, new reminder keys present
+3. `_humanize_minutes`: 5m / 1h / 1h30m / 1d / 3d
+4. `MAX_REMIND_MINUTES` is 1 year
+5. `_ai_parse_reminder` happy path with valid JSON
+6. Markdown-fenced JSON gets stripped
+7. AI returning `minutes: 0` → None + reason
+8. Malformed JSON → None + error
+9. Time too far in future → rejected
+10. Classic `/remind 30 text` doesn't call AI (verified by counter)
+11. NL `/remind` triggers AI, reminder saved with parsed minutes+text
+12. NL `/remind` without API key → friendly "needs key" error
+13. `/remind` with no args → usage card
+14. Non-VIP user blocked from `/remind`
+15. BOT_VERSION == 2.4.0
+
+---
+
 ## [2.3.0] — 2026-05-25 🌐 Inline mode (Phase 1.3 — Phase 1 COMPLETE)
 
 ### 💬 @AI_DISCO_BOT works in any Telegram chat

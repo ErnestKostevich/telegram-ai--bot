@@ -39,6 +39,50 @@ async def vip_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(t(lang, "vip_status", status=status), parse_mode="HTML")
 
 
+MAX_REMIND_MINUTES = 60 * 24 * 365  # 1 year — generous cap for natural-language dates
+
+
+async def _ai_parse_reminder(uid: int, raw: str, now_iso: str):
+    """Ask the AI to parse a natural-language reminder.
+    Returns (minutes:int, text:str) or (None, error_msg:str)."""
+    from bot.ai import ai_handler
+    import json, re as _re
+    prompt = (
+        f"Current time (UTC): {now_iso}\n"
+        f"User said: {raw!r}\n\n"
+        "Extract a reminder time (in MINUTES from now, integer >= 1) and "
+        "the cleaned reminder text from the user's input. The user may write "
+        "in any language. Use the current time as reference for relative "
+        "expressions like 'tomorrow', 'in 2 hours', 'next Monday 9am'.\n\n"
+        "Reply with STRICT JSON only, no markdown, no commentary:\n"
+        '{"minutes": <int>, "text": "<cleaned reminder body>"}\n\n'
+        "If you can't parse a time, reply: "
+        '{"minutes": 0, "text": "<reason>"}'
+    )
+    try:
+        raw_resp = await ai_handler.generate_response(
+            uid, prompt,
+            system_prompt="You output ONLY valid JSON, no markdown fences, no extra text.",
+            use_history=False,
+        )
+    except Exception as e:
+        return None, f"AI error: {e}"
+    if raw_resp.startswith("❌"):
+        return None, raw_resp
+    cleaned = _re.sub(r"^```(?:json)?|```$", "", raw_resp.strip(), flags=_re.MULTILINE).strip()
+    try:
+        obj = json.loads(cleaned)
+        minutes = int(obj["minutes"])
+        text = str(obj["text"]).strip()
+        if minutes < 1:
+            return None, text or "couldn't parse a future time"
+        if minutes > MAX_REMIND_MINUTES:
+            return None, "time too far in the future"
+        return minutes, text[:2000]
+    except (json.JSONDecodeError, KeyError, ValueError, TypeError) as e:
+        return None, f"bad AI output: {e}"
+
+
 async def remind_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     user = storage.get_user(uid)
@@ -46,25 +90,83 @@ async def remind_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not check_vip(user):
         await update.message.reply_text(t(lang, "gen_vip_only"))
         return
-    if len(context.args) < 2:
+    if not context.args:
         await update.message.reply_text(t(lang, "remind_usage"))
         return
-    try:
-        minutes = int(context.args[0])
-        if minutes <= 0 or minutes > 60 * 24 * 30:
-            await update.message.reply_text(t(lang, "remind_bad_time"))
+
+    minutes: int | None = None
+    text: str = ""
+
+    # Fast path 1: classic "/remind 30 текст напоминания"
+    if len(context.args) >= 2:
+        try:
+            m = int(context.args[0])
+            if 1 <= m <= MAX_REMIND_MINUTES:
+                minutes = m
+                text = " ".join(context.args[1:])[:2000]
+        except ValueError:
+            pass
+
+    # Slow path: natural language → AI parse
+    if minutes is None:
+        raw = " ".join(context.args)
+        # Tell the user we're parsing (AI takes 1-3s)
+        thinking = await update.message.reply_text(t(lang, "remind_parsing"))
+        # Need a user key for the AI parse — surface a friendly hint if missing
+        provider = user.get("ai_provider", "gemini")
+        if not user.get("api_keys", {}).get(provider):
+            await thinking.edit_text(t(lang, "remind_needs_key"), parse_mode="HTML")
             return
-    except ValueError:
-        await update.message.reply_text(t(lang, "remind_bad_time"))
+        import datetime as _dt
+        now_iso = _dt.datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
+        parsed_minutes, parsed_text_or_err = await _ai_parse_reminder(uid, raw, now_iso)
+        if parsed_minutes is None:
+            await thinking.edit_text(
+                t(lang, "remind_parse_fail", err=html.escape(str(parsed_text_or_err))[:300]),
+                parse_mode="HTML",
+            )
+            return
+        minutes = parsed_minutes
+        text = parsed_text_or_err
+        # Replace the thinking message with the success later
+        try:
+            await thinking.delete()
+        except Exception:
+            pass
+
+    if not text:
+        await update.message.reply_text(t(lang, "remind_usage"))
         return
-    text = " ".join(context.args[1:])[:2000]  # cap reminder text
+
     target_time = datetime.datetime.now() + datetime.timedelta(minutes=minutes)
     storage.data["reminders"].append({
         "user_id": uid, "chat_id": update.effective_chat.id,
         "time": target_time.timestamp(), "text": text,
     })
     await storage.save()
-    await update.message.reply_text(t(lang, "remind_set", mins=minutes))
+    # Render time in a friendly form
+    when_str = _humanize_minutes(minutes, lang)
+    await update.message.reply_text(
+        t(lang, "remind_set_smart", when=when_str, text=html.escape(text)),
+        parse_mode="HTML",
+    )
+
+
+def _humanize_minutes(m: int, lang: str) -> str:
+    """Turn N minutes into a friendly relative string."""
+    if m < 60:
+        unit = {"ru": "мин", "en": "min", "it": "min"}.get(lang, "min")
+        return f"{m} {unit}"
+    if m < 60 * 24:
+        h = m // 60
+        rem = m % 60
+        h_unit = {"ru": "ч", "en": "h", "it": "h"}.get(lang, "h")
+        if rem == 0:
+            return f"{h}{h_unit}"
+        return f"{h}{h_unit} {rem}{'мин' if lang == 'ru' else 'min'}"
+    days = m // (60 * 24)
+    d_unit = {"ru": "д", "en": "d", "it": "g"}.get(lang, "d")
+    return f"{days}{d_unit}"
 
 
 async def reminders_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
