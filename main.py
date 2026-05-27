@@ -85,9 +85,15 @@ def main():
         ("summary", handlers.summary_command), ("translate", handlers.translate_command),
         ("rules", handlers.rules_command), ("setrules", handlers.setrules_command),
         ("guardian", handlers.guardian_command), ("groupstats", handlers.groupstats_command),
+        ("groupmem", handlers.groupmem_command),
+    ]
+    # Phase 3 — power-user commands (work in any chat type)
+    power = [
+        ("run", handlers.run_command),
+        ("search", handlers.search_command),
     ]
 
-    for batch in (base, ai_mem, notes, vip_creator, games_utils, groups):
+    for batch in (base, ai_mem, notes, vip_creator, games_utils, groups, power):
         for cmd, fn in batch:
             application.add_handler(CommandHandler(cmd, fn))
 

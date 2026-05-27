@@ -698,7 +698,12 @@ async def keyboard_message_handler(update: Update, context: ContextTypes.DEFAULT
             from bot.handlers.ai_memory import _build_system_prompt, _typing
             await _typing(context, update.effective_chat.id)
             msg = await update.message.reply_text(t(lang, "ai_thinking"))
-            system = _build_system_prompt(user, "You are AI DISCO BOT inside a Telegram group chat. Be concise (1-4 sentences). ")
+            group_data = storage.get_group(update.effective_chat.id)
+            system = _build_system_prompt(
+                user,
+                "You are AI DISCO BOT inside a Telegram group chat. Be concise (1-4 sentences). ",
+                group=group_data,
+            )
             try:
                 response = await ai_handler.generate_response(uid, query, system_prompt=system, use_history=False)
                 if response.startswith("❌"):

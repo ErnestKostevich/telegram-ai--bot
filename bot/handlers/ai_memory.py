@@ -161,7 +161,7 @@ async def _stream_to_message(update, context, prompt, system_prompt, lang):
     return final
 
 
-def _build_system_prompt(user: dict, base: str = "") -> str:
+def _build_system_prompt(user: dict, base: str = "", group: dict | None = None) -> str:
     lang = user.get("language", "ru")
     lang_names = {"ru": "Russian", "en": "English", "it": "Italian"}
     sp = base or "You are AI DISCO BOT — a helpful, friendly AI assistant inside Telegram. "
@@ -179,10 +179,18 @@ def _build_system_prompt(user: dict, base: str = "") -> str:
         pass
     memory = user.get("memory") or {}
     if memory:
-        # Cap how many entries get injected — otherwise huge memories blow context
         sp += "User's saved memory:\n"
         for k, v in list(memory.items())[:MEMORY_SYSTEM_PROMPT_CAP]:
             sp += f"- {k}: {v}\n"
+    # Group shared memory (only present when called from group context)
+    if group:
+        try:
+            from bot.handlers.groups import _build_group_memory_block
+            gmem = _build_group_memory_block(group)
+            if gmem:
+                sp += gmem
+        except Exception:
+            pass
     return sp
 
 

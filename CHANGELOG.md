@@ -6,6 +6,69 @@
 
 ---
 
+## [3.0.0] — 2026-05-25 🚀 MAJOR — Phase 3 essentials + everything since v2.1
+
+This release ships three big Phase 3 items in one go and marks the
+project's first proper major version since v2.0:
+
+### 👥 Group AI shared memory (Phase 3.5)
+- `/groupmem save [key] [value]` — admin-only save into the group's shared facts
+- `/groupmem get [key]` / `/groupmem list` — anyone can read
+- `/groupmem del [key]` — admin-only delete
+- Group memory is automatically injected into the system prompt of EVERY
+  AI call in that group (both `/ask` and `@bot` mentions).
+- Cap: 30 entries × 500 chars per group.
+
+### 💻 Code sandbox `/run` (Phase 3.3)
+- `/run python print(2+2)` — single-line
+- `/run python ⏎ ``` ⏎ ...code... ⏎ ```` — fenced block
+- 20+ languages: python, py, js, ts, go, rust, c, cpp, java, ruby,
+  bash, php, lua, kotlin, csharp, swift, haskell, ...
+- Runs via Piston (emkc.org), free public sandboxed API.
+- Limits: 10s wall time, no network, code ≤ 6KB, stdout ≤ 2.5KB shown.
+- Shows compile errors and stderr separately when relevant.
+
+### 🔎 Web search `/search` (Phase 3.1)
+- `/search [query]` — DuckDuckGo Instant Answer (no API key needed)
+- Renders abstracts (Wikipedia), direct answers (calculations),
+  definitions (dictionary), and related topics.
+- If DDG has no instant answer AND the user has an AI key, falls back
+  to a short AI summary with an explicit "knowledge may be outdated"
+  disclaimer (BYOK — uses the user's own key).
+- HTML-escapes the user query (no injection into Telegram messages).
+
+### Plumbing
+- New modules: `bot/handlers/sandbox.py`, `bot/handlers/search.py`.
+- `_build_system_prompt()` gained an optional `group=` parameter that
+  injects the group's shared memory block — used by `/ask` and the
+  `@bot` mention path.
+- 25 new i18n keys × 3 langs (268 keys/lang total, parity verified).
+- BOT_VERSION 2.5.0 → 3.0.0.
+
+### Tested (20 in-session verifications, all green)
+1. main.py loads + new handlers exported
+2. BOT_VERSION == 3.0.0
+3. i18n parity (268 × 3, all 25 new keys present)
+4. `_parse_run_args` handles single-line / fenced / lang-only / bare
+5. LANGUAGES dict covers core 20+ languages
+6-7. `_build_group_memory_block` + `_build_system_prompt` injection
+8-12. `/groupmem` save/list/get works; admin-only save rejected for
+   non-admin; refused in private chats
+13-14. `/run` usage card + unsupported language error
+15. Live `/run python print(2+2)` execution via real Piston API
+16-19. `/search` usage / abstract formatter / empty result fallback /
+   HTML-escape of user query
+20. No callback_data prefix collisions (no new callback handlers added)
+
+### ROADMAP status after v3.0.0
+- Phase 1: ✅ COMPLETE (4/5 — Free Tier intentionally skipped, BYOK)
+- Phase 2: ✅ 5/6 (morning digest deferred — needs per-user TZ)
+- Phase 3: ✅ 3/5 — group memory, code sandbox, web search
+  - Deferred: image-to-image (3.2), Telegram Mini App (3.4)
+- Phase 4 (monetization) and Phase 5 (scale) remain for later.
+
+---
+
 ## [2.5.0] — 2026-05-25 🎤 Phase 2 closeout — TTS + multi-quiz + weekly LB + proactive memory
 
 ### 🎙 TTS voice reply (Phase 2.3)
