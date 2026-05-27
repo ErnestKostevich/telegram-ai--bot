@@ -393,10 +393,16 @@ async def ask_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception:
         pass
     msg = await update.message.reply_text(t(lang, "ai_thinking"))
+    # Inject group's shared memory if any
+    group = storage.get_group(update.effective_chat.id) if _is_group(update) else {}
+    group_memory = _build_group_memory_block(group)
+    sys_prompt = "You are a helpful assistant in a group chat. Be concise (2-5 sentences). "
+    if group_memory:
+        sys_prompt += group_memory
     try:
         response = await ai_handler.generate_response(
             uid, prompt,
-            system_prompt="You are a helpful assistant in a group chat. Be concise (2-5 sentences).",
+            system_prompt=sys_prompt,
             use_history=False,
         )
         await msg.edit_text(response, disable_web_page_preview=True)
@@ -520,6 +526,101 @@ async def guardian_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         st = "ON ✅" if group.get("guardian") else "OFF ❌"
         await update.message.reply_text(f"🛡️ AI Guardian: {st}\nUsage: /guardian [on|off]")
+
+
+MAX_GROUP_MEMORY_ENTRIES = 30
+MAX_GROUP_MEMORY_KEY_LEN = 50
+MAX_GROUP_MEMORY_VAL_LEN = 500
+
+
+async def groupmem_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """/groupmem save|get|list|del — shared memory injected into group AI prompts."""
+    if not _is_group(update):
+        lang = storage.get_user(update.effective_user.id).get("language", "ru")
+        await update.message.reply_text(t(lang, "group_only"))
+        return
+    lang = storage.get_user(update.effective_user.id).get("language", "ru")
+    group = storage.get_group(update.effective_chat.id)
+    mem = group.setdefault("memory", {})
+
+    args = context.args or []
+    if not args:
+        await update.message.reply_text(t(lang, "groupmem_usage"), parse_mode="HTML")
+        return
+
+    action = args[0].lower()
+
+    if action == "list":
+        if not mem:
+            await update.message.reply_text(t(lang, "groupmem_empty"))
+            return
+        text = t(lang, "groupmem_list_title", count=len(mem))
+        for k, v in list(mem.items())[:MAX_GROUP_MEMORY_ENTRIES]:
+            text += f"• <b>{html.escape(k)}</b>: {html.escape(str(v))}\n"
+        await update.message.reply_text(text, parse_mode="HTML")
+        return
+
+    if action == "get":
+        if len(args) < 2:
+            await update.message.reply_text(t(lang, "groupmem_get_usage"))
+            return
+        k = args[1]
+        v = mem.get(k)
+        if v:
+            await update.message.reply_text(
+                t(lang, "groupmem_value", k=html.escape(k), v=html.escape(str(v))),
+                parse_mode="HTML",
+            )
+        else:
+            await update.message.reply_text(t(lang, "groupmem_not_found", k=html.escape(k)))
+        return
+
+    # save/del require admin
+    if not await _check_admin(update, context):
+        return
+
+    if action == "save":
+        if len(args) < 3:
+            await update.message.reply_text(t(lang, "groupmem_save_usage"))
+            return
+        k = args[1][:MAX_GROUP_MEMORY_KEY_LEN]
+        v = " ".join(args[2:])[:MAX_GROUP_MEMORY_VAL_LEN]
+        if k not in mem and len(mem) >= MAX_GROUP_MEMORY_ENTRIES:
+            await update.message.reply_text(t(lang, "groupmem_full", max=MAX_GROUP_MEMORY_ENTRIES))
+            return
+        mem[k] = v
+        await storage.save()
+        await update.message.reply_text(
+            t(lang, "groupmem_saved", k=html.escape(k), v=html.escape(v)),
+            parse_mode="HTML",
+        )
+        return
+
+    if action == "del":
+        if len(args) < 2:
+            await update.message.reply_text(t(lang, "groupmem_del_usage"))
+            return
+        k = args[1]
+        if k in mem:
+            del mem[k]
+            await storage.save()
+            await update.message.reply_text(t(lang, "groupmem_deleted", k=html.escape(k)))
+        else:
+            await update.message.reply_text(t(lang, "groupmem_not_found", k=html.escape(k)))
+        return
+
+    await update.message.reply_text(t(lang, "groupmem_usage"), parse_mode="HTML")
+
+
+def _build_group_memory_block(group: dict) -> str:
+    """Return a system-prompt fragment for the group's shared memory, or empty string."""
+    mem = group.get("memory") or {}
+    if not mem:
+        return ""
+    lines = ["Group context to remember:"]
+    for k, v in list(mem.items())[:MAX_GROUP_MEMORY_ENTRIES]:
+        lines.append(f"- {k}: {v}")
+    return "\n".join(lines) + "\n"
 
 
 async def groupstats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):

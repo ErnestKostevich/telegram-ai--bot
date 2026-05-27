@@ -258,6 +258,46 @@ translations = {
         "mem_suggest_saved_all": "✅ Сохранено в память: {count} фактов.\nПосмотреть: /memorylist",
         "mem_suggest_skipped": "👌 Пропущено.",
         "mem_suggest_stale": "⌛ Подсказка устарела.",
+        # v3.0.0: group shared memory
+        "groupmem_usage": ("👥 <b>Память группы</b> (общая для AI в этом чате)\n\n"
+                            "<code>/groupmem save [ключ] [значение]</code> — сохранить (только админ)\n"
+                            "<code>/groupmem get [ключ]</code>\n"
+                            "<code>/groupmem list</code>\n"
+                            "<code>/groupmem del [ключ]</code> — удалить (только админ)\n\n"
+                            "<i>Эти факты бот будет учитывать в каждом AI-ответе в этой группе.</i>"),
+        "groupmem_get_usage": "Использование: /groupmem get [ключ]",
+        "groupmem_save_usage": "Использование: /groupmem save [ключ] [значение]",
+        "groupmem_del_usage": "Использование: /groupmem del [ключ]",
+        "groupmem_list_title": "👥 <b>Память группы ({count}):</b>\n\n",
+        "groupmem_empty": "📭 Память группы пуста.",
+        "groupmem_value": "👥 <b>{k}</b>: {v}",
+        "groupmem_not_found": "❌ Ключ '{k}' не найден.",
+        "groupmem_saved": "✅ В память группы: <b>{k}</b> = {v}",
+        "groupmem_deleted": "🗑 Удалено из памяти группы: <b>{k}</b>",
+        "groupmem_full": "❌ Лимит памяти группы: {max}. Удалите лишнее: /groupmem del [ключ]",
+        # v3.0.0: code sandbox /run
+        "run_usage": ("💻 <b>Запуск кода в песочнице</b>\n\n"
+                       "<code>/run python print('hello')</code>\n"
+                       "Или с код-блоком:\n"
+                       "<code>/run python</code>\n"
+                       "<pre>print('hello')</pre>\n\n"
+                       "<b>Языки:</b> {langs}\n\n"
+                       "<i>Лимиты: 10с, без сети. Через Piston (emkc.org).</i>"),
+        "run_lang_unknown": "❌ Этот язык не поддерживается.\nДоступные: {langs}",
+        "run_code_too_big": "❌ Код слишком большой (>{max} байт).",
+        "run_running": "⚙️ Запускаю <b>{lang}</b>...",
+        "run_done": "✅ <b>{lang}</b> завершён (exit: {exit})",
+        "run_no_output": "(нет вывода)",
+        "run_truncated": "<i>... вывод обрезан.</i>",
+        "run_error": "❌ Ошибка sandbox: {err}",
+        # v3.0.0: web search /search
+        "search_usage": "🔎 Использование: <code>/search [запрос]</code>",
+        "search_loading": "🔎 Ищу: <i>{q}</i>...",
+        "search_header": "🔎 <b>{q}</b>",
+        "search_full_results": "Все результаты на DuckDuckGo",
+        "search_no_instant": ("🤔 По запросу <i>«{q}»</i> нет точного ответа.\n\n"
+                                "Попробуйте уточнить или открыть <a href=\"{link}\">DuckDuckGo</a>."),
+        "search_error": "❌ Ошибка поиска: {err}",
         "reminders_empty": "📭 Нет активных напоминаний.",
         "reminders_title": "⏰ <b>Напоминания ({count}):</b>\n\n",
         "feedback_usage": "💬 Использование: /feedback [текст]\nВаш отзыв уйдёт создателю.",
@@ -569,6 +609,46 @@ translations = {
         "mem_suggest_saved_all": "✅ Saved to memory: {count} facts.\nSee: /memorylist",
         "mem_suggest_skipped": "👌 Skipped.",
         "mem_suggest_stale": "⌛ This suggestion is stale.",
+        # v3.0.0: group shared memory
+        "groupmem_usage": ("👥 <b>Group memory</b> (shared with AI in this chat)\n\n"
+                            "<code>/groupmem save [key] [value]</code> — save (admin only)\n"
+                            "<code>/groupmem get [key]</code>\n"
+                            "<code>/groupmem list</code>\n"
+                            "<code>/groupmem del [key]</code> — delete (admin only)\n\n"
+                            "<i>The bot will take these facts into account in every AI reply in this group.</i>"),
+        "groupmem_get_usage": "Usage: /groupmem get [key]",
+        "groupmem_save_usage": "Usage: /groupmem save [key] [value]",
+        "groupmem_del_usage": "Usage: /groupmem del [key]",
+        "groupmem_list_title": "👥 <b>Group memory ({count}):</b>\n\n",
+        "groupmem_empty": "📭 Group memory is empty.",
+        "groupmem_value": "👥 <b>{k}</b>: {v}",
+        "groupmem_not_found": "❌ Key '{k}' not found.",
+        "groupmem_saved": "✅ Saved to group memory: <b>{k}</b> = {v}",
+        "groupmem_deleted": "🗑 Removed from group memory: <b>{k}</b>",
+        "groupmem_full": "❌ Group memory limit: {max}. Delete some: /groupmem del [key]",
+        # v3.0.0: code sandbox /run
+        "run_usage": ("💻 <b>Run code in a sandbox</b>\n\n"
+                       "<code>/run python print('hello')</code>\n"
+                       "Or with a code block:\n"
+                       "<code>/run python</code>\n"
+                       "<pre>print('hello')</pre>\n\n"
+                       "<b>Languages:</b> {langs}\n\n"
+                       "<i>Limits: 10s, no network. Via Piston (emkc.org).</i>"),
+        "run_lang_unknown": "❌ Language not supported.\nAvailable: {langs}",
+        "run_code_too_big": "❌ Code too big (>{max} bytes).",
+        "run_running": "⚙️ Running <b>{lang}</b>...",
+        "run_done": "✅ <b>{lang}</b> finished (exit: {exit})",
+        "run_no_output": "(no output)",
+        "run_truncated": "<i>... output truncated.</i>",
+        "run_error": "❌ Sandbox error: {err}",
+        # v3.0.0: web search /search
+        "search_usage": "🔎 Usage: <code>/search [query]</code>",
+        "search_loading": "🔎 Searching: <i>{q}</i>...",
+        "search_header": "🔎 <b>{q}</b>",
+        "search_full_results": "Full results on DuckDuckGo",
+        "search_no_instant": ("🤔 No instant answer for <i>\"{q}\"</i>.\n\n"
+                                "Try refining or open <a href=\"{link}\">DuckDuckGo</a>."),
+        "search_error": "❌ Search error: {err}",
         "reminders_empty": "📭 No active reminders.",
         "reminders_title": "⏰ <b>Reminders ({count}):</b>\n\n",
         "feedback_usage": "💬 Usage: /feedback [text]\nYour message goes to the creator.",
@@ -877,6 +957,46 @@ translations = {
         "mem_suggest_saved_all": "✅ Salvati in memoria: {count} fatti.\nVedi: /memorylist",
         "mem_suggest_skipped": "👌 Saltato.",
         "mem_suggest_stale": "⌛ Suggerimento scaduto.",
+        # v3.0.0: group shared memory
+        "groupmem_usage": ("👥 <b>Memoria del gruppo</b> (condivisa con l'AI in questa chat)\n\n"
+                            "<code>/groupmem save [chiave] [valore]</code> — salva (solo admin)\n"
+                            "<code>/groupmem get [chiave]</code>\n"
+                            "<code>/groupmem list</code>\n"
+                            "<code>/groupmem del [chiave]</code> — elimina (solo admin)\n\n"
+                            "<i>L'AI userà questi fatti in ogni risposta in questo gruppo.</i>"),
+        "groupmem_get_usage": "Uso: /groupmem get [chiave]",
+        "groupmem_save_usage": "Uso: /groupmem save [chiave] [valore]",
+        "groupmem_del_usage": "Uso: /groupmem del [chiave]",
+        "groupmem_list_title": "👥 <b>Memoria del gruppo ({count}):</b>\n\n",
+        "groupmem_empty": "📭 Memoria del gruppo vuota.",
+        "groupmem_value": "👥 <b>{k}</b>: {v}",
+        "groupmem_not_found": "❌ Chiave '{k}' non trovata.",
+        "groupmem_saved": "✅ Salvato nella memoria del gruppo: <b>{k}</b> = {v}",
+        "groupmem_deleted": "🗑 Rimosso dalla memoria del gruppo: <b>{k}</b>",
+        "groupmem_full": "❌ Limite memoria gruppo: {max}. Elimina con: /groupmem del [chiave]",
+        # v3.0.0: code sandbox /run
+        "run_usage": ("💻 <b>Esegui codice in sandbox</b>\n\n"
+                       "<code>/run python print('hello')</code>\n"
+                       "O con blocco di codice:\n"
+                       "<code>/run python</code>\n"
+                       "<pre>print('hello')</pre>\n\n"
+                       "<b>Linguaggi:</b> {langs}\n\n"
+                       "<i>Limiti: 10s, senza rete. Via Piston (emkc.org).</i>"),
+        "run_lang_unknown": "❌ Linguaggio non supportato.\nDisponibili: {langs}",
+        "run_code_too_big": "❌ Codice troppo grande (>{max} byte).",
+        "run_running": "⚙️ Eseguo <b>{lang}</b>...",
+        "run_done": "✅ <b>{lang}</b> finito (exit: {exit})",
+        "run_no_output": "(nessun output)",
+        "run_truncated": "<i>... output troncato.</i>",
+        "run_error": "❌ Errore sandbox: {err}",
+        # v3.0.0: web search /search
+        "search_usage": "🔎 Uso: <code>/search [query]</code>",
+        "search_loading": "🔎 Cerco: <i>{q}</i>...",
+        "search_header": "🔎 <b>{q}</b>",
+        "search_full_results": "Risultati completi su DuckDuckGo",
+        "search_no_instant": ("🤔 Nessuna risposta diretta per <i>«{q}»</i>.\n\n"
+                                "Affina o apri <a href=\"{link}\">DuckDuckGo</a>."),
+        "search_error": "❌ Errore di ricerca: {err}",
         "reminders_empty": "📭 Nessun promemoria attivo.",
         "reminders_title": "⏰ <b>Promemoria ({count}):</b>\n\n",
         "feedback_usage": "💬 Uso: /feedback [testo]\nIl tuo messaggio va al creatore.",

@@ -12,7 +12,10 @@ from .groups import (grouphelp_command, ban_command, warn_command, warnings_comm
                       mute_command, unmute_command, kick_command, purge_command,
                       antilink_command, antispam_command, welcome_command, goodbye_command,
                       ask_command, summary_command, translate_command, rules_command, setrules_command,
-                      guardian_command, groupstats_command, group_message_tracker)
+                      guardian_command, groupstats_command, group_message_tracker,
+                      groupmem_command)
+from .sandbox import run_command
+from .search import search_command
 from .interactive import button_callback, keyboard_message_handler
 from .games import dice_command, coinflip_command, random_command, joke_command
 from .media import media_message_handler, generate_command, voice_message_handler, voice_command
