@@ -61,10 +61,13 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await onboarding_start(update, context)
         return
 
+    # Use t() (not get_text) so the {version} placeholder gets filled in
+    short_ver = BOT_VERSION.rsplit(".", 1)[0]  # "3.2.0" -> "3.2"
+    welcome = t(lang, "welcome", version=short_ver)
     if update.effective_chat.type == "private":
-        await update.message.reply_text(get_text(lang, "welcome"), parse_mode="HTML", reply_markup=get_main_keyboard(lang))
+        await update.message.reply_text(welcome, parse_mode="HTML", reply_markup=get_main_keyboard(lang))
     else:
-        await update.message.reply_text(get_text(lang, "welcome"), parse_mode="HTML")
+        await update.message.reply_text(welcome, parse_mode="HTML")
 
 
 async def onboard_command(update: Update, context: ContextTypes.DEFAULT_TYPE):

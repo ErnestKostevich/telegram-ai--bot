@@ -1,7 +1,7 @@
 translations = {
     "ru": {
         # === Welcome / Main ===
-        "welcome": ("🤖 <b>Добро пожаловать в AI DISCO BOT v2.1!</b>\n\n"
+        "welcome": ("🤖 <b>Добро пожаловать в AI DISCO BOT v{version}!</b>\n\n"
                      "Я — AI-ассистент со <b>стримингом ответов</b>, как ChatGPT,\n"
                      "прямо внутри Telegram.\n\n"
                      "<b>С чего начать:</b>\n"
@@ -436,7 +436,7 @@ translations = {
         "translate_generating": "🌍 Перевожу...",
     },
     "en": {
-        "welcome": ("🤖 <b>Welcome to AI DISCO BOT v2.1!</b>\n\n"
+        "welcome": ("🤖 <b>Welcome to AI DISCO BOT v{version}!</b>\n\n"
                      "AI assistant with <b>streaming responses</b> like ChatGPT,\n"
                      "right inside Telegram.\n\n"
                      "<b>Quick start:</b>\n"
@@ -849,7 +849,7 @@ translations = {
         "translate_generating": "🌍 Translating...",
     },
     "it": {
-        "welcome": ("🤖 <b>Benvenuto in AI DISCO BOT v2.1!</b>\n\n"
+        "welcome": ("🤖 <b>Benvenuto in AI DISCO BOT v{version}!</b>\n\n"
                      "Assistente AI con <b>risposte in streaming</b> come ChatGPT,\n"
                      "dentro Telegram.\n\n"
                      "<b>Come iniziare:</b>\n"
