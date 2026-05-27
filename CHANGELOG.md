@@ -6,6 +6,90 @@
 
 ---
 
+## [3.1.0] — 2026-05-25 💰 Monetization — Stars + Crypto + Tiers + Mini App + Image edit
+
+### ⭐ Telegram Stars (Phase 4.1)
+- `/buy` → pick Plus (199 ⭐) or Pro (399 ⭐) → native Telegram Stars invoice
+- Pre-checkout always approved (Stars don't fail)
+- `successful_payment_callback` grants the tier + triggers partner reward
+
+### 💎 NOWPayments crypto (Phase 4.x)
+- `/buycrypto` → tier picker → creates a NOWPayments invoice via their API
+- Bot replies with a "Open checkout" button linking to NOWPayments hosted page
+- POST `/webhook/nowpayments` endpoint on the bot's HTTP server verifies
+  HMAC-SHA512 signature with `NOWPAYMENTS_IPN_SECRET`, grants tier on
+  `payment_status == "finished"` or `"confirmed"`
+- Supports BTC, ETH, USDT, TON, and 200+ other coins
+
+### 📊 Tiers (Phase 4.2 + 4.3)
+- **Free** ($0): AI chat (BYOK), voice in, persona, notes, mini-games
+- **Plus** (199 ⭐ / $3.99/mo): + reminders, voice replies (TTS), smart NL reminders, 20 image credits
+- **Pro** (399 ⭐ / $7.99/mo): everything in Plus + image generation, photo/doc analysis, 100 image credits
+- `tier_active(user, "plus"|"pro")` is the canonical gate
+- Monthly image credit budget auto-refills on subscription renewal
+- Legacy `vip` boolean kept in sync for back-compat
+
+### 🤝 Partner program (Phase 4.4)
+- When a referred user makes their **first** paid purchase, the referrer
+  gets **30 days of Plus tier** automatically + a notification
+- Reward fires only once per payer (`first_paid` flag)
+
+### 🎨 Image-to-image `/edit` (Phase 3.2)
+- Send a photo with caption `/edit your prompt` or reply `/edit prompt`
+  to a photo → OpenAI gpt-image-1 returns the edited version
+- Spends one image credit, Pro tier required, uses user's own OpenAI key
+
+### 📱 Telegram Mini App (Phase 3.4 — minimal)
+- New `/webapp` command opens a server-rendered HTML dashboard via Telegram
+  WebApp button
+- Dashboard shows: tier, expiration, image credits, XP, provider, persona,
+  memory, recent notes, referral count
+- Init-data HMAC-SHA256 signature verified server-side (Telegram WebApp algo)
+
+### 🏗 Plumbing
+- New module `bot/server.py` — aiohttp web server running in parallel with the
+  polling bot. Endpoints: `/` health, `/healthz`, `/webhook/nowpayments`,
+  `/webapp`, `/api/profile`
+- New module `bot/handlers/payments.py` — all monetization logic
+- `Dockerfile` exposes port 8080
+- `fly.toml` adds `[http_service]` with `auto_stop_machines = 'off'` and
+  `min_machines_running = 1` so the polling bot stays alive
+- `.env.example` documents `NOWPAYMENTS_API_KEY`, `NOWPAYMENTS_IPN_SECRET`,
+  `PUBLIC_BASE_URL`
+- 28 new i18n keys × 3 langs (296 keys total per lang, parity verified)
+- BOT_VERSION 3.0.0 → 3.1.0
+
+### Tested (20 in-session verifications, all green)
+1. main.py loads + all 8 new handlers exported
+2. BOT_VERSION == 3.1.0
+3. TIERS dict has free/plus/pro with correct stars/credits
+4. tier_active gates by order AND expiration (auto-downgrades on expiry)
+5. grant_tier sets tier + image_credits + back-compat vip
+6. grant_tier stacks days on renewal/upgrade
+7. consume_image_credit decrements, returns False when empty
+8. NOWPayments HMAC-SHA512 verifier accepts valid, rejects 3 invalid cases
+9. handle_nowpayments_webhook: grants tier, pops pending, notifies user
+10. Webhook ignores non-finished status (pending/expired)
+11. Partner reward: first paid by referred user → 30d Plus to referrer
+12. Partner reward fires ONLY once (not on subsequent purchases)
+13. i18n parity 296 × 3, all 28 new keys present in ru/en/it
+14. WebApp init_data HMAC-SHA256 verifier accepts valid, rejects tampered
+15. /buycrypto short-circuits cleanly when NOWPAYMENTS_API_KEY unset
+16. tier_stars_/tier_crypto_ callback prefixes don't collide with existing
+17. /vip delegates to new tier panel
+18. /edit refused for non-Pro tier
+19. /generate refused even for Plus (Pro-only feature)
+20. /webapp shows disabled message when PUBLIC_BASE_URL unset
+
+### ROADMAP status after v3.1.0
+- Phase 1: ✅ COMPLETE
+- Phase 2: ✅ 5/6 (morning digest deferred)
+- Phase 3: ✅ 5/5 — group memory + sandbox + search + image-edit + mini app
+- Phase 4: ✅ 4/4 — Stars + crypto + tiers + partner program
+- Phase 5: ⏸ skipped per user request (Postgres / CI / Sentry)
+
+---
+
 ## [3.0.0] — 2026-05-25 🚀 MAJOR — Phase 3 essentials + everything since v2.1
 
 This release ships three big Phase 3 items in one go and marks the

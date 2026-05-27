@@ -128,13 +128,18 @@ class Storage:
                 "id": user_id,
                 "ai_provider": "gemini",
                 "api_keys": {},
-                "vip": False,
+                "vip": False,                # legacy boolean — kept for back-compat
+                "tier": "free",              # "free" | "plus" | "pro"
+                "tier_expires": None,        # epoch seconds; None = forever or free
+                "image_credits": 0,
+                "image_credits_reset": 0,    # epoch seconds when monthly bucket refills
                 "memory": {},
                 "notes": [],
                 "chat_history": [],
                 "stats": {"msgs": 0, "commands": 0},
                 "referrals": 0,
-                "xp_by_week": {},   # {"2026-W21": 50, ...}
+                "xp_by_week": {},
+                "first_paid": False,         # has this user ever paid? (for partner program)
             }
         else:
             u = self.data["users"][uid]
@@ -145,6 +150,11 @@ class Storage:
             u.setdefault("stats", {"msgs": 0, "commands": 0})
             u.setdefault("referrals", 0)
             u.setdefault("xp_by_week", {})
+            u.setdefault("tier", "pro" if u.get("vip") else "free")
+            u.setdefault("tier_expires", u.get("vip_expires"))
+            u.setdefault("image_credits", 0)
+            u.setdefault("image_credits_reset", 0)
+            u.setdefault("first_paid", False)
         return self.data["users"][uid]
 
     def get_group(self, chat_id: int) -> dict:

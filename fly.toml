@@ -1,9 +1,15 @@
-# fly.toml — AI DISCO BOT (Telegram polling worker, no HTTP).
+# fly.toml — AI DISCO BOT
 #
-# IMPORTANT: do NOT re-add [http_service]! Our bot doesn't listen on HTTP.
-# Fly's HTTP health-check would fail and roll back every deploy after ~50s.
-# If you ever re-run `fly launch`, it will add [http_service] back —
-# delete it again before deploying.
+# Bot does long-polling Telegram AND serves HTTP on :8080 for:
+#   - POST /webhook/nowpayments   (crypto payment IPN callbacks)
+#   - GET  /webapp                (Telegram Mini App dashboard)
+#
+# Key settings:
+#   - http_service.internal_port = 8080 — what the bot listens on
+#   - auto_stop_machines = 'off' — polling MUST stay alive 24/7
+#   - min_machines_running = 1 — guarantee 1 instance always up
+# If you ever re-run `fly launch`, double-check it didn't add
+# auto_stop_machines = 'stop' or min_machines_running = 0.
 
 app = 'telegram-ai--bot'
 primary_region = 'fra'
@@ -16,6 +22,21 @@ primary_region = 'fra'
 
 [deploy]
   strategy = 'immediate'
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = 'off'
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ['app']
+
+[[http_service.checks]]
+  interval = '30s'
+  timeout = '5s'
+  grace_period = '20s'
+  method = 'GET'
+  path = '/healthz'
 
 [[vm]]
   size = 'shared-cpu-1x'

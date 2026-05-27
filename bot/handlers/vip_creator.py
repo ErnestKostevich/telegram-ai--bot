@@ -9,6 +9,16 @@ from bot.i18n import t
 
 
 def check_vip(user: dict) -> bool:
+    """Back-compat boolean check. Any paid tier (plus or pro) counts as VIP.
+
+    New code should call bot.handlers.payments.tier_active(user, "plus"|"pro")
+    for explicit tier gating."""
+    try:
+        from bot.handlers.payments import tier_active
+        return tier_active(user, "plus")
+    except Exception:
+        pass
+    # Legacy fallback if payments module ever fails to import
     if not user.get("vip"):
         return False
     expires = user.get("vip_expires")
@@ -22,21 +32,9 @@ def check_vip(user: dict) -> bool:
 
 
 async def vip_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    uid = update.effective_user.id
-    user = storage.get_user(uid)
-    lang = user.get("language", "ru")
-    is_vip = check_vip(user)
-    if is_vip:
-        expires = user.get("vip_expires")
-        if expires:
-            exp_date = datetime.datetime.fromtimestamp(expires).strftime("%d.%m.%Y")
-            exp_text = {"ru": f"до {exp_date}", "en": f"until {exp_date}", "it": f"fino al {exp_date}"}.get(lang, f"until {exp_date}")
-        else:
-            exp_text = {"ru": "навсегда ♾️", "en": "forever ♾️", "it": "per sempre ♾️"}.get(lang, "forever ♾️")
-        status = f"👑 {t(lang, 'status_yes')} ({exp_text})"
-    else:
-        status = t(lang, "status_no")
-    await update.message.reply_text(t(lang, "vip_status", status=status), parse_mode="HTML")
+    """Show current tier + offers. Delegates to payments.vip_info_command."""
+    from bot.handlers.payments import vip_info_command
+    await vip_info_command(update, context)
 
 
 MAX_REMIND_MINUTES = 60 * 24 * 365  # 1 year — generous cap for natural-language dates

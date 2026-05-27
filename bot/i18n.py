@@ -298,6 +298,49 @@ translations = {
         "search_no_instant": ("🤔 По запросу <i>«{q}»</i> нет точного ответа.\n\n"
                                 "Попробуйте уточнить или открыть <a href=\"{link}\">DuckDuckGo</a>."),
         "search_error": "❌ Ошибка поиска: {err}",
+        # v3.1.0: monetization
+        "days": "дней",
+        "tier_header": "💎 <b>Тарифы AI DISCO BOT</b>",
+        "tier_price_free": "<code>$0/мес</code> — бессрочно",
+        "tier_status_free": "💎 Текущий тариф: <b>Free</b>",
+        "tier_status_paid": "💎 Текущий тариф: <b>{tier}</b>\n📅 Действует до: <b>{until}</b>\n🖼 Image-credits: <b>{credits}</b>",
+        "tier_status_paid_forever": "💎 Текущий тариф: <b>{tier}</b> ♾️\n🖼 Image-credits: <b>{credits}</b>",
+        "buy_choose_stars": "Выбери тариф для оплаты через <b>Telegram Stars</b>:",
+        "buy_choose_crypto": "Выбери тариф для оплаты <b>криптой</b> (NOWPayments):",
+        "buy_hint": "Купить: /buy (Stars) · /buycrypto (BTC/ETH/USDT/...)",
+        "invoice_title": "AI DISCO BOT — {tier}",
+        "invoice_desc": "{tier} тариф на {days} дней. Включает {credits} image-credits и все продвинутые AI-фичи.",
+        "invoice_error": "❌ Ошибка создания счёта: {err}",
+        "crypto_disabled": "❌ Крипто-платежи временно отключены. Используй /buy (Telegram Stars).",
+        "crypto_error": "❌ NOWPayments error: {err}",
+        "crypto_invoice_ready": ("💎 <b>{tier}</b> — ${usd:.2f}\n\n"
+                                   "Жми кнопку ниже чтобы открыть оплату.\n"
+                                   "Поддерживается: BTC, ETH, USDT, TON, и ещё 200+ монет.\n\n"
+                                   "После подтверждения сети тариф активируется автоматически."),
+        "crypto_open_btn": "🔗 Открыть оплату",
+        "purchase_success": ("🎉 <b>Оплата получена!</b>\n\n"
+                              "Тариф: <b>{tier}</b> ({days} дней)\n"
+                              "Image-credits: <b>{credits}</b>\n\n"
+                              "Все фичи разблокированы. Приятно пользоваться!"),
+        "partner_reward": ("🎁 <b>Бонус от партнёрки!</b>\n\n"
+                            "Твой реферал <b>{name}</b> оформил подписку.\n"
+                            "Тебе начислено <b>{days} дней Plus</b> бесплатно!"),
+        # v3.1.0: pro-tier gates
+        "gen_pro_only": ("💎 Генерация изображений доступна на тарифе <b>Pro</b>.\n"
+                          "Купить: /buy"),
+        "gen_no_credits": ("🖼 Закончились image-credits на этот месяц.\n"
+                            "Они восстановятся при следующем обновлении подписки или при покупке /buy."),
+        "edit_pro_only": "💎 Редактирование изображений — тариф <b>Pro</b>. /buy",
+        "edit_needs_openai": "❌ Для редактирования картинок нужен ключ OpenAI. /setkey",
+        "edit_usage": ("✏️ <b>Редактирование картинки</b>\n\n"
+                        "1) Пришли фото с подписью <code>/edit твой prompt</code>\n"
+                        "2) Или ответь <code>/edit prompt</code> на сообщение с фото"),
+        "edit_working": "🎨 Редактирую изображение...",
+        "edit_error": "❌ Ошибка редактирования: {err}",
+        # v3.1.0: mini app
+        "webapp_disabled": "📱 Mini App ещё не настроен (PUBLIC_BASE_URL не задан).",
+        "webapp_intro": "📱 <b>Open the AI DISCO BOT dashboard</b>\n\nПрофиль, память, заметки, статистика — всё на одной странице.",
+        "webapp_btn": "📱 Открыть дашборд",
         "reminders_empty": "📭 Нет активных напоминаний.",
         "reminders_title": "⏰ <b>Напоминания ({count}):</b>\n\n",
         "feedback_usage": "💬 Использование: /feedback [текст]\nВаш отзыв уйдёт создателю.",
@@ -649,6 +692,46 @@ translations = {
         "search_no_instant": ("🤔 No instant answer for <i>\"{q}\"</i>.\n\n"
                                 "Try refining or open <a href=\"{link}\">DuckDuckGo</a>."),
         "search_error": "❌ Search error: {err}",
+        # v3.1.0: monetization
+        "days": "days",
+        "tier_header": "💎 <b>AI DISCO BOT — Pricing</b>",
+        "tier_price_free": "<code>$0/mo</code> — forever",
+        "tier_status_free": "💎 Current tier: <b>Free</b>",
+        "tier_status_paid": "💎 Current tier: <b>{tier}</b>\n📅 Active until: <b>{until}</b>\n🖼 Image credits: <b>{credits}</b>",
+        "tier_status_paid_forever": "💎 Current tier: <b>{tier}</b> ♾️\n🖼 Image credits: <b>{credits}</b>",
+        "buy_choose_stars": "Pick a tier to pay via <b>Telegram Stars</b>:",
+        "buy_choose_crypto": "Pick a tier to pay via <b>crypto</b> (NOWPayments):",
+        "buy_hint": "Buy: /buy (Stars) · /buycrypto (BTC/ETH/USDT/...)",
+        "invoice_title": "AI DISCO BOT — {tier}",
+        "invoice_desc": "{tier} tier for {days} days. Includes {credits} image credits and all premium AI features.",
+        "invoice_error": "❌ Invoice error: {err}",
+        "crypto_disabled": "❌ Crypto payments are temporarily disabled. Use /buy (Telegram Stars).",
+        "crypto_error": "❌ NOWPayments error: {err}",
+        "crypto_invoice_ready": ("💎 <b>{tier}</b> — ${usd:.2f}\n\n"
+                                   "Tap the button below to open checkout.\n"
+                                   "Supported: BTC, ETH, USDT, TON, and 200+ more.\n\n"
+                                   "Your tier activates automatically after network confirmation."),
+        "crypto_open_btn": "🔗 Open checkout",
+        "purchase_success": ("🎉 <b>Payment received!</b>\n\n"
+                              "Tier: <b>{tier}</b> ({days} days)\n"
+                              "Image credits: <b>{credits}</b>\n\n"
+                              "All features unlocked. Enjoy!"),
+        "partner_reward": ("🎁 <b>Partner program reward!</b>\n\n"
+                            "Your referral <b>{name}</b> just subscribed.\n"
+                            "You got <b>{days} days of Plus</b> for free!"),
+        "gen_pro_only": "💎 Image generation requires <b>Pro</b> tier.\nGet it: /buy",
+        "gen_no_credits": ("🖼 Out of image credits this month.\n"
+                            "They refill on next subscription period or buy again with /buy."),
+        "edit_pro_only": "💎 Image editing requires <b>Pro</b> tier. /buy",
+        "edit_needs_openai": "❌ Image editing needs an OpenAI key. /setkey",
+        "edit_usage": ("✏️ <b>Edit an image</b>\n\n"
+                        "1) Send a photo with caption <code>/edit your prompt</code>\n"
+                        "2) Or reply <code>/edit prompt</code> to a photo"),
+        "edit_working": "🎨 Editing image...",
+        "edit_error": "❌ Edit error: {err}",
+        "webapp_disabled": "📱 Mini App isn't set up yet (PUBLIC_BASE_URL not configured).",
+        "webapp_intro": "📱 <b>Open the AI DISCO BOT dashboard</b>\n\nProfile, memory, notes, stats — all in one page.",
+        "webapp_btn": "📱 Open dashboard",
         "reminders_empty": "📭 No active reminders.",
         "reminders_title": "⏰ <b>Reminders ({count}):</b>\n\n",
         "feedback_usage": "💬 Usage: /feedback [text]\nYour message goes to the creator.",
@@ -997,6 +1080,45 @@ translations = {
         "search_no_instant": ("🤔 Nessuna risposta diretta per <i>«{q}»</i>.\n\n"
                                 "Affina o apri <a href=\"{link}\">DuckDuckGo</a>."),
         "search_error": "❌ Errore di ricerca: {err}",
+        # v3.1.0: monetization
+        "days": "giorni",
+        "tier_header": "💎 <b>AI DISCO BOT — Prezzi</b>",
+        "tier_price_free": "<code>$0/mese</code> — per sempre",
+        "tier_status_free": "💎 Tier attuale: <b>Free</b>",
+        "tier_status_paid": "💎 Tier attuale: <b>{tier}</b>\n📅 Attivo fino al: <b>{until}</b>\n🖼 Crediti immagini: <b>{credits}</b>",
+        "tier_status_paid_forever": "💎 Tier attuale: <b>{tier}</b> ♾️\n🖼 Crediti immagini: <b>{credits}</b>",
+        "buy_choose_stars": "Scegli un tier da pagare con <b>Telegram Stars</b>:",
+        "buy_choose_crypto": "Scegli un tier da pagare in <b>cripto</b> (NOWPayments):",
+        "buy_hint": "Compra: /buy (Stars) · /buycrypto (BTC/ETH/USDT/...)",
+        "invoice_title": "AI DISCO BOT — {tier}",
+        "invoice_desc": "Tier {tier} per {days} giorni. Include {credits} crediti immagini e tutte le funzioni AI premium.",
+        "invoice_error": "❌ Errore fattura: {err}",
+        "crypto_disabled": "❌ Pagamenti crypto temporaneamente disabilitati. Usa /buy (Telegram Stars).",
+        "crypto_error": "❌ Errore NOWPayments: {err}",
+        "crypto_invoice_ready": ("💎 <b>{tier}</b> — ${usd:.2f}\n\n"
+                                   "Tocca il bottone per aprire il checkout.\n"
+                                   "Supportate: BTC, ETH, USDT, TON e 200+ altre.\n\n"
+                                   "Il tier si attiva automaticamente dopo la conferma."),
+        "crypto_open_btn": "🔗 Apri checkout",
+        "purchase_success": ("🎉 <b>Pagamento ricevuto!</b>\n\n"
+                              "Tier: <b>{tier}</b> ({days} giorni)\n"
+                              "Crediti immagini: <b>{credits}</b>\n\n"
+                              "Tutte le funzioni sbloccate. Buon divertimento!"),
+        "partner_reward": ("🎁 <b>Ricompensa partner!</b>\n\n"
+                            "Il tuo referral <b>{name}</b> si è iscritto.\n"
+                            "Hai ricevuto <b>{days} giorni di Plus</b> gratis!"),
+        "gen_pro_only": "💎 Generazione immagini richiede tier <b>Pro</b>. /buy",
+        "gen_no_credits": "🖼 Crediti immagini esauriti questo mese. Si ricaricano col rinnovo o con /buy.",
+        "edit_pro_only": "💎 Modifica immagini richiede tier <b>Pro</b>. /buy",
+        "edit_needs_openai": "❌ Servono le chiavi OpenAI per modificare immagini. /setkey",
+        "edit_usage": ("✏️ <b>Modifica un'immagine</b>\n\n"
+                        "1) Invia una foto con caption <code>/edit prompt</code>\n"
+                        "2) O rispondi <code>/edit prompt</code> a una foto"),
+        "edit_working": "🎨 Modifico l'immagine...",
+        "edit_error": "❌ Errore modifica: {err}",
+        "webapp_disabled": "📱 Mini App non ancora configurata (PUBLIC_BASE_URL non impostato).",
+        "webapp_intro": "📱 <b>Apri la dashboard AI DISCO BOT</b>\n\nProfilo, memoria, note, statistiche — tutto in una pagina.",
+        "webapp_btn": "📱 Apri dashboard",
         "reminders_empty": "📭 Nessun promemoria attivo.",
         "reminders_title": "⏰ <b>Promemoria ({count}):</b>\n\n",
         "feedback_usage": "💬 Uso: /feedback [testo]\nIl tuo messaggio va al creatore.",

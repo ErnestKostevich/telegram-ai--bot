@@ -73,6 +73,24 @@ async def onboard_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await onboarding_start(update, context)
 
 
+async def webapp_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Open the Telegram Mini App dashboard."""
+    from bot.config import PUBLIC_BASE_URL
+    from telegram import WebAppInfo, InlineKeyboardButton, InlineKeyboardMarkup
+    user = storage.get_user(update.effective_user.id)
+    lang = user.get("language", "ru")
+    if not PUBLIC_BASE_URL:
+        await update.message.reply_text(t(lang, "webapp_disabled"), parse_mode="HTML")
+        return
+    kb = InlineKeyboardMarkup([[
+        InlineKeyboardButton(
+            t(lang, "webapp_btn"),
+            web_app=WebAppInfo(url=f"{PUBLIC_BASE_URL}/webapp"),
+        )
+    ]])
+    await update.message.reply_text(t(lang, "webapp_intro"), parse_mode="HTML", reply_markup=kb)
+
+
 async def share_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show a ready-to-share invite message with the user's referral link."""
     user = storage.get_user(update.effective_user.id)

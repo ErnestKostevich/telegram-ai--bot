@@ -1,6 +1,6 @@
 from telegram import Update
 from telegram.ext import ContextTypes
-import base64, io, aiohttp
+import base64, html, io, aiohttp
 from bot.ai import ai_handler, VISION_PROVIDERS
 from bot.storage import storage
 from bot.i18n import t
@@ -87,6 +87,102 @@ async def maybe_speak_response(context, chat_id: int, user: dict, text: str):
     except Exception:
         # Voice is a nice-to-have; never fail the whole reply if TTS hiccups
         pass
+
+
+async def edit_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Image-to-image edit. Usage:
+      - Send a photo with caption: /edit <prompt>
+      - Reply to a photo with: /edit <prompt>"""
+    uid = update.effective_user.id
+    user = storage.get_user(uid)
+    lang = user.get("language", "ru")
+    from bot.handlers.payments import tier_active, consume_image_credit
+
+    if not tier_active(user, "pro"):
+        await update.message.reply_text(t(lang, "edit_pro_only"), parse_mode="HTML")
+        return
+
+    # Find the photo to edit: either the message itself or its reply target
+    msg = update.message
+    photo_msg = None
+    if msg.photo:
+        photo_msg = msg
+    elif msg.reply_to_message and msg.reply_to_message.photo:
+        photo_msg = msg.reply_to_message
+    else:
+        await msg.reply_text(t(lang, "edit_usage"), parse_mode="HTML")
+        return
+
+    prompt = " ".join(context.args).strip()
+    if not prompt:
+        # Try caption-without-command
+        cap = (msg.caption or "").strip()
+        if cap.lower().startswith("/edit"):
+            prompt = cap[5:].strip()
+    if not prompt:
+        await msg.reply_text(t(lang, "edit_usage"), parse_mode="HTML")
+        return
+
+    openai_key = user.get("api_keys", {}).get("openai")
+    if not openai_key:
+        await msg.reply_text(t(lang, "edit_needs_openai"), parse_mode="HTML")
+        return
+
+    if not consume_image_credit(user):
+        await msg.reply_text(t(lang, "gen_no_credits"), parse_mode="HTML")
+        return
+    await storage.save()
+
+    placeholder = await msg.reply_text(t(lang, "edit_working"))
+
+    try:
+        # Download the source photo
+        photo = photo_msg.photo[-1]
+        tg_file = await context.bot.get_file(photo.file_id)
+        timeout = aiohttp.ClientTimeout(total=60)
+        async with aiohttp.ClientSession(timeout=timeout) as s:
+            async with s.get(tg_file.file_path) as r:
+                img_bytes = await r.read()
+
+        # OpenAI image edit API (gpt-image-1)
+        url = "https://api.openai.com/v1/images/edits"
+        form = aiohttp.FormData()
+        form.add_field("model", "gpt-image-1")
+        form.add_field("prompt", prompt[:1000])
+        form.add_field("size", "1024x1024")
+        form.add_field("image", img_bytes, filename="src.png", content_type="image/png")
+        headers = {"Authorization": f"Bearer {openai_key}"}
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=120)) as s:
+            async with s.post(url, headers=headers, data=form) as resp:
+                data = await resp.json()
+                if resp.status != 200 or "data" not in data:
+                    err = data.get("error", {}).get("message") or f"HTTP {resp.status}"
+                    raise RuntimeError(err)
+                b64 = data["data"][0].get("b64_json")
+                if not b64:
+                    # Some responses give url instead
+                    img_url = data["data"][0].get("url")
+                    if not img_url:
+                        raise RuntimeError("no image data returned")
+                    async with aiohttp.ClientSession(timeout=timeout) as s2:
+                        async with s2.get(img_url) as r2:
+                            out_bytes = await r2.read()
+                else:
+                    out_bytes = base64.b64decode(b64)
+
+        await msg.reply_photo(photo=out_bytes,
+                               caption=f"🎨 <i>{html.escape(prompt[:200])}</i>",
+                               parse_mode="HTML")
+        try:
+            await placeholder.delete()
+        except Exception:
+            pass
+    except Exception as e:
+        try:
+            await placeholder.edit_text(t(lang, "edit_error", err=html.escape(str(e))[:200]),
+                                          parse_mode="HTML")
+        except Exception:
+            pass
 
 
 async def _transcribe_voice_openai(api_key: str, ogg_bytes: bytes) -> str:
@@ -252,16 +348,27 @@ async def generate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     user = storage.get_user(uid)
     lang = user.get("language", "ru")
-    if not check_vip(user):
-        await update.message.reply_text(t(lang, "gen_vip_only"))
+    # Pro tier required for image generation
+    from bot.handlers.payments import tier_active, consume_image_credit
+    if not tier_active(user, "pro"):
+        await update.message.reply_text(t(lang, "gen_pro_only"), parse_mode="HTML")
         return
     if not context.args:
         await update.message.reply_text(t(lang, "gen_usage"))
         return
+    # Try to spend a credit before calling the paid endpoint
+    if not consume_image_credit(user):
+        await update.message.reply_text(t(lang, "gen_no_credits"), parse_mode="HTML")
+        return
+    from bot.storage import storage as _st
+    await _st.save()
     prompt = " ".join(context.args)
     keys = user.get("api_keys", {})
     provider = user.get("ai_provider", "openai")
-    msg = await update.message.reply_text(t(lang, "gen_drawing"))
+    msg = await update.message.reply_text(
+        t(lang, "gen_drawing") + f"\n<i>💎 {user.get('image_credits', 0)} credits left</i>",
+        parse_mode="HTML",
+    )
     try:
         if provider == "together" and keys.get("together"):
             url = "https://api.together.xyz/v1/images/generations"
