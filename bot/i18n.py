@@ -341,6 +341,32 @@ translations = {
         "webapp_disabled": "📱 Mini App ещё не настроен (PUBLIC_BASE_URL не задан).",
         "webapp_intro": "📱 <b>Open the AI DISCO BOT dashboard</b>\n\nПрофиль, память, заметки, статистика — всё на одной странице.",
         "webapp_btn": "📱 Открыть дашборд",
+        # v3.2.0: morning digest
+        "digest_status": ("📅 <b>Утренний дайджест</b>: {status}\n"
+                            "🕐 Время доставки: <b>{time}</b>\n"
+                            "🌍 Часовой пояс: <code>{tz}</code>\n\n"
+                            "Включить: <code>/digest on</code>\n"
+                            "Сменить время: <code>/digest 09:30</code>\n"
+                            "Сменить TZ: <code>/tz Europe/Moscow</code>"),
+        "digest_on": "📅 Утренний дайджест включён.\nБудет приходить ежедневно в <b>{time}</b> ({tz}).",
+        "digest_off": "📅 Утренний дайджест выключен.",
+        "digest_time_set": "🕐 Время дайджеста: <b>{time}</b> ({tz}). Включён.",
+        "digest_bad_arg": ("❌ Неверный формат.\n"
+                            "Используй: <code>/digest on</code> / <code>/digest off</code> / "
+                            "<code>/digest 08:30</code>"),
+        "tz_status": "🌍 Часовой пояс: <code>{tz}</code>\nСменить: <code>/tz Europe/Moscow</code>",
+        "tz_invalid": ("❌ Неверный часовой пояс. Используй IANA-имя:\n"
+                        "• <code>Europe/Moscow</code> · <code>Europe/Kiev</code>\n"
+                        "• <code>America/New_York</code> · <code>America/Los_Angeles</code>\n"
+                        "• <code>Asia/Tokyo</code> · <code>Asia/Dubai</code>\n"
+                        "• <code>UTC</code>"),
+        "tz_set": "✅ Часовой пояс: <code>{tz}</code>",
+        "digest_greeting": "☀️ <b>Доброе утро, {name}!</b>\n<i>{date}</i>\n",
+        "digest_todos_header": "📋 <b>Открытые задачи:</b>",
+        "digest_reminders_header": "⏰ <b>Напоминания на сегодня:</b>",
+        "digest_streak": "🔥 Дневной streak: <b>{days}</b>",
+        "digest_weekly_rank": "🏆 Ты на <b>{rank}-м</b> месте недельного рейтинга",
+        "digest_footer": "\n<i>Отключить: /digest off</i>",
         "reminders_empty": "📭 Нет активных напоминаний.",
         "reminders_title": "⏰ <b>Напоминания ({count}):</b>\n\n",
         "feedback_usage": "💬 Использование: /feedback [текст]\nВаш отзыв уйдёт создателю.",
@@ -732,6 +758,32 @@ translations = {
         "webapp_disabled": "📱 Mini App isn't set up yet (PUBLIC_BASE_URL not configured).",
         "webapp_intro": "📱 <b>Open the AI DISCO BOT dashboard</b>\n\nProfile, memory, notes, stats — all in one page.",
         "webapp_btn": "📱 Open dashboard",
+        # v3.2.0: morning digest
+        "digest_status": ("📅 <b>Morning digest</b>: {status}\n"
+                            "🕐 Delivery time: <b>{time}</b>\n"
+                            "🌍 Timezone: <code>{tz}</code>\n\n"
+                            "Enable: <code>/digest on</code>\n"
+                            "Change time: <code>/digest 09:30</code>\n"
+                            "Change TZ: <code>/tz Europe/London</code>"),
+        "digest_on": "📅 Morning digest enabled.\nWill arrive daily at <b>{time}</b> ({tz}).",
+        "digest_off": "📅 Morning digest disabled.",
+        "digest_time_set": "🕐 Digest time: <b>{time}</b> ({tz}). Enabled.",
+        "digest_bad_arg": ("❌ Bad format.\n"
+                            "Use: <code>/digest on</code> / <code>/digest off</code> / "
+                            "<code>/digest 08:30</code>"),
+        "tz_status": "🌍 Timezone: <code>{tz}</code>\nChange: <code>/tz Europe/London</code>",
+        "tz_invalid": ("❌ Invalid timezone. Use IANA names:\n"
+                        "• <code>Europe/London</code> · <code>Europe/Berlin</code>\n"
+                        "• <code>America/New_York</code> · <code>America/Los_Angeles</code>\n"
+                        "• <code>Asia/Tokyo</code> · <code>Asia/Dubai</code>\n"
+                        "• <code>UTC</code>"),
+        "tz_set": "✅ Timezone: <code>{tz}</code>",
+        "digest_greeting": "☀️ <b>Good morning, {name}!</b>\n<i>{date}</i>\n",
+        "digest_todos_header": "📋 <b>Open tasks:</b>",
+        "digest_reminders_header": "⏰ <b>Today's reminders:</b>",
+        "digest_streak": "🔥 Daily streak: <b>{days}</b>",
+        "digest_weekly_rank": "🏆 You're <b>#{rank}</b> on this week's leaderboard",
+        "digest_footer": "\n<i>Disable: /digest off</i>",
         "reminders_empty": "📭 No active reminders.",
         "reminders_title": "⏰ <b>Reminders ({count}):</b>\n\n",
         "feedback_usage": "💬 Usage: /feedback [text]\nYour message goes to the creator.",
@@ -1119,6 +1171,32 @@ translations = {
         "webapp_disabled": "📱 Mini App non ancora configurata (PUBLIC_BASE_URL non impostato).",
         "webapp_intro": "📱 <b>Apri la dashboard AI DISCO BOT</b>\n\nProfilo, memoria, note, statistiche — tutto in una pagina.",
         "webapp_btn": "📱 Apri dashboard",
+        # v3.2.0: morning digest
+        "digest_status": ("📅 <b>Digest mattutino</b>: {status}\n"
+                            "🕐 Orario: <b>{time}</b>\n"
+                            "🌍 Fuso: <code>{tz}</code>\n\n"
+                            "Attiva: <code>/digest on</code>\n"
+                            "Cambia orario: <code>/digest 09:30</code>\n"
+                            "Cambia fuso: <code>/tz Europe/Rome</code>"),
+        "digest_on": "📅 Digest mattutino attivato.\nArriverà ogni giorno alle <b>{time}</b> ({tz}).",
+        "digest_off": "📅 Digest mattutino disattivato.",
+        "digest_time_set": "🕐 Orario digest: <b>{time}</b> ({tz}). Attivato.",
+        "digest_bad_arg": ("❌ Formato non valido.\n"
+                            "Uso: <code>/digest on</code> / <code>/digest off</code> / "
+                            "<code>/digest 08:30</code>"),
+        "tz_status": "🌍 Fuso orario: <code>{tz}</code>\nCambia: <code>/tz Europe/Rome</code>",
+        "tz_invalid": ("❌ Fuso orario non valido. Usa nomi IANA:\n"
+                        "• <code>Europe/Rome</code> · <code>Europe/London</code>\n"
+                        "• <code>America/New_York</code> · <code>America/Los_Angeles</code>\n"
+                        "• <code>Asia/Tokyo</code> · <code>Asia/Dubai</code>\n"
+                        "• <code>UTC</code>"),
+        "tz_set": "✅ Fuso orario: <code>{tz}</code>",
+        "digest_greeting": "☀️ <b>Buongiorno, {name}!</b>\n<i>{date}</i>\n",
+        "digest_todos_header": "📋 <b>Compiti aperti:</b>",
+        "digest_reminders_header": "⏰ <b>Promemoria di oggi:</b>",
+        "digest_streak": "🔥 Streak giornaliero: <b>{days}</b>",
+        "digest_weekly_rank": "🏆 Sei al <b>#{rank}</b> della classifica settimanale",
+        "digest_footer": "\n<i>Disattiva: /digest off</i>",
         "reminders_empty": "📭 Nessun promemoria attivo.",
         "reminders_title": "⏰ <b>Promemoria ({count}):</b>\n\n",
         "feedback_usage": "💬 Uso: /feedback [testo]\nIl tuo messaggio va al creatore.",

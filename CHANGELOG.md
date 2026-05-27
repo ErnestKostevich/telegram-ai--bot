@@ -6,6 +6,38 @@
 
 ---
 
+## [3.2.0] — 2026-05-25 ☀️ Morning digest — ROADMAP fully closed
+
+### 📅 Per-user morning digest (Phase 2.1 — the last deferred item)
+- `/digest on|off` — opt-in toggle (off by default)
+- `/digest 09:30` — set delivery time
+- `/tz Europe/Moscow` — set IANA timezone (with validation via pytz)
+- Scheduler runs every 15 min; for each opted-in user it computes their
+  LOCAL time and delivers if the time matches digest_time within ±7 min
+  AND a digest hasn't been sent today (idempotent via `last_digest_date`).
+- Digest contents: greeting, top 3 open todos, today's reminders,
+  current daily streak, weekly leaderboard rank (if in top 10).
+
+### Tested
+- `_validate_tz` accepts IANA, rejects garbage
+- `_maybe_send_digest` is no-op when disabled
+- Fires once when time window matches, idempotent on second call same day
+- Digest body contains greeting / streak / tasks correctly
+
+### ROADMAP closeout
+With Phase 2.1 shipped, every actionable item from the ROADMAP is done
+except the explicitly user-skipped Phase 5 (Postgres/CI/Sentry).
+
+- Phase 1: ✅ COMPLETE (onboarding, inline mode, action buttons, /share)
+- Phase 2: ✅ **COMPLETE** (TTS, multi-quiz, smart reminders, weekly LB, proactive memory, morning digest)
+- Phase 3: ✅ COMPLETE (group memory, sandbox, web search, image-edit, mini app)
+- Phase 4: ✅ COMPLETE (Telegram Stars, NOWPayments, tiers, partner program)
+- Phase 5: ⏸ skipped per user request
+
+BOT_VERSION 3.1.0 → 3.2.0. 310 i18n keys/lang. 14 new digest keys.
+
+---
+
 ## [3.1.0] — 2026-05-25 💰 Monetization — Stars + Crypto + Tiers + Mini App + Image edit
 
 ### ⭐ Telegram Stars (Phase 4.1)
