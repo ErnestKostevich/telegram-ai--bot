@@ -139,7 +139,11 @@ class Storage:
                 "stats": {"msgs": 0, "commands": 0},
                 "referrals": 0,
                 "xp_by_week": {},
-                "first_paid": False,         # has this user ever paid? (for partner program)
+                "first_paid": False,
+                "digest_enabled": False,
+                "digest_time": "08:00",
+                "timezone": "UTC",
+                "last_digest_date": "",
             }
         else:
             u = self.data["users"][uid]
@@ -155,6 +159,10 @@ class Storage:
             u.setdefault("image_credits", 0)
             u.setdefault("image_credits_reset", 0)
             u.setdefault("first_paid", False)
+            u.setdefault("digest_enabled", False)
+            u.setdefault("digest_time", "08:00")
+            u.setdefault("timezone", "UTC")
+            u.setdefault("last_digest_date", "")
         return self.data["users"][uid]
 
     def get_group(self, chat_id: int) -> dict:

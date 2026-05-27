@@ -20,6 +20,7 @@ from .search import search_command
 from .payments import (buy_command, buycrypto_command, tier_stars_callback,
                         tier_crypto_callback, pre_checkout_callback,
                         successful_payment_callback)
+from .digest import digest_command, tz_command, morning_digest_scheduler_task
 from .interactive import button_callback, keyboard_message_handler
 from .games import dice_command, coinflip_command, random_command, joke_command
 from .media import (media_message_handler, generate_command, voice_message_handler,

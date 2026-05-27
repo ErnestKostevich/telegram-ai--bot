@@ -99,6 +99,8 @@ def main():
         ("buycrypto", handlers.buycrypto_command),
         ("edit", handlers.edit_command),
         ("webapp", handlers.webapp_command),
+        ("digest", handlers.digest_command),
+        ("tz", handlers.tz_command),
     ]
 
     for batch in (base, ai_mem, notes, vip_creator, games_utils, groups, power, money):

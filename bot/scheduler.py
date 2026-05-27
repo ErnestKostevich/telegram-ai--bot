@@ -73,12 +73,24 @@ async def _spam_cache_cleanup_task():
         logger.error(f"Spam-cache cleanup failed: {e}")
 
 
+async def _morning_digest_job(bot):
+    """Wraps the digest scheduler task with error swallowing."""
+    try:
+        from bot.handlers.digest import morning_digest_scheduler_task
+        await morning_digest_scheduler_task(bot)
+    except Exception as e:
+        logger.error(f"Morning digest job failed: {e}")
+
+
 def start_scheduler(bot_or_app):
-    # Accept either a Bot or an Application for compatibility
     bot = getattr(bot_or_app, "bot", None) or bot_or_app
     scheduler = AsyncIOScheduler()
     scheduler.add_job(_check_reminders_task, "interval", minutes=1, args=[bot])
     scheduler.add_job(_periodic_save_task, "interval", minutes=5)
     scheduler.add_job(_spam_cache_cleanup_task, "interval", minutes=10)
+    # Morning digest: every 15 min, fires per-user when their local clock matches
+    scheduler.add_job(_morning_digest_job, "interval", minutes=15, args=[bot])
     scheduler.start()
-    logger.info("APScheduler started: reminders (1m) + save (5m) + spam cleanup (10m).")
+    logger.info(
+        "APScheduler started: reminders (1m) + save (5m) + spam cleanup (10m) + digest (15m)."
+    )
