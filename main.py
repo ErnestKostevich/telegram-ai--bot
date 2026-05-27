@@ -2,7 +2,8 @@ import logging
 import os
 from dotenv import load_dotenv
 from telegram.ext import (ApplicationBuilder, CommandHandler, MessageHandler,
-                          CallbackQueryHandler, InlineQueryHandler, filters)
+                          CallbackQueryHandler, InlineQueryHandler, PreCheckoutQueryHandler,
+                          filters)
 
 load_dotenv()
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -92,10 +93,23 @@ def main():
         ("run", handlers.run_command),
         ("search", handlers.search_command),
     ]
+    # Phase 4 — monetization
+    money = [
+        ("buy", handlers.buy_command),
+        ("buycrypto", handlers.buycrypto_command),
+        ("edit", handlers.edit_command),
+        ("webapp", handlers.webapp_command),
+    ]
 
-    for batch in (base, ai_mem, notes, vip_creator, games_utils, groups, power):
+    for batch in (base, ai_mem, notes, vip_creator, games_utils, groups, power, money):
         for cmd, fn in batch:
             application.add_handler(CommandHandler(cmd, fn))
+
+    # Payment-specific handlers (Stars + tier picker callbacks)
+    application.add_handler(CallbackQueryHandler(handlers.tier_stars_callback, pattern=r"^tier_stars_"))
+    application.add_handler(CallbackQueryHandler(handlers.tier_crypto_callback, pattern=r"^tier_crypto_"))
+    application.add_handler(PreCheckoutQueryHandler(handlers.pre_checkout_callback))
+    application.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, handlers.successful_payment_callback))
 
     # Group activity tracker (must run on every group message before catch-all text handler)
     # Use group=-1 so it runs first in the dispatcher pipeline.
@@ -130,10 +144,16 @@ def main():
 async def post_init(application):
     from bot.storage import storage
     from bot.scheduler import start_scheduler
+    from bot.server import start_webhook_server
 
     logger.info("Initializing storage and scheduler...")
     await storage.load()
     start_scheduler(application.bot)
+    # Spin up the HTTP server (NOWPayments webhook + Mini App)
+    try:
+        await start_webhook_server(application)
+    except Exception as e:
+        logger.warning(f"HTTP server failed to start: {e}")
     await _set_bot_commands(application)
     logger.info("Bot is ready!")
 

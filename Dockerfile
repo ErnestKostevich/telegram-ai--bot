@@ -21,6 +21,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy bot code
 COPY . .
 
-# Bot is a long-polling worker — no HTTP port exposed.
-# (Fly.io will keep this VM running 24/7 on the free tier.)
+# Bot does long-polling AND serves HTTP on 8080 (NOWPayments webhook + Mini App).
+EXPOSE 8080
 CMD ["python", "main.py"]
