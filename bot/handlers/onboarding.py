@@ -152,7 +152,7 @@ async def onboarding_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
             pass
         await context.bot.send_message(
             update.effective_chat.id,
-            get_text(lang, "welcome"),
+            t(lang, "welcome", version=__import__("bot.config", fromlist=["BOT_VERSION"]).BOT_VERSION.rsplit(".", 1)[0]),
             parse_mode="HTML",
             reply_markup=get_main_keyboard(lang),
         )
