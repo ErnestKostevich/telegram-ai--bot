@@ -94,9 +94,10 @@ def main():
         ("search", handlers.search_command),
     ]
     # Phase 4 — monetization
+    from bot.handlers.crypto_direct import buycrypto_entry, crypto_direct_callback
     money = [
         ("buy", handlers.buy_command),
-        ("buycrypto", handlers.buycrypto_command),
+        ("buycrypto", buycrypto_entry),
         ("edit", handlers.edit_command),
         ("webapp", handlers.webapp_command),
         ("digest", handlers.digest_command),
@@ -110,6 +111,8 @@ def main():
     # Payment-specific handlers (Stars + tier picker callbacks)
     application.add_handler(CallbackQueryHandler(handlers.tier_stars_callback, pattern=r"^tier_stars_"))
     application.add_handler(CallbackQueryHandler(handlers.tier_crypto_callback, pattern=r"^tier_crypto_"))
+    # Direct on-chain crypto (USDT TRC-20 / ERC-20) — tier/network/address flow
+    application.add_handler(CallbackQueryHandler(crypto_direct_callback, pattern=r"^cd_"))
     application.add_handler(PreCheckoutQueryHandler(handlers.pre_checkout_callback))
     application.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, handlers.successful_payment_callback))
 

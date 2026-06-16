@@ -867,6 +867,13 @@ async def keyboard_message_handler(update: Update, context: ContextTypes.DEFAULT
             from bot.handlers.groups import translate_command
             await translate_command(update, context)
             return
+        elif state and state.startswith("awaiting_txhash:"):
+            # User submitted a crypto tx hash to verify on-chain.
+            user["state"] = None
+            await storage.save()
+            from bot.handlers.crypto_direct import handle_txhash_submission
+            await handle_txhash_submission(update, context, state, text.strip())
+            return
 
         # Default: AI chat with conversation history (streaming!)
         from bot.handlers.ai_memory import _build_system_prompt, _stream_to_message

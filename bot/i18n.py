@@ -312,6 +312,24 @@ translations = {
         "invoice_desc": "{tier} тариф на {days} дней. Включает {credits} image-credits и все продвинутые AI-фичи.",
         "invoice_error": "❌ Ошибка создания счёта: {err}",
         "crypto_disabled": "❌ Крипто-платежи временно отключены. Используй /buy (Telegram Stars).",
+        "cd_pick_tier": "💎 <b>Оплата криптой (USDT)</b>\n\nВыбери тариф:",
+        "cd_pick_network": "💎 <b>{tier}</b> — ${usd}\n\nВыбери сеть для оплаты USDT:",
+        "cd_pay_instructions": ("💸 <b>Оплата {tier} — ${usd}</b>\n\n"
+            "Сеть: <b>{network}</b>\n"
+            "Отправь ровно <b>{usd} USDT</b> на адрес:\n\n"
+            "<code>{address}</code>\n\n"
+            "👆 Нажми на адрес, чтобы скопировать.\n\n"
+            "После оплаты пришли сюда <b>хэш транзакции</b> (TxID) — я проверю её в блокчейне и выдам тариф."),
+        "cd_copy_hint": "📋 Нажми на адрес выше, чтобы скопировать",
+        "cd_checking": "🔎 Проверяю транзакцию в блокчейне…",
+        "cd_bad_hash": "❌ Это не похоже на хэш транзакции. Пришли TxID (64 символа) твоего USDT-перевода.",
+        "cd_already_used": "❌ Эта транзакция уже была использована.",
+        "cd_check_failed": "⚠️ Не удалось связаться с блокчейном. Попробуй ещё раз через минуту — просто пришли хэш снова.",
+        "cd_not_found": "❌ Транзакция пока не найдена. Подожди ~1 минуту после отправки и пришли хэш снова.",
+        "cd_no_transfer": "❌ Это не USDT-перевод на наш кошелёк. Проверь сеть и адрес.",
+        "cd_too_old": "❌ Транзакция слишком старая (нужна в пределах 24 часов).",
+        "cd_low_amount": "❌ Получено {got} USDT, а нужно {need}. Доплати разницу и пришли новый хэш.",
+        "cd_success": "✅ <b>Оплата подтверждена!</b>\n\n💎 Тариф <b>{tier}</b> активен на {days} дн.\n🖼 Кредитов на картинки: {credits}\n💵 Получено: {amount} USDT\n\nСпасибо! 🎉",
         "crypto_error": "❌ NOWPayments error: {err}",
         "crypto_invoice_ready": ("💎 <b>{tier}</b> — ${usd:.2f}\n\n"
                                    "Жми кнопку ниже чтобы открыть оплату.\n"
@@ -732,6 +750,24 @@ translations = {
         "invoice_desc": "{tier} tier for {days} days. Includes {credits} image credits and all premium AI features.",
         "invoice_error": "❌ Invoice error: {err}",
         "crypto_disabled": "❌ Crypto payments are temporarily disabled. Use /buy (Telegram Stars).",
+        "cd_pick_tier": "💎 <b>Pay with crypto (USDT)</b>\n\nChoose a plan:",
+        "cd_pick_network": "💎 <b>{tier}</b> — ${usd}\n\nChoose the network to pay USDT:",
+        "cd_pay_instructions": ("💸 <b>Pay {tier} — ${usd}</b>\n\n"
+            "Network: <b>{network}</b>\n"
+            "Send exactly <b>{usd} USDT</b> to:\n\n"
+            "<code>{address}</code>\n\n"
+            "👆 Tap the address to copy.\n\n"
+            "After paying, send the <b>transaction hash</b> (TxID) here — I'll verify it on-chain and unlock your plan."),
+        "cd_copy_hint": "📋 Tap the address above to copy",
+        "cd_checking": "🔎 Checking the transaction on-chain…",
+        "cd_bad_hash": "❌ That doesn't look like a transaction hash. Send the TxID (64 chars) of your USDT transfer.",
+        "cd_already_used": "❌ This transaction was already used.",
+        "cd_check_failed": "⚠️ Couldn't reach the blockchain. Try again in a minute — just resend the hash.",
+        "cd_not_found": "❌ Transaction not found yet. Wait ~1 min after sending, then resend the hash.",
+        "cd_no_transfer": "❌ That isn't a USDT payment to our wallet. Check the network and address.",
+        "cd_too_old": "❌ That transaction is too old (must be within 24h).",
+        "cd_low_amount": "❌ Received {got} USDT but {need} required. Top up the difference and send a new hash.",
+        "cd_success": "✅ <b>Payment confirmed!</b>\n\n💎 <b>{tier}</b> active for {days} days.\n🖼 Image credits: {credits}\n💵 Received: {amount} USDT\n\nThank you! 🎉",
         "crypto_error": "❌ NOWPayments error: {err}",
         "crypto_invoice_ready": ("💎 <b>{tier}</b> — ${usd:.2f}\n\n"
                                    "Tap the button below to open checkout.\n"
@@ -1146,6 +1182,24 @@ translations = {
         "invoice_desc": "Tier {tier} per {days} giorni. Include {credits} crediti immagini e tutte le funzioni AI premium.",
         "invoice_error": "❌ Errore fattura: {err}",
         "crypto_disabled": "❌ Pagamenti crypto temporaneamente disabilitati. Usa /buy (Telegram Stars).",
+        "cd_pick_tier": "💎 <b>Paga con crypto (USDT)</b>\n\nScegli un piano:",
+        "cd_pick_network": "💎 <b>{tier}</b> — ${usd}\n\nScegli la rete per pagare in USDT:",
+        "cd_pay_instructions": ("💸 <b>Paga {tier} — ${usd}</b>\n\n"
+            "Rete: <b>{network}</b>\n"
+            "Invia esattamente <b>{usd} USDT</b> a:\n\n"
+            "<code>{address}</code>\n\n"
+            "👆 Tocca l'indirizzo per copiarlo.\n\n"
+            "Dopo il pagamento, invia qui l'<b>hash della transazione</b> (TxID) — lo verifico on-chain e sblocco il piano."),
+        "cd_copy_hint": "📋 Tocca l'indirizzo sopra per copiare",
+        "cd_checking": "🔎 Verifico la transazione on-chain…",
+        "cd_bad_hash": "❌ Non sembra un hash di transazione. Invia il TxID (64 caratteri) del tuo trasferimento USDT.",
+        "cd_already_used": "❌ Questa transazione è già stata usata.",
+        "cd_check_failed": "⚠️ Impossibile raggiungere la blockchain. Riprova tra un minuto — reinvia l'hash.",
+        "cd_not_found": "❌ Transazione non ancora trovata. Aspetta ~1 min dopo l'invio, poi reinvia l'hash.",
+        "cd_no_transfer": "❌ Non è un pagamento USDT al nostro wallet. Controlla rete e indirizzo.",
+        "cd_too_old": "❌ Transazione troppo vecchia (deve essere entro 24h).",
+        "cd_low_amount": "❌ Ricevuti {got} USDT ma ne servono {need}. Aggiungi la differenza e invia un nuovo hash.",
+        "cd_success": "✅ <b>Pagamento confermato!</b>\n\n💎 <b>{tier}</b> attivo per {days} giorni.\n🖼 Crediti immagine: {credits}\n💵 Ricevuti: {amount} USDT\n\nGrazie! 🎉",
         "crypto_error": "❌ Errore NOWPayments: {err}",
         "crypto_invoice_ready": ("💎 <b>{tier}</b> — ${usd:.2f}\n\n"
                                    "Tocca il bottone per aprire il checkout.\n"
