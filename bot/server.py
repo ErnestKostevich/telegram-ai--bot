@@ -144,6 +144,7 @@ async def _api_me(request: web.Request) -> web.Response:
         target_uid=uid,
         tg_first_name=user_info.get("first_name"),
     )
+    payload["bot_username"] = request.app.get("bot_username", "")
     return web.json_response(payload)
 
 
@@ -301,6 +302,8 @@ async def _api_topup_stars(request: web.Request) -> web.Response:
     payload = f"stars:{tier_id}:{uid}:{secrets.token_urlsafe(6)}"
     bot = request.app["bot"]
     try:
+        # Stars: provider_token must be empty string per Telegram docs (matches
+        # the working send_invoice flow in bot/handlers/payments.py).
         url = await bot.create_invoice_link(
             title=f"AI DISCO BOT {info['label']}",
             description=f"{info['days']} days · {info['image_credits']} image credits",
@@ -401,6 +404,13 @@ async def start_webhook_server(application):
     app = web.Application()
     app["bot"] = application.bot
     app["bot_token"] = application.bot.token
+    # bot.username is cached after Application.initialize() calls get_me().
+    # We surface it in /api/me so the Mini App can build the right invite link.
+    try:
+        me = await application.bot.get_me()
+        app["bot_username"] = me.username or ""
+    except Exception:
+        app["bot_username"] = ""
 
     app.router.add_get("/", _root)
     app.router.add_get("/healthz", _healthz)
@@ -1006,8 +1016,8 @@ const I18N = {
     memory: "Memoria", persona: "Persona", save: "Salva",
     upgrade_to_unlock: "Tocca per fare upgrade →",
     renews_in: "Si rinnova tra {n}", expires_in: "Scade tra {n}", forever: "Per sempre",
-    main_ask: "CHIEDI QUALSIASI COSA", main_streak: "🔥 MANTIENI LA SERIE DI {n} GIORNI",
-    main_upgrade: "FAI UPGRADE — SBLOCCA TUTTO", main_close_to_level: "+{n} XP AL LIV. {l}",
+    main_ask: "CHIEDI QUALSIASI COSA", main_streak: "🔥 MANTIENI SERIE {n}G",
+    main_upgrade: "FAI UPGRADE — SBLOCCA", main_close_to_level: "+{n} XP AL LIV. {l}",
     main_save: "Salva",
     topup_title: "Ricarica", topup_lead: "Scegli un piano e un metodo.",
     pay_stars: "Paga con Stars", pay_crypto: "Paga con crypto",
@@ -1487,7 +1497,7 @@ const wireScrim = () => {
 const wireCopyRef = () => {
   const btn = document.getElementById('copyRef');
   btn.addEventListener('click', () => {
-    const url = `https://t.me/${tg.initDataUnsafe.bot?.username || 'AI_DISCO_BOT'}?start=ref_${profile.referral_code}`;
+    const url = `https://t.me/${profile.bot_username || 'AI_DISCO_BOT'}?start=ref_${profile.referral_code}`;
     const copy = navigator.clipboard?.writeText(url);
     Promise.resolve(copy).then(() => {
       btn.textContent = t('copied');
