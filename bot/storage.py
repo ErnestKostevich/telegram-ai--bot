@@ -139,6 +139,8 @@ class Storage:
                 "stats": {"msgs": 0, "commands": 0},
                 "referrals": 0,
                 "xp_by_week": {},
+                "xp_by_day": {},
+                "last_seen_level": 0,
                 "first_paid": False,
                 "digest_enabled": False,
                 "digest_time": "08:00",
@@ -154,6 +156,8 @@ class Storage:
             u.setdefault("stats", {"msgs": 0, "commands": 0})
             u.setdefault("referrals", 0)
             u.setdefault("xp_by_week", {})
+            u.setdefault("xp_by_day", {})
+            u.setdefault("last_seen_level", 0)
             u.setdefault("tier", "pro" if u.get("vip") else "free")
             u.setdefault("tier_expires", u.get("vip_expires"))
             u.setdefault("image_credits", 0)

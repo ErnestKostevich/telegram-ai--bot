@@ -340,16 +340,24 @@ def _iso_week_key(dt=None) -> str:
 
 
 def award_weekly_xp(user: dict, xp: int):
-    """Increment the user's XP for the current ISO week."""
+    """Increment the user's XP for the current ISO week AND today's UTC bucket."""
     if xp <= 0:
         return
+    import datetime as _dt
     wk = _iso_week_key()
     wxp = user.setdefault("xp_by_week", {})
     wxp[wk] = int(wxp.get(wk, 0)) + xp
-    # Keep only last 8 weeks to bound storage
     if len(wxp) > 8:
         for k in sorted(wxp.keys())[: len(wxp) - 8]:
             wxp.pop(k, None)
+    # Per-day bucket powers the "This week" histogram in the Mini App.
+    today = _dt.date.today().isoformat()
+    dxp = user.setdefault("xp_by_day", {})
+    dxp[today] = int(dxp.get(today, 0)) + xp
+    # Keep only last 14 days
+    if len(dxp) > 14:
+        for k in sorted(dxp.keys())[: len(dxp) - 14]:
+            dxp.pop(k, None)
 
 
 async def leaderboard_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
