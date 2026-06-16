@@ -61,11 +61,29 @@ def _step2_provider_keyboard(lang: str) -> InlineKeyboardMarkup:
 
 
 async def onboarding_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Entry point — shows the language picker (step 1)."""
+    """Entry point.
+
+    If the user's language is already known (auto-detected from
+    Telegram's BCP-47 language_code in start_command, or set previously),
+    we skip step 1 entirely and jump straight to the provider picker —
+    no point asking again. Otherwise we show the trilingual greeting.
+    """
     user = storage.get_user(update.effective_user.id)
     user["state"] = "onboarding"
     await storage.save()
-    # Use a neutral 3-language welcome since we don't know lang yet
+
+    known_lang = user.get("language")
+    if known_lang in ("ru", "en", "it"):
+        # We already know the language — skip step 1 and go to step 2.
+        await update.message.reply_text(
+            t(known_lang, "onb_step2_text"),
+            parse_mode="HTML",
+            reply_markup=_step2_provider_keyboard(known_lang),
+            disable_web_page_preview=True,
+        )
+        return
+
+    # Truly unknown language → trilingual picker
     text = ("👋 <b>Welcome / Привет / Ciao!</b>\n\n"
             "I'm <b>AI DISCO BOT</b> — pick your language to begin.\n"
             "Выбери язык, чтобы начать.\n"
@@ -96,7 +114,7 @@ async def onboarding_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
         return
 
-    lang = user.get("language", "ru")
+    lang = user.get("language", "en")
 
     # --- Step 2 → 3: a free provider chosen, ask for key ---
     if data.startswith("onb_pick_"):

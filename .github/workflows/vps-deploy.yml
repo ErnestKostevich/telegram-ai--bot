@@ -1,0 +1,53 @@
+name: VPS Deploy
+
+# Auto-deploy AI DISCO BOT to the Ubuntu VPS on every push to main.
+#
+# Required repo secrets (Settings → Secrets and variables → Actions):
+#   VPS_HOST              — server IP or hostname
+#   VPS_USER              — SSH user (a dedicated `deploy` user is recommended over root)
+#   VPS_SSH_KEY           — private SSH key (passwordless OpenSSH format)
+#   VPS_SSH_PORT          — (optional) SSH port if not 22
+#   VPS_HOST_FINGERPRINT  — SHA256 of the VPS's SSH host key.
+#                           Get it once on the VPS: ssh-keyscan -t ed25519 localhost \
+#                           | ssh-keygen -lf - -E sha256
+#                           Format: "SHA256:base64hash"
+#
+# Required sudoers entry on the VPS (so VPS_USER can run update.sh without password):
+#   echo 'VPS_USER ALL=(root) NOPASSWD: /opt/disco-ai-bot/deploy/update.sh' \
+#     | sudo tee /etc/sudoers.d/disco-ai-bot-deploy
+#   sudo chmod 0440 /etc/sudoers.d/disco-ai-bot-deploy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+# Minimal token scope: the job doesn't push code or labels.
+permissions:
+  contents: read
+
+concurrency:
+  group: vps-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to VPS
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Run remote update.sh
+        # Pinned to commit SHA to neutralise tag-mutation supply-chain risk.
+        # Bump this SHA together with the version comment when upgrading.
+        uses: appleboy/ssh-action@2ead5e36573f08b82fbfce1504f1a4b05a647c6f  # v1.2.0
+        with:
+          host:        ${{ secrets.VPS_HOST }}
+          username:    ${{ secrets.VPS_USER }}
+          key:         ${{ secrets.VPS_SSH_KEY }}
+          port:        ${{ secrets.VPS_SSH_PORT || 22 }}
+          fingerprint: ${{ secrets.VPS_HOST_FINGERPRINT }}
+          script_stop: true
+          command_timeout: 8m
+          script: |
+            sudo /opt/disco-ai-bot/deploy/update.sh

@@ -48,8 +48,12 @@ async def _nowpayments_webhook(request: web.Request) -> web.Response:
     try:
         await handle_nowpayments_webhook(bot, body)
     except Exception as e:
+        # Return 500 so NOWPayments retries (they back off and re-deliver up to
+        # ~7 days). The handler is idempotent on `pending_crypto`, so retries
+        # don't double-grant tier. Returning 200 here would silently drop a
+        # payment if storage.save() blew up mid-grant.
         logger.exception(f"NOWPayments webhook handler error: {e}")
-        # Return 200 anyway so NOWPayments doesn't retry forever — we logged it
+        return web.Response(status=500, text="handler error")
     return web.Response(text="ok")
 
 

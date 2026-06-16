@@ -1,0 +1,79 @@
+[Unit]
+Description=AI DISCO BOT (Telegram polling worker + HTTP server)
+Documentation=https://github.com/ErnestKostevich/telegram-ai--bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=disco-bot
+Group=disco-bot
+WorkingDirectory=/opt/disco-ai-bot
+
+# Pull env from the protected file you create on the server. NEVER commit secrets.
+EnvironmentFile=/etc/disco-ai-bot/disco-ai-bot.env
+
+# Run the bot from the project's virtualenv so we don't pollute /usr.
+ExecStart=/opt/disco-ai-bot/.venv/bin/python main.py
+
+# Restart on any abnormal exit; back off so a tight crash loop doesn't melt the CPU.
+Restart=on-failure
+RestartSec=10s
+StartLimitInterval=300s
+StartLimitBurst=5
+
+# Logging to journald — view with: journalctl -u disco-ai-bot -f
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=disco-ai-bot
+
+# ===== Hardening (Ubuntu 24.04) =====
+# The bot's only persistent state lives in GitHub via the API — it does NOT
+# write to /opt/disco-ai-bot at runtime. So the code dir is fully read-only
+# to the bot, and a hypothetical RCE can't rewrite update.sh, the unit file,
+# Python source, etc. PYTHONDONTWRITEBYTECODE in the unit env stops __pycache__.
+Environment=PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+
+# No new privileges from any binary the bot exec's
+NoNewPrivileges=true
+
+# Filesystem
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+ProcSubset=pid
+
+# Capabilities — drop everything (User=disco-bot already has none, this is
+# defense-in-depth and prevents capability injection bugs).
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+# Namespaces / IPC
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+
+# Network — we only need INET + UNIX (the bot talks HTTPS to Telegram and AI
+# providers; never raw sockets, packet, or netlink).
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+# Syscall filter — block everything outside the "system service" set.
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+SystemCallArchitectures=native
+
+# Files the bot creates (none on disk, but if any: not world-readable)
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

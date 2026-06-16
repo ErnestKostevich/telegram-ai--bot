@@ -162,7 +162,7 @@ async def _stream_to_message(update, context, prompt, system_prompt, lang):
 
 
 def _build_system_prompt(user: dict, base: str = "", group: dict | None = None) -> str:
-    lang = user.get("language", "ru")
+    lang = user.get("language", "en")
     lang_names = {"ru": "Russian", "en": "English", "it": "Italian"}
     sp = base or "You are AI DISCO BOT — a helpful, friendly AI assistant inside Telegram. "
     sp += f"Respond in {lang_names.get(lang, 'English')} unless asked otherwise. "
@@ -207,7 +207,7 @@ async def _send_long(message, text: str):
 async def setprovider_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     user = storage.get_user(uid)
-    lang = user.get("language", "ru")
+    lang = user.get("language", "en")
     if not context.args:
         # No args → show inline picker buttons (huge UX improvement vs. plain text)
         from bot.keyboards import get_provider_picker_keyboard
@@ -229,7 +229,7 @@ async def setprovider_command(update: Update, context: ContextTypes.DEFAULT_TYPE
 async def setkey_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     user = storage.get_user(uid)
-    lang = user.get("language", "ru")
+    lang = user.get("language", "en")
 
     # SECURITY: in groups we MUST scrub the message first. If we successfully
     # delete it the key is safe to save and we confirm via DM. If we couldn't
@@ -316,7 +316,7 @@ async def setkey_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def setmodel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     user = storage.get_user(uid)
-    lang = user.get("language", "ru")
+    lang = user.get("language", "en")
     if not context.args:
         # No args → show model picker buttons for current provider
         from bot.ai import PROVIDER_MODELS, DEFAULT_MODELS
@@ -351,7 +351,7 @@ async def setmodel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def ai_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     user = storage.get_user(uid)
-    lang = user.get("language", "ru")
+    lang = user.get("language", "en")
     user["stats"]["commands"] = user["stats"].get("commands", 0) + 1
     user["stats"]["msgs"] = user["stats"].get("msgs", 0) + 1
     if not context.args:
@@ -365,7 +365,7 @@ async def ai_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def clear_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     user = storage.get_user(uid)
-    lang = user.get("language", "ru")
+    lang = user.get("language", "en")
     had = len(user.get("chat_history", []))
     ai_handler.clear_history(uid)
     await storage.save()
@@ -375,7 +375,7 @@ async def clear_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def memorysave_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     user = storage.get_user(uid)
-    lang = user.get("language", "ru")
+    lang = user.get("language", "en")
     if len(context.args) < 2:
         await update.message.reply_text(t(lang, "mem_usage"))
         return
@@ -394,7 +394,7 @@ async def memorysave_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
 async def memoryget_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     user = storage.get_user(uid)
-    lang = user.get("language", "ru")
+    lang = user.get("language", "en")
     if not context.args:
         await update.message.reply_text(t(lang, "mem_usage"))
         return
@@ -409,7 +409,7 @@ async def memoryget_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def memorylist_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     user = storage.get_user(uid)
-    lang = user.get("language", "ru")
+    lang = user.get("language", "en")
     if not user["memory"]:
         await update.message.reply_text(t(lang, "mem_empty"))
         return
@@ -423,7 +423,7 @@ async def memorylist_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
 async def memorydel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     user = storage.get_user(uid)
-    lang = user.get("language", "ru")
+    lang = user.get("language", "en")
     if not context.args:
         await update.message.reply_text(t(lang, "mem_del_usage"))
         return

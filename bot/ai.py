@@ -119,7 +119,7 @@ class AIHandler:
         image_mime: str = "image/jpeg",
     ) -> str:
         user = storage.get_user(user_id)
-        lang = user.get("language", "ru")
+        lang = user.get("language", "en")
         provider = user.get("ai_provider", "gemini")
         api_key = user.get("api_keys", {}).get(provider)
 
@@ -127,11 +127,12 @@ class AIHandler:
             return _no_key_msg(lang, provider)
 
         if image_b64 and provider not in VISION_PROVIDERS:
-            return _err_msg(lang, provider, {
+            _detail = {
                 "ru": "этот провайдер не поддерживает анализ изображений. Используйте openai, anthropic, gemini или openrouter.",
                 "en": "this provider does not support image analysis. Use openai, anthropic, gemini, or openrouter.",
                 "it": "questo provider non supporta l'analisi delle immagini. Usa openai, anthropic, gemini o openrouter.",
-            }.get(lang, ""))
+            }
+            return _err_msg(lang, provider, _detail.get(lang, _detail["en"]))
 
         model = self._get_model(user_id, provider)
         history = self._get_history(user_id) if use_history and not image_b64 else []
@@ -230,7 +231,7 @@ class AIHandler:
         """Yield text chunks as they arrive from the provider. Caller is
         responsible for accumulating and persisting the final text to history."""
         user = storage.get_user(user_id)
-        lang = user.get("language", "ru")
+        lang = user.get("language", "en")
         provider = user.get("ai_provider", "gemini")
         api_key = user.get("api_keys", {}).get(provider)
 

@@ -15,7 +15,7 @@ MAX_TASK_LEN = 1000
 async def note_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     user = storage.get_user(uid)
-    lang = user.get("language", "ru")
+    lang = user.get("language", "en")
     if not context.args:
         await update.message.reply_text(t(lang, "note_usage"))
         return
@@ -31,7 +31,7 @@ async def note_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def notes_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     user = storage.get_user(uid)
-    lang = user.get("language", "ru")
+    lang = user.get("language", "en")
     if not user["notes"]:
         await update.message.reply_text(t(lang, "notes_empty"))
         return
@@ -45,7 +45,7 @@ async def notes_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def delnote_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     user = storage.get_user(uid)
-    lang = user.get("language", "ru")
+    lang = user.get("language", "en")
     if not context.args:
         await update.message.reply_text(t(lang, "note_del_usage"))
         return
@@ -80,7 +80,7 @@ def _todo_index(args, user):
 async def todo_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     user = storage.get_user(uid)
-    lang = user.get("language", "ru")
+    lang = user.get("language", "en")
     user.setdefault("tasks", [])
 
     if not context.args:

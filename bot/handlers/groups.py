@@ -24,7 +24,7 @@ _spam_cache: dict = defaultdict(list)
 
 
 async def grouphelp_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    lang = storage.get_user(update.effective_user.id).get("language", "ru")
+    lang = storage.get_user(update.effective_user.id).get("language", "en")
     texts = {
         "ru": ("👥 <b>Команды для групп:</b>\n\n"
                "🛡️ <b>Модерация:</b>\n"
@@ -102,12 +102,12 @@ def _is_group(update):
 
 async def _check_admin(update, context):
     if not _is_group(update):
-        lang = storage.get_user(update.effective_user.id).get("language", "ru")
+        lang = storage.get_user(update.effective_user.id).get("language", "en")
         await update.message.reply_text(t(lang, "group_only"))
         return False
     member = await context.bot.get_chat_member(update.effective_chat.id, update.effective_user.id)
     if member.status not in ["administrator", "creator"]:
-        lang = storage.get_user(update.effective_user.id).get("language", "ru")
+        lang = storage.get_user(update.effective_user.id).get("language", "en")
         await update.message.reply_text(t(lang, "admin_only"))
         return False
     return True
@@ -115,7 +115,7 @@ async def _check_admin(update, context):
 
 async def ban_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await _check_admin(update, context): return
-    lang = storage.get_user(update.effective_user.id).get("language", "ru")
+    lang = storage.get_user(update.effective_user.id).get("language", "en")
     if not update.message.reply_to_message:
         await update.message.reply_text(t(lang, "reply_needed"))
         return
@@ -129,7 +129,7 @@ async def ban_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def warn_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await _check_admin(update, context): return
-    lang = storage.get_user(update.effective_user.id).get("language", "ru")
+    lang = storage.get_user(update.effective_user.id).get("language", "en")
     if not update.message.reply_to_message:
         await update.message.reply_text(t(lang, "reply_needed"))
         return
@@ -155,7 +155,7 @@ async def warn_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def warnings_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    lang = storage.get_user(update.effective_user.id).get("language", "ru")
+    lang = storage.get_user(update.effective_user.id).get("language", "en")
     if not _is_group(update):
         await update.message.reply_text(t(lang, "group_only"))
         return
@@ -179,7 +179,7 @@ async def warnings_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def unwarn_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await _check_admin(update, context): return
-    lang = storage.get_user(update.effective_user.id).get("language", "ru")
+    lang = storage.get_user(update.effective_user.id).get("language", "en")
     if not update.message.reply_to_message:
         await update.message.reply_text(t(lang, "reply_needed"))
         return
@@ -197,7 +197,7 @@ async def unwarn_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def mute_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await _check_admin(update, context): return
-    lang = storage.get_user(update.effective_user.id).get("language", "ru")
+    lang = storage.get_user(update.effective_user.id).get("language", "en")
     if not update.message.reply_to_message:
         await update.message.reply_text(t(lang, "reply_needed"))
         return
@@ -217,7 +217,7 @@ async def mute_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def unmute_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await _check_admin(update, context): return
-    lang = storage.get_user(update.effective_user.id).get("language", "ru")
+    lang = storage.get_user(update.effective_user.id).get("language", "en")
     if not update.message.reply_to_message:
         await update.message.reply_text(t(lang, "reply_needed"))
         return
@@ -237,7 +237,7 @@ async def unmute_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def kick_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await _check_admin(update, context): return
-    lang = storage.get_user(update.effective_user.id).get("language", "ru")
+    lang = storage.get_user(update.effective_user.id).get("language", "en")
     if not update.message.reply_to_message:
         await update.message.reply_text(t(lang, "reply_needed"))
         return
@@ -252,7 +252,7 @@ async def kick_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def purge_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await _check_admin(update, context): return
-    lang = storage.get_user(update.effective_user.id).get("language", "ru")
+    lang = storage.get_user(update.effective_user.id).get("language", "en")
     chat_id = update.effective_chat.id
     deleted = 0
 
@@ -290,7 +290,7 @@ async def purge_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def antilink_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await _check_admin(update, context): return
-    lang = storage.get_user(update.effective_user.id).get("language", "ru")
+    lang = storage.get_user(update.effective_user.id).get("language", "en")
     group = storage.get_group(update.effective_chat.id)
     arg = context.args[0].lower() if context.args else None
     if arg == "on":
@@ -308,7 +308,7 @@ async def antilink_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def antispam_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await _check_admin(update, context): return
-    lang = storage.get_user(update.effective_user.id).get("language", "ru")
+    lang = storage.get_user(update.effective_user.id).get("language", "en")
     group = storage.get_group(update.effective_chat.id)
     arg = context.args[0].lower() if context.args else None
     if arg == "on":
@@ -326,7 +326,7 @@ async def antispam_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def welcome_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await _check_admin(update, context): return
-    lang = storage.get_user(update.effective_user.id).get("language", "ru")
+    lang = storage.get_user(update.effective_user.id).get("language", "en")
     group = storage.get_group(update.effective_chat.id)
     if not context.args:
         st = "ON ✅" if group.get("welcome_enabled") else "OFF ❌"
@@ -353,7 +353,7 @@ async def welcome_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def goodbye_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await _check_admin(update, context): return
-    lang = storage.get_user(update.effective_user.id).get("language", "ru")
+    lang = storage.get_user(update.effective_user.id).get("language", "en")
     group = storage.get_group(update.effective_chat.id)
     if not context.args:
         st = "ON ✅" if group.get("goodbye_enabled") else "OFF ❌"
@@ -381,7 +381,7 @@ async def goodbye_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def ask_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     user = storage.get_user(uid)
-    lang = user.get("language", "ru")
+    lang = user.get("language", "en")
     if not context.args:
         await update.message.reply_text(t(lang, "ask_usage"))
         return
@@ -412,12 +412,12 @@ async def ask_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def summary_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not _is_group(update):
-        lang = storage.get_user(update.effective_user.id).get("language", "ru")
+        lang = storage.get_user(update.effective_user.id).get("language", "en")
         await update.message.reply_text(t(lang, "group_only"))
         return
     uid = update.effective_user.id
     user = storage.get_user(uid)
-    lang = user.get("language", "ru")
+    lang = user.get("language", "en")
     group = storage.get_group(update.effective_chat.id)
     messages = group.get("messages", [])
 
@@ -455,7 +455,7 @@ async def summary_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def translate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     user = storage.get_user(uid)
-    lang = user.get("language", "ru")
+    lang = user.get("language", "en")
     # Support reply: /translate en (replied msg)
     text_to_translate = None
     target_lang = None
@@ -486,10 +486,10 @@ async def translate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def rules_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not _is_group(update):
-        lang = storage.get_user(update.effective_user.id).get("language", "ru")
+        lang = storage.get_user(update.effective_user.id).get("language", "en")
         await update.message.reply_text(t(lang, "group_only"))
         return
-    lang = storage.get_user(update.effective_user.id).get("language", "ru")
+    lang = storage.get_user(update.effective_user.id).get("language", "en")
     group = storage.get_group(update.effective_chat.id)
     rules = group.get("rules") or t(lang, "rules_empty")
     # Escape so admin-set rules with < or & don't break HTML
@@ -501,7 +501,7 @@ async def rules_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def setrules_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await _check_admin(update, context): return
-    lang = storage.get_user(update.effective_user.id).get("language", "ru")
+    lang = storage.get_user(update.effective_user.id).get("language", "en")
     if not context.args:
         await update.message.reply_text(t(lang, "setrules_usage"))
         return
@@ -513,7 +513,7 @@ async def setrules_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def guardian_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await _check_admin(update, context): return
-    lang = storage.get_user(update.effective_user.id).get("language", "ru")
+    lang = storage.get_user(update.effective_user.id).get("language", "en")
     group = storage.get_group(update.effective_chat.id)
     if context.args and context.args[0].lower() == "on":
         group["guardian"] = True
@@ -536,10 +536,10 @@ MAX_GROUP_MEMORY_VAL_LEN = 500
 async def groupmem_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """/groupmem save|get|list|del — shared memory injected into group AI prompts."""
     if not _is_group(update):
-        lang = storage.get_user(update.effective_user.id).get("language", "ru")
+        lang = storage.get_user(update.effective_user.id).get("language", "en")
         await update.message.reply_text(t(lang, "group_only"))
         return
-    lang = storage.get_user(update.effective_user.id).get("language", "ru")
+    lang = storage.get_user(update.effective_user.id).get("language", "en")
     group = storage.get_group(update.effective_chat.id)
     mem = group.setdefault("memory", {})
 
@@ -625,10 +625,10 @@ def _build_group_memory_block(group: dict) -> str:
 
 async def groupstats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not _is_group(update):
-        lang = storage.get_user(update.effective_user.id).get("language", "ru")
+        lang = storage.get_user(update.effective_user.id).get("language", "en")
         await update.message.reply_text(t(lang, "group_only"))
         return
-    lang = storage.get_user(update.effective_user.id).get("language", "ru")
+    lang = storage.get_user(update.effective_user.id).get("language", "en")
     chat = update.effective_chat
     g = storage.get_group(chat.id)
     count = await context.bot.get_chat_member_count(chat.id)
@@ -732,7 +732,7 @@ async def group_message_tracker(update: Update, context: ContextTypes.DEFAULT_TY
                         _spam_cache[key] = []
                         await context.bot.send_message(
                             chat.id,
-                            t(storage.get_user(msg.from_user.id).get("language", "ru"),
+                            t(storage.get_user(msg.from_user.id).get("language", "en"),
                               "antispam_muted", user=msg.from_user.first_name, mins=SPAM_MUTE_MIN),
                             parse_mode="HTML",
                         )

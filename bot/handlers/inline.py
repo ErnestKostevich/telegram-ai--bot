@@ -69,7 +69,15 @@ async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         return
     uid = iq.from_user.id
     user = storage.get_user(uid)
-    lang = user.get("language", "ru")
+    # Inline can be the very first place a brand-new user encounters the bot
+    # (without ever running /start). Apply the same BCP-47 auto-detect here
+    # so the switch_pm button label is in their language, not stuck on EN.
+    if not user.get("language"):
+        from bot.i18n import detect_lang_from_code
+        user["language"] = detect_lang_from_code(
+            getattr(iq.from_user, "language_code", None)
+        )
+    lang = user.get("language", "en")
     raw_query = (iq.query or "").strip()
 
     # Case 1: no key → surface switch_pm to onboarding
@@ -137,7 +145,7 @@ async def inline_generate_callback(update: Update, context: ContextTypes.DEFAULT
 
     asker_uid = update.effective_user.id
     user = storage.get_user(asker_uid)
-    lang = user.get("language", "ru")
+    lang = user.get("language", "en")
 
     if cached is None:
         try:

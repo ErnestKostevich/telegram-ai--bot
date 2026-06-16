@@ -7,7 +7,7 @@ from urllib.parse import quote
 
 
 async def time_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    lang = storage.get_user(update.effective_user.id).get("language", "ru")
+    lang = storage.get_user(update.effective_user.id).get("language", "en")
     if not context.args:
         await update.message.reply_text(t(lang, "time_usage"))
         return
@@ -35,7 +35,7 @@ async def time_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def weather_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    lang = storage.get_user(update.effective_user.id).get("language", "ru")
+    lang = storage.get_user(update.effective_user.id).get("language", "en")
     if not context.args:
         await update.message.reply_text(t(lang, "weather_usage"))
         return
@@ -61,7 +61,7 @@ async def weather_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def calc_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    lang = storage.get_user(update.effective_user.id).get("language", "ru")
+    lang = storage.get_user(update.effective_user.id).get("language", "en")
     if not context.args:
         await update.message.reply_text(t(lang, "calc_usage"))
         return
@@ -81,7 +81,7 @@ async def calc_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def password_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    lang = storage.get_user(update.effective_user.id).get("language", "ru")
+    lang = storage.get_user(update.effective_user.id).get("language", "en")
     length = 16
     if context.args:
         try:

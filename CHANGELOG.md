@@ -6,6 +6,121 @@
 
 ---
 
+## [3.3.0] — 2026-05-25 🌍 English-by-default + VPS deploy
+
+### 🌍 Default language switched RU → EN, with Telegram auto-detect
+The bot was Russian-by-default since v1.0. v3.3 makes it English-by-default
+while keeping RU and IT switchable. New users get auto-detected from their
+Telegram client's BCP-47 `language_code`:
+- `ru-*` → Russian
+- `it-*` → Italian
+- anything else → English
+
+What changed:
+- `bot/i18n.py`: new public symbols `DEFAULT_LANG = "en"`, `SUPPORTED_LANGS`,
+  and `detect_lang_from_code()`. `get_text()` and `t()` fall back to EN.
+- `bot/handlers/base.py` `start_command`: when a user has no `language` field
+  set yet, calls `detect_lang_from_code(update.effective_user.language_code)`
+  and persists it on first /start.
+- 110 occurrences of `.get("language", "ru")` → `.get("language", "en")` across
+  19 files (every handler module + `bot/ai.py` + `bot/i18n.py`).
+- 8 keyboard-builder function signatures: `lang="ru"` → `lang="en"` defaults.
+
+What did NOT change:
+- Existing users who already set their language stay on their pick.
+- All three translation dicts (`ru`, `en`, `it`) are still complete.
+- `/lang ru|en|it` and the onboarding language picker still work the same way.
+
+Tests: 14 BCP-47 mappings verified (None / '' / en / en-US / EN-GB / ru /
+ru-RU / it / it-IT / fr-FR / de / ja-JP / zh-CN / xx-xx).
+
+### 🔧 Polish & fixes from adversarial review (3-lens workflow audit)
+- `bot/handlers/onboarding.py`: when `start_command`'s auto-detect already
+  set the user's language, the wizard now skips the trilingual step-1 picker
+  and jumps straight to the provider screen in their detected language.
+- `bot/handlers/inline.py`: brand-new users whose first interaction is
+  `@AI_DISCO_BOT query` (without ever running /start) now get
+  `detect_lang_from_code(iq.from_user.language_code)` so the switch_pm
+  button label is in their language, not stuck on EN.
+- `bot/ai.py`: the vision-not-supported branch had a `.get(lang, "")`
+  fallback that returned an empty error message to users on locales we don't
+  translate. Now falls back to the EN string.
+- `bot/handlers/vip_creator.py`: `/broadcast` usage hint was bare Russian.
+  Switched to English (consistent with EN-default contract).
+- `bot/server.py`: NOWPayments webhook now returns HTTP 500 (not 200) when
+  the handler raises after HMAC verification. NOWPayments will retry up to
+  ~7 days; the handler is already idempotent via `pending_crypto.pop()`, so
+  retries are safe. Previously a `storage.save()` failure mid-grant silently
+  dropped a payment.
+- `.github/workflows/fly-deploy.yml` renamed to `.disabled` so it doesn't
+  fight `vps-deploy.yml` after migration.
+
+### 🔐 Hardening pass on the VPS deploy infra
+- `.github/workflows/vps-deploy.yml`:
+  - Pinned `appleboy/ssh-action` to commit SHA (closes tag-mutation
+    supply-chain risk; v1.2.0 SHA `2ead5e3…`).
+  - Added `permissions: contents: read` (minimal token scope).
+  - Added `timeout-minutes: 10` (prevents hung-SSH runner pin).
+  - Added `command_timeout: 8m`.
+  - New required secret `VPS_HOST_FINGERPRINT` for SSH host-key verification
+    — workflow now refuses to connect to a tampered host. Docs explain how
+    to capture it.
+- `deploy/disco-ai-bot.service`:
+  - Dropped `ReadWritePaths=/opt/disco-ai-bot` — bot writes nothing to disk
+    (storage lives in GitHub via API), so the code dir is now read-only to
+    the bot. A hypothetical RCE can't rewrite update.sh, the unit file, or
+    Python source; the next deploy reuses clean code.
+  - Added `SystemCallFilter=@system-service`, `SystemCallArchitectures=native`,
+    `RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX`,
+    `CapabilityBoundingSet=` / `AmbientCapabilities=` (drop everything),
+    `MemoryDenyWriteExecute=true`, `ProtectClock`, `ProtectHostname`,
+    `ProtectKernelLogs`, `ProtectProc=invisible`, `ProcSubset=pid`,
+    `RestrictSUIDSGID`, `UMask=0077`.
+  - Set `Environment=PYTHONDONTWRITEBYTECODE=1` so the bot truly has no
+    write needs at runtime (no `__pycache__` either).
+- `deploy/nginx-disco-ai-bot.conf`:
+  - Added security headers: `Strict-Transport-Security` (HSTS,
+    2-year max-age + includeSubDomains), `X-Content-Type-Options: nosniff`,
+    `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy`
+    (deny geolocation/mic/camera).
+  - Added `Content-Security-Policy` with `frame-ancestors
+    https://web.telegram.org https://*.telegram.org` so the Mini App still
+    frames inside Telegram. `script-src` includes `https://telegram.org`
+    plus `unsafe-inline` (required by the current Mini App; switch to nonce
+    when iterating).
+  - Default-server block returns 444 on unknown Host (drops scanners).
+  - `limit_req_zone` (20 r/s burst 50) applied to `/webhook/nowpayments` and
+    `/api/` so an attacker can't flood expensive HMAC paths.
+  - Explicit `ssl_protocols TLSv1.2 TLSv1.3;`.
+
+### 🖥 Ubuntu VPS deploy infrastructure
+Self-hostable on any Ubuntu 24.04 (or 22.04) box, designed to coexist with
+other bots on the same machine. New files under `deploy/`:
+
+- `disco-ai-bot.service` — systemd unit. Runs as dedicated `disco-bot` user,
+  loads env from `/etc/disco-ai-bot/disco-ai-bot.env` (mode 0600), restarts
+  on failure, sandboxed (`NoNewPrivileges`, `ProtectSystem=strict`,
+  `PrivateTmp`, etc).
+- `disco-ai-bot.env.example` — env template with `WEBHOOK_PORT=8081` so it
+  doesn't collide with other bots that often grab 8080.
+- `nginx-disco-ai-bot.conf` — reverse-proxy vhost with HTTP→HTTPS redirect
+  and a placeholder for certbot to fill in.
+- `install.sh` — first-time setup (idempotent). Creates user, clones repo,
+  builds venv, installs systemd unit, starts service.
+- `update.sh` — pull + dep refresh + restart, with auto-rollback to previous
+  commit if the new release fails health check within 6 seconds.
+
+GitHub Actions workflow `.github/workflows/vps-deploy.yml` SSHs into the VPS
+on every push to main and runs `sudo /opt/disco-ai-bot/deploy/update.sh`.
+Required repo secrets: `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`, optional
+`VPS_SSH_PORT`.
+
+Migration walkthrough lives in `docs/VPS_MIGRATION.md`.
+
+BOT_VERSION 3.2.0 → 3.3.0.
+
+---
+
 ## [3.2.0] — 2026-05-25 ☀️ Morning digest — ROADMAP fully closed
 
 ### 📅 Per-user morning digest (Phase 2.1 — the last deferred item)
