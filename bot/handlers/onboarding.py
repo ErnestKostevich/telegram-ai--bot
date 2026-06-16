@@ -46,8 +46,17 @@ def _step1_language_keyboard() -> InlineKeyboardMarkup:
 
 
 def _step2_provider_keyboard(lang: str) -> InlineKeyboardMarkup:
-    """Cards for the three free providers + a 'I already have a key' shortcut."""
-    rows = []
+    """Cards for the three free providers + a 'I already have a key' shortcut.
+
+    A compact language row sits on top: English is the default, RU/IT are
+    one tap away (re-renders this step via the onb_lang_* handler). This
+    replaces the old separate language step — English-first, no redundancy.
+    """
+    rows = [[
+        InlineKeyboardButton(("🇬🇧 EN" if lang != "en" else "🔵 EN"), callback_data="onb_lang_en"),
+        InlineKeyboardButton(("🇷🇺 RU" if lang != "ru" else "🔵 RU"), callback_data="onb_lang_ru"),
+        InlineKeyboardButton(("🇮🇹 IT" if lang != "it" else "🔵 IT"), callback_data="onb_lang_it"),
+    ]]
     for pid, label, url, _why in FREE_PROVIDERS:
         # First button: opens signup page in browser
         # Second button: picks this provider in the wizard
@@ -72,23 +81,16 @@ async def onboarding_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user["state"] = "onboarding"
     await storage.save()
 
-    known_lang = user.get("language")
-    if known_lang in ("ru", "en", "it"):
-        # We already know the language — skip step 1 and go to step 2.
-        await update.message.reply_text(
-            t(known_lang, "onb_step2_text"),
-            parse_mode="HTML",
-            reply_markup=_step2_provider_keyboard(known_lang),
-            disable_web_page_preview=True,
-        )
-        return
-
-    # Truly unknown language → trilingual picker
-    text = ("👋 <b>Welcome / Привет / Ciao!</b>\n\n"
-            "I'm <b>AI DISCO BOT</b> — pick your language to begin.\n"
-            "Выбери язык, чтобы начать.\n"
-            "Scegli la lingua per iniziare.")
-    await update.message.reply_text(text, parse_mode="HTML", reply_markup=_step1_language_keyboard())
+    # English-first: default to EN, but the provider keyboard carries a
+    # one-tap language row so RU/IT users switch instantly without a
+    # separate step.
+    eff_lang = user.get("language") if user.get("language") in ("ru", "en", "it") else "en"
+    await update.message.reply_text(
+        t(eff_lang, "onb_step2_text"),
+        parse_mode="HTML",
+        reply_markup=_step2_provider_keyboard(eff_lang),
+        disable_web_page_preview=True,
+    )
 
 
 async def onboarding_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):

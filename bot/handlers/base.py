@@ -4,7 +4,7 @@ from telegram import Update
 from telegram.ext import ContextTypes
 from bot.storage import storage
 from bot.keyboards import get_main_keyboard, get_help_keyboard
-from bot.i18n import t, get_text, detect_lang_from_code, DEFAULT_LANG
+from bot.i18n import t, get_text, DEFAULT_LANG
 from bot.config import BOT_VERSION, BOT_BUILD_DATE
 
 
@@ -16,14 +16,11 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.username:
         user["username"] = update.effective_user.username
 
-    # If the user has no language yet (brand new OR pre-3.3 record without
-    # explicit field), try Telegram's BCP-47 client language_code first.
-    # Russian/Italian client → matching translation; anything else → English.
-    if not user.get("language"):
-        user["language"] = detect_lang_from_code(
-            getattr(update.effective_user, "language_code", None)
-        )
-
+    # English-first by design. New users default to DEFAULT_LANG ("en");
+    # they switch to RU/IT via /lang, the 🌐 button, or the language row in
+    # onboarding. We deliberately do NOT auto-detect the Telegram client
+    # locale (that made Russian-locale users land in Russian, which the
+    # owner explicitly does not want).
     lang = user.get("language", DEFAULT_LANG)
 
     # Referral parsing: /start ref_<inviter_uid>

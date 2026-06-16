@@ -69,14 +69,7 @@ async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         return
     uid = iq.from_user.id
     user = storage.get_user(uid)
-    # Inline can be the very first place a brand-new user encounters the bot
-    # (without ever running /start). Apply the same BCP-47 auto-detect here
-    # so the switch_pm button label is in their language, not stuck on EN.
-    if not user.get("language"):
-        from bot.i18n import detect_lang_from_code
-        user["language"] = detect_lang_from_code(
-            getattr(iq.from_user, "language_code", None)
-        )
+    # English-first by design — no Telegram-locale auto-detect (see base.py).
     lang = user.get("language", "en")
     raw_query = (iq.query or "").strip()
 
