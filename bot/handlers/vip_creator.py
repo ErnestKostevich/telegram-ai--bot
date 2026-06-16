@@ -84,7 +84,7 @@ async def _ai_parse_reminder(uid: int, raw: str, now_iso: str):
 async def remind_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     user = storage.get_user(uid)
-    lang = user.get("language", "ru")
+    lang = user.get("language", "en")
     if not check_vip(user):
         await update.message.reply_text(t(lang, "gen_vip_only"))
         return
@@ -170,7 +170,7 @@ def _humanize_minutes(m: int, lang: str) -> str:
 async def reminders_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     user = storage.get_user(uid)
-    lang = user.get("language", "ru")
+    lang = user.get("language", "en")
     if not check_vip(user):
         await update.message.reply_text(t(lang, "gen_vip_only"))
         return
@@ -189,7 +189,7 @@ async def reminders_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def unremind_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     user = storage.get_user(uid)
-    lang = user.get("language", "ru")
+    lang = user.get("language", "en")
     user_reminders = [r for r in storage.data["reminders"] if r["user_id"] == uid]
     if not user_reminders:
         await update.message.reply_text(t(lang, "reminders_empty"))
@@ -223,7 +223,7 @@ async def unremind_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def feedback_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     user = storage.get_user(uid)
-    lang = user.get("language", "ru")
+    lang = user.get("language", "en")
     if not context.args:
         await update.message.reply_text(t(lang, "feedback_usage"))
         return
@@ -321,7 +321,7 @@ async def grant_vip_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "en": f"🎉 <b>You've been granted VIP!</b>\nDuration: <b>{label}</b>\n\n💎 Unlocked: image generation, photo/doc analysis, reminders.",
             "it": f"🎉 <b>Hai ottenuto il VIP!</b>\nDurata: <b>{label}</b>\n\n💎 Sbloccato: generazione immagini, analisi foto/doc, promemoria.",
         }
-        target_lang = target_user.get("language", "ru")
+        target_lang = target_user.get("language", "en")
         await context.bot.send_message(target_id, notif.get(target_lang, notif["en"]), parse_mode="HTML")
     except Exception:
         pass
@@ -332,7 +332,7 @@ async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌")
         return
     if not context.args:
-        await update.message.reply_text("Использование: /broadcast [текст]")
+        await update.message.reply_text("Usage: /broadcast [text]")
         return
     raw = " ".join(context.args)
     # Escape user input so unbalanced <, >, & don't break HTML parsing for every recipient

@@ -8,12 +8,12 @@ async def dice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_dice(emoji="🎲")
 
 async def coinflip_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    lang = storage.get_user(update.effective_user.id).get("language", "ru")
+    lang = storage.get_user(update.effective_user.id).get("language", "en")
     result = t(lang, "coinflip_h") if random.randint(0,1) else t(lang, "coinflip_t")
     await update.message.reply_text(t(lang, "coinflip_text", result=result), parse_mode="HTML")
 
 async def random_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    lang = storage.get_user(update.effective_user.id).get("language", "ru")
+    lang = storage.get_user(update.effective_user.id).get("language", "en")
     if len(context.args) < 2:
         await update.message.reply_text(t(lang, "random_usage"))
         return
@@ -26,7 +26,7 @@ async def random_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(t(lang, "random_usage"))
 
 async def joke_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    lang = storage.get_user(update.effective_user.id).get("language", "ru")
+    lang = storage.get_user(update.effective_user.id).get("language", "en")
     jokes = {
         "ru": [
             "Почему программисты не любят природу? Слишком много багов. 🐛",

@@ -54,7 +54,7 @@ async def maybe_suggest_memory(context, chat_id: int, user: dict):
             f"{', '.join(existing_keys)}\n\n" if existing_keys else ""
         )
 
-        lang = user.get("language", "ru")
+        lang = user.get("language", "en")
         lang_names = {"ru": "Russian", "en": "English", "it": "Italian"}
         prompt = (
             f"{existing_block}"
@@ -161,7 +161,7 @@ async def memory_suggest_callback(update: Update, context: ContextTypes.DEFAULT_
     await query.answer()
     uid = update.effective_user.id
     user = storage.get_user(uid)
-    lang = user.get("language", "ru")
+    lang = user.get("language", "en")
     data = query.data or ""
 
     pending = user.get("memory_pending") or {}

@@ -114,7 +114,7 @@ async def search_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """/search [query] — DuckDuckGo lookup with AI-augmented summary."""
     uid = update.effective_user.id
     user = storage.get_user(uid)
-    lang = user.get("language", "ru")
+    lang = user.get("language", "en")
     if not context.args:
         await update.message.reply_text(t(lang, "search_usage"), parse_mode="HTML")
         return

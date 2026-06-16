@@ -4,7 +4,7 @@ from telegram import Update
 from telegram.ext import ContextTypes
 from bot.storage import storage
 from bot.keyboards import get_main_keyboard, get_help_keyboard
-from bot.i18n import t, get_text
+from bot.i18n import t, get_text, detect_lang_from_code, DEFAULT_LANG
 from bot.config import BOT_VERSION, BOT_BUILD_DATE
 
 
@@ -15,7 +15,16 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user["state"] = None
     if update.effective_user.username:
         user["username"] = update.effective_user.username
-    lang = user.get("language", "ru")
+
+    # If the user has no language yet (brand new OR pre-3.3 record without
+    # explicit field), try Telegram's BCP-47 client language_code first.
+    # Russian/Italian client → matching translation; anything else → English.
+    if not user.get("language"):
+        user["language"] = detect_lang_from_code(
+            getattr(update.effective_user, "language_code", None)
+        )
+
+    lang = user.get("language", DEFAULT_LANG)
 
     # Referral parsing: /start ref_<inviter_uid>
     if context.args and context.args[0].startswith("ref_") and not user.get("referred_by"):
@@ -29,7 +38,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     # Notify the inviter
                     try:
                         new_name = update.effective_user.first_name or "Friend"
-                        inv_lang = inviter.get("language", "ru")
+                        inv_lang = inviter.get("language", "en")
                         await context.bot.send_message(
                             inviter_uid,
                             t(inv_lang, "ref_inviter_notify", name=new_name, total=inviter["referrals"]),
@@ -81,7 +90,7 @@ async def webapp_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     from bot.config import PUBLIC_BASE_URL
     from telegram import WebAppInfo, InlineKeyboardButton, InlineKeyboardMarkup
     user = storage.get_user(update.effective_user.id)
-    lang = user.get("language", "ru")
+    lang = user.get("language", "en")
     if not PUBLIC_BASE_URL:
         await update.message.reply_text(t(lang, "webapp_disabled"), parse_mode="HTML")
         return
@@ -97,7 +106,7 @@ async def webapp_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def share_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show a ready-to-share invite message with the user's referral link."""
     user = storage.get_user(update.effective_user.id)
-    lang = user.get("language", "ru")
+    lang = user.get("language", "en")
     try:
         me = await context.bot.get_me()
         bot_username = me.username
@@ -112,7 +121,7 @@ async def share_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def referrals_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = storage.get_user(update.effective_user.id)
-    lang = user.get("language", "ru")
+    lang = user.get("language", "en")
     refs = int(user.get("referrals", 0))
     await update.message.reply_text(t(lang, "ref_stats", count=refs), parse_mode="HTML")
 
@@ -122,12 +131,12 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = storage.get_user(user_id)
     user["stats"]["commands"] += 1
     user["state"] = None  # reset any half-finished interactive flow
-    lang = user.get("language", "ru")
+    lang = user.get("language", "en")
     await update.message.reply_text(get_text(lang, "help"), parse_mode="HTML", reply_markup=get_help_keyboard(lang, user_id=user_id))
 
 
 async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    lang = storage.get_user(update.effective_user.id).get("language", "ru")
+    lang = storage.get_user(update.effective_user.id).get("language", "en")
     await update.message.reply_text(
         t(lang, "info", version=BOT_VERSION, date=BOT_BUILD_DATE),
         parse_mode="HTML",
@@ -136,7 +145,7 @@ async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    lang = storage.get_user(update.effective_user.id).get("language", "ru")
+    lang = storage.get_user(update.effective_user.id).get("language", "en")
     await update.message.reply_text(
         t(lang, "status",
           users=len(storage.data["users"]),
@@ -147,12 +156,12 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def version_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    lang = storage.get_user(update.effective_user.id).get("language", "ru")
+    lang = storage.get_user(update.effective_user.id).get("language", "en")
     await update.message.reply_text(t(lang, "version_text", version=BOT_VERSION, date=BOT_BUILD_DATE), parse_mode="HTML")
 
 
 async def changelog_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    lang = storage.get_user(update.effective_user.id).get("language", "ru")
+    lang = storage.get_user(update.effective_user.id).get("language", "en")
     log = {
         "ru": (
             "📜 <b>Что нового в AI DISCO BOT</b>\n\n"
@@ -227,7 +236,7 @@ async def changelog_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def export_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     user = storage.get_user(uid)
-    lang = user.get("language", "ru")
+    lang = user.get("language", "en")
     export_data = {
         "user_id": uid,
         "username": user.get("username"),
@@ -249,7 +258,7 @@ async def export_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     user = storage.get_user(user_id)
-    lang = user.get("language", "ru")
+    lang = user.get("language", "en")
     xp = user.get("stats", {}).get("commands", 0) * 10
     level = xp // 100 + 1
     next_xp = level * 100
@@ -278,7 +287,7 @@ async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def disco_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     user = storage.get_user(user_id)
-    lang = user.get("language", "ru")
+    lang = user.get("language", "en")
     if not context.args:
         st = t(lang, "disco_enabled") if user.get("disco_mode") else t(lang, "disco_disabled")
         await update.message.reply_text(t(lang, "disco_status", status=st), parse_mode="HTML")
@@ -312,7 +321,7 @@ async def lang_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Abort any in-progress interactive flow (awaiting_setkey, awaiting_calc, etc.)."""
     user = storage.get_user(update.effective_user.id)
-    lang = user.get("language", "ru")
+    lang = user.get("language", "en")
     had_state = user.get("state")
     user["state"] = None
     await storage.save()
@@ -345,7 +354,7 @@ def award_weekly_xp(user: dict, xp: int):
 
 async def leaderboard_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """/leaderboard [weekly] — top users by total or current-week XP."""
-    lang = storage.get_user(update.effective_user.id).get("language", "ru")
+    lang = storage.get_user(update.effective_user.id).get("language", "en")
     users = storage.data.get("users", {})
     weekly = bool(context.args and context.args[0].lower() in ("weekly", "week", "неделя", "settimana"))
 
@@ -395,7 +404,7 @@ async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Two-step user-data wipe. First call shows confirmation, second confirms."""
     uid = update.effective_user.id
     user = storage.get_user(uid)
-    lang = user.get("language", "ru")
+    lang = user.get("language", "en")
     if context.args and context.args[0].lower() == "confirm":
         # Export first
         try:

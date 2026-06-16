@@ -10,7 +10,7 @@ from bot.i18n import t
 async def daily_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     user = storage.get_user(uid)
-    lang = user.get("language", "ru")
+    lang = user.get("language", "en")
 
     today = datetime.date.today().isoformat()
     last = user.get("daily_last")
@@ -44,7 +44,7 @@ async def daily_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def rep_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    lang = storage.get_user(update.effective_user.id).get("language", "ru")
+    lang = storage.get_user(update.effective_user.id).get("language", "en")
     if not update.message.reply_to_message:
         texts = {"ru": "❌ Ответьте на сообщение пользователя.", "en": "❌ Reply to a user's message.", "it": "❌ Rispondi al messaggio di un utente."}
         await update.message.reply_text(texts.get(lang, texts["en"]))
@@ -68,7 +68,7 @@ async def rep_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def roast_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     user = storage.get_user(uid)
-    lang = user.get("language", "ru")
+    lang = user.get("language", "en")
     if not update.message.reply_to_message:
         texts = {"ru": "❌ Ответьте на сообщение.", "en": "❌ Reply to a message.", "it": "❌ Rispondi a un messaggio."}
         await update.message.reply_text(texts.get(lang, texts["en"]))

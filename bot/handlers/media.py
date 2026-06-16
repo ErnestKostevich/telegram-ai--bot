@@ -35,7 +35,7 @@ async def voice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """/voice on|off|<voice_name> — toggle TTS voice replies."""
     uid = update.effective_user.id
     user = storage.get_user(uid)
-    lang = user.get("language", "ru")
+    lang = user.get("language", "en")
 
     if not context.args:
         cur = user.get("voice_reply", False)
@@ -95,7 +95,7 @@ async def edit_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
       - Reply to a photo with: /edit <prompt>"""
     uid = update.effective_user.id
     user = storage.get_user(uid)
-    lang = user.get("language", "ru")
+    lang = user.get("language", "en")
     from bot.handlers.payments import tier_active, consume_image_credit
 
     if not tier_active(user, "pro"):
@@ -208,7 +208,7 @@ async def voice_message_handler(update: Update, context: ContextTypes.DEFAULT_TY
         return
     uid = update.effective_user.id
     user = storage.get_user(uid)
-    lang = user.get("language", "ru")
+    lang = user.get("language", "en")
 
     api_key = user.get("api_keys", {}).get("openai")
     if not api_key:
@@ -264,7 +264,7 @@ async def media_message_handler(update: Update, context: ContextTypes.DEFAULT_TY
         return
     uid = update.effective_user.id
     user = storage.get_user(uid)
-    lang = user.get("language", "ru")
+    lang = user.get("language", "en")
 
     # Only handle private chats here; groups would be too noisy
     if update.effective_chat.type != "private":
@@ -347,7 +347,7 @@ async def media_message_handler(update: Update, context: ContextTypes.DEFAULT_TY
 async def generate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     user = storage.get_user(uid)
-    lang = user.get("language", "ru")
+    lang = user.get("language", "en")
     # Pro tier required for image generation
     from bot.handlers.payments import tier_active, consume_image_credit
     if not tier_active(user, "pro"):

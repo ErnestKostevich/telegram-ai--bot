@@ -32,7 +32,7 @@ PERSONAS = {
 async def persona_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     user = storage.get_user(uid)
-    lang = user.get("language", "ru")
+    lang = user.get("language", "en")
     if not context.args:
         # No args → show interactive picker
         from bot.keyboards import get_persona_picker_keyboard
@@ -78,7 +78,7 @@ _GAME_DEFS = {
 async def _play_dice_game(update: Update, context: ContextTypes.DEFAULT_TYPE, game_key: str):
     uid = update.effective_user.id
     user = storage.get_user(uid)
-    lang = user.get("language", "ru")
+    lang = user.get("language", "en")
     emoji, _, wins = _GAME_DEFS[game_key]
 
     sent = await update.message.reply_dice(emoji=emoji)
@@ -118,7 +118,7 @@ async def bowl_command(update, context):     await _play_dice_game(update, conte
 async def today_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     user = storage.get_user(uid)
-    lang = user.get("language", "ru")
+    lang = user.get("language", "en")
 
     today = datetime.date.today().isoformat()
     cached = user.get("today_cache")
@@ -160,7 +160,7 @@ async def today_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def quiz_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     user = storage.get_user(uid)
-    lang = user.get("language", "ru")
+    lang = user.get("language", "en")
     topic = " ".join(context.args).strip() or t(lang, "quiz_default_topic")
     lang_names = {"ru": "Russian", "en": "English", "it": "Italian"}
 
@@ -224,7 +224,7 @@ async def quiz_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     uid = update.effective_user.id
     user = storage.get_user(uid)
-    lang = user.get("language", "ru")
+    lang = user.get("language", "en")
 
     try:
         _, qid, chosen_str = query.data.split("_", 2)
@@ -321,7 +321,7 @@ async def quizgame_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """/quizgame [topic] [N=5] — start a multi-question quiz session."""
     uid = update.effective_user.id
     user = storage.get_user(uid)
-    lang = user.get("language", "ru")
+    lang = user.get("language", "en")
 
     # If a session is already in progress, end it cleanly first
     existing = user.get("quiz_session")
@@ -366,7 +366,7 @@ async def quizgame_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def _queue_next_quiz_question(context, chat_id: int, uid: int, user: dict, session: dict):
     """Generate the next question in the session and send it."""
-    lang = user.get("language", "ru")
+    lang = user.get("language", "en")
     topic = session["topic"]
     idx = session["index"]
     total = session["total"]

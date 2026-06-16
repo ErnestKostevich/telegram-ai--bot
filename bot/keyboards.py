@@ -2,7 +2,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMa
 from bot.i18n import get_text
 
 
-def get_main_keyboard(lang="ru", user_id=None):
+def get_main_keyboard(lang="en", user_id=None):
     keyboard = [
         [KeyboardButton(get_text(lang, "btn_ai")), KeyboardButton(get_text(lang, "btn_mem"))],
         [KeyboardButton(get_text(lang, "btn_notes")), KeyboardButton(get_text(lang, "btn_vip"))],
@@ -12,7 +12,7 @@ def get_main_keyboard(lang="ru", user_id=None):
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
 
-def get_settings_keyboard(lang="ru", user=None):
+def get_settings_keyboard(lang="en", user=None):
     """Settings keyboard. If `user` is passed, button labels show current values
     (provider/model/persona) so users instantly see what's selected."""
     from bot.ai import DEFAULT_MODELS
@@ -43,7 +43,7 @@ def get_settings_keyboard(lang="ru", user=None):
     return InlineKeyboardMarkup(keyboard)
 
 
-def get_provider_picker_keyboard(lang="ru", current=None, action_prefix="setprov"):
+def get_provider_picker_keyboard(lang="en", current=None, action_prefix="setprov"):
     """Grid of provider buttons. action_prefix controls what the callback does:
       - 'setprov' → sets the user's provider (used by Settings → Provider)
       - 'keyfor'  → starts the 2-step setkey flow (used by Settings → API Key)
@@ -62,7 +62,7 @@ def get_provider_picker_keyboard(lang="ru", current=None, action_prefix="setprov
     return InlineKeyboardMarkup(kb)
 
 
-def get_persona_picker_keyboard(lang="ru", current="default"):
+def get_persona_picker_keyboard(lang="en", current="default"):
     from bot.handlers.wow import PERSONAS
     icons = {
         "default": "💬", "philosopher": "🧘", "comedian": "🎭", "teacher": "📚",
@@ -82,7 +82,7 @@ def get_persona_picker_keyboard(lang="ru", current="default"):
     return InlineKeyboardMarkup(kb)
 
 
-def get_vip_keyboard(lang="ru"):
+def get_vip_keyboard(lang="en"):
     keyboard = [
         [InlineKeyboardButton(get_text(lang, "ik_reminders"), callback_data="vip_reminders"),
          InlineKeyboardButton(get_text(lang, "ik_generate"), callback_data="vip_generate")],
@@ -91,7 +91,7 @@ def get_vip_keyboard(lang="ru"):
     return InlineKeyboardMarkup(keyboard)
 
 
-def get_games_keyboard(lang="ru"):
+def get_games_keyboard(lang="en"):
     """Games + WOW shortcuts on a single screen."""
     keyboard = [
         [InlineKeyboardButton("🎰 Slots", callback_data="game_slots"),
@@ -110,7 +110,7 @@ def get_games_keyboard(lang="ru"):
     return InlineKeyboardMarkup(keyboard)
 
 
-def get_tools_keyboard(lang="ru"):
+def get_tools_keyboard(lang="en"):
     keyboard = [
         [InlineKeyboardButton("⏰ Time", callback_data="tool_time"),
          InlineKeyboardButton("🌤 Weather", callback_data="tool_weather")],
@@ -121,7 +121,7 @@ def get_tools_keyboard(lang="ru"):
     return InlineKeyboardMarkup(keyboard)
 
 
-def get_help_keyboard(lang="ru", submenu=None, user_id=None):
+def get_help_keyboard(lang="en", submenu=None, user_id=None):
     if submenu:
         return InlineKeyboardMarkup([[InlineKeyboardButton(get_text(lang, "ik_back"), callback_data="help_back")]])
     from bot.config import CREATOR_ID

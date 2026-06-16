@@ -1264,9 +1264,31 @@ translations = {
 }
 
 
+# Bot's default language when nothing else is known. Used as the fallback
+# everywhere a user record lacks a "language" field. Switching this from "ru"
+# to "en" in v3.3.0 made the bot English-by-default. Users still pick their
+# language via the onboarding wizard, /lang, or Telegram BCP-47 auto-detect.
+DEFAULT_LANG = "en"
+
+# Languages we ship translations for (must match top-level keys of `translations`).
+SUPPORTED_LANGS = ("en", "ru", "it")
+
+
+def detect_lang_from_code(language_code) -> str:
+    """Map a Telegram BCP-47 language_code (e.g. 'ru-RU', 'en-US', 'it-IT')
+    to one of our supported translations. Anything we don't translate falls
+    back to DEFAULT_LANG."""
+    if not language_code:
+        return DEFAULT_LANG
+    base = str(language_code).lower().split("-", 1)[0]
+    if base in SUPPORTED_LANGS:
+        return base
+    return DEFAULT_LANG
+
+
 def get_text(user_lang: str, key: str) -> str:
-    lang = user_lang if user_lang in translations else "ru"
-    return translations[lang].get(key, translations["ru"].get(key, key))
+    lang = user_lang if user_lang in translations else DEFAULT_LANG
+    return translations[lang].get(key, translations[DEFAULT_LANG].get(key, key))
 
 
 def t(user_id_or_lang, i18n_key, **kwargs):
@@ -1282,7 +1304,7 @@ def t(user_id_or_lang, i18n_key, **kwargs):
     from bot.storage import storage
     if isinstance(user_id_or_lang, int):
         user = storage.get_user(user_id_or_lang)
-        lang = user.get("language", "ru")
+        lang = user.get("language", DEFAULT_LANG)
     else:
         lang = user_id_or_lang
     text = get_text(lang, i18n_key)

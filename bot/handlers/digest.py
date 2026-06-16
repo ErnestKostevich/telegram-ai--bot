@@ -52,7 +52,7 @@ async def digest_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """/digest on|off|<HH:MM> — manage morning digest preferences."""
     uid = update.effective_user.id
     user = storage.get_user(uid)
-    lang = user.get("language", "ru")
+    lang = user.get("language", "en")
 
     if not context.args:
         st = "ON ✅" if user.get("digest_enabled") else "OFF ❌"
@@ -109,7 +109,7 @@ async def tz_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """/tz [zone] — set IANA timezone (e.g. Europe/Moscow)."""
     uid = update.effective_user.id
     user = storage.get_user(uid)
-    lang = user.get("language", "ru")
+    lang = user.get("language", "en")
 
     if not context.args:
         await update.message.reply_text(
@@ -216,7 +216,7 @@ async def _maybe_send_digest(bot, user: dict) -> bool:
     if now < target_today_local - datetime.timedelta(minutes=7):
         return False
 
-    lang = user.get("language", "ru")
+    lang = user.get("language", "en")
     try:
         text = _build_digest_message(user, lang)
         await bot.send_message(user["id"], text, parse_mode="HTML")

@@ -20,7 +20,7 @@ async def _bot_username(context) -> str:
 
 
 def _lang(update):
-    return storage.get_user(update.effective_user.id).get("language", "ru")
+    return storage.get_user(update.effective_user.id).get("language", "en")
 
 
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -29,7 +29,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
     uid = update.effective_user.id
     user = storage.get_user(uid)
-    lang = user.get("language", "ru")
+    lang = user.get("language", "en")
 
     # === Onboarding wizard ===
     if data.startswith("onb_"):
@@ -679,7 +679,7 @@ async def keyboard_message_handler(update: Update, context: ContextTypes.DEFAULT
     user = storage.get_user(uid)
     if update.effective_user.username:
         user["username"] = update.effective_user.username
-    lang = user.get("language", "ru")
+    lang = user.get("language", "en")
     is_group = update.effective_chat.type in ["group", "supergroup"]
 
     if is_group:

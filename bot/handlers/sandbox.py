@@ -116,7 +116,7 @@ async def _piston_run(language: str, version: str, code: str) -> dict:
 async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     user = storage.get_user(uid)
-    lang = user.get("language", "ru")
+    lang = user.get("language", "en")
 
     raw_text = update.message.text or ""
     language_key, code = _parse_run_args(raw_text)

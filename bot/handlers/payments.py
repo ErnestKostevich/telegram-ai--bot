@@ -129,7 +129,7 @@ async def buy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show tier comparison + pay-with-Stars buttons."""
     uid = update.effective_user.id
     user = storage.get_user(uid)
-    lang = user.get("language", "ru")
+    lang = user.get("language", "en")
     text = _tiers_text(lang) + "\n\n" + t(lang, "buy_choose_stars")
     await update.message.reply_text(
         text,
@@ -142,7 +142,7 @@ async def buycrypto_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show tier comparison + pay-with-crypto buttons."""
     uid = update.effective_user.id
     user = storage.get_user(uid)
-    lang = user.get("language", "ru")
+    lang = user.get("language", "en")
     if not NOWPAYMENTS_API_KEY:
         await update.message.reply_text(t(lang, "crypto_disabled"), parse_mode="HTML")
         return
@@ -158,7 +158,7 @@ async def vip_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """/vip — show current tier and renewal info."""
     uid = update.effective_user.id
     user = storage.get_user(uid)
-    lang = user.get("language", "ru")
+    lang = user.get("language", "en")
     cur = user.get("tier", "free")
     info = TIERS.get(cur, TIERS["free"])
     if cur == "free":
@@ -184,7 +184,7 @@ async def tier_stars_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
     await query.answer()
     uid = update.effective_user.id
     user = storage.get_user(uid)
-    lang = user.get("language", "ru")
+    lang = user.get("language", "en")
     parts = (query.data or "").split("_", 2)
     if len(parts) != 3:
         return
@@ -232,7 +232,7 @@ async def successful_payment_callback(update: Update, context: ContextTypes.DEFA
     payload = sp.invoice_payload or ""
     uid = update.effective_user.id
     user = storage.get_user(uid)
-    lang = user.get("language", "ru")
+    lang = user.get("language", "en")
 
     # Parse payload: stars:<tier>:<uid>:<nonce>
     parts = payload.split(":")
@@ -260,7 +260,7 @@ async def tier_crypto_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     await query.answer()
     uid = update.effective_user.id
     user = storage.get_user(uid)
-    lang = user.get("language", "ru")
+    lang = user.get("language", "en")
     if not NOWPAYMENTS_API_KEY:
         try:
             await query.edit_message_text(t(lang, "crypto_disabled"), parse_mode="HTML")
@@ -378,7 +378,7 @@ async def handle_nowpayments_webhook(bot, body: dict):
     await _award_partner_if_first_paid(_Ctx(bot), user)
     await storage.save()
     try:
-        lang = user.get("language", "ru")
+        lang = user.get("language", "en")
         await bot.send_message(
             uid,
             t(lang, "purchase_success",
@@ -406,7 +406,7 @@ async def _award_partner_if_first_paid(context, user: dict):
     grant_tier(referrer, "plus", days=PARTNER_REWARD_DAYS)
     # Notify the referrer
     try:
-        ref_lang = referrer.get("language", "ru")
+        ref_lang = referrer.get("language", "en")
         await context.bot.send_message(
             referrer_uid,
             t(ref_lang, "partner_reward",
