@@ -138,12 +138,27 @@ async def buy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
+def _crypto_unconfigured() -> bool:
+    """True if we shouldn't try to mint NOWPayments invoices.
+
+    Empty key obviously disables. A placeholder PUBLIC_BASE_URL (the
+    example.com hostname or blank) means IPN callbacks would never
+    arrive, so paying users wouldn't get credited — refuse explicitly
+    instead of silently issuing un-callbackable invoices.
+    """
+    if not NOWPAYMENTS_API_KEY:
+        return True
+    if not PUBLIC_BASE_URL or "example.com" in PUBLIC_BASE_URL:
+        return True
+    return False
+
+
 async def buycrypto_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show tier comparison + pay-with-crypto buttons."""
     uid = update.effective_user.id
     user = storage.get_user(uid)
     lang = user.get("language", "en")
-    if not NOWPAYMENTS_API_KEY:
+    if _crypto_unconfigured():
         await update.message.reply_text(t(lang, "crypto_disabled"), parse_mode="HTML")
         return
     text = _tiers_text(lang) + "\n\n" + t(lang, "buy_choose_crypto")
@@ -261,7 +276,7 @@ async def tier_crypto_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     uid = update.effective_user.id
     user = storage.get_user(uid)
     lang = user.get("language", "en")
-    if not NOWPAYMENTS_API_KEY:
+    if _crypto_unconfigured():
         try:
             await query.edit_message_text(t(lang, "crypto_disabled"), parse_mode="HTML")
         except Exception:
