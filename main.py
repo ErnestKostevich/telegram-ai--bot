@@ -217,6 +217,23 @@ async def _set_bot_commands(application):
     except Exception as e:
         logger.warning(f"set_my_commands failed: {e}")
 
+    # Auto-register Mini App menu button so the user doesn't have to do it
+    # by hand in BotFather. Only when PUBLIC_BASE_URL is a real HTTPS URL
+    # (Telegram refuses http:// and example.com placeholders).
+    from bot.config import PUBLIC_BASE_URL
+    if PUBLIC_BASE_URL and PUBLIC_BASE_URL.startswith("https://") and "example.com" not in PUBLIC_BASE_URL:
+        try:
+            from telegram import MenuButtonWebApp, WebAppInfo
+            await application.bot.set_chat_menu_button(
+                menu_button=MenuButtonWebApp(
+                    text="Open Dashboard",
+                    web_app=WebAppInfo(url=f"{PUBLIC_BASE_URL}/webapp"),
+                )
+            )
+            logger.info(f"Mini App menu button registered: {PUBLIC_BASE_URL}/webapp")
+        except Exception as e:
+            logger.warning(f"set_chat_menu_button failed: {e}")
+
 
 if __name__ == "__main__":
     main()

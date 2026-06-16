@@ -327,7 +327,9 @@ async def _api_topup_crypto(request: web.Request) -> web.Response:
     user_info, body = await _authed(request)
     if not user_info:
         return web.json_response({"error": "auth"}, status=401)
-    if not NOWPAYMENTS_API_KEY:
+    # Crypto requires BOTH the NOWPayments key AND a real PUBLIC_BASE_URL so
+    # the IPN callback can find us. example.com placeholder = silent drop.
+    if not NOWPAYMENTS_API_KEY or not PUBLIC_BASE_URL or "example.com" in PUBLIC_BASE_URL:
         return web.json_response({"error": "crypto_disabled"}, status=503)
     tier_id = body.get("tier", "plus")
     if tier_id not in TIERS or tier_id == "free":
@@ -393,7 +395,17 @@ async def _api_quick_action(request: web.Request) -> web.Response:
 # ===========================================================================
 
 async def _webapp_dashboard(request: web.Request) -> web.Response:
-    return web.Response(text=_MINIAPP_HTML, content_type="text/html")
+    # Cache-bust per deploy: Telegram's WebApp client is aggressive about
+    # caching the HTML shell. Tying ETag to BOT_VERSION means a redeploy
+    # forces every client to pull the fresh dashboard markup.
+    return web.Response(
+        text=_MINIAPP_HTML,
+        content_type="text/html",
+        headers={
+            "Cache-Control": "no-cache, must-revalidate",
+            "ETag": f'"{BOT_VERSION}"',
+        },
+    )
 
 
 # ===========================================================================

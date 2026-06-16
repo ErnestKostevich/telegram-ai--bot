@@ -33,7 +33,14 @@ class Storage:
 
     async def load(self):
         if not self.persistent:
-            logger.warning("GitHub credentials not set. Using in-memory storage.")
+            # ERROR (not warning) — running without GitHub means ALL user state
+            # is wiped on every restart. Paying users would lose their tier.
+            # CI smoke-tests skip this by setting GITHUB_TOKEN to a dummy.
+            logger.error(
+                "GITHUB_TOKEN or GITHUB_REPO missing. Running with IN-MEMORY storage — "
+                "ALL user data (memory, notes, paid tiers, streaks) will be wiped on restart. "
+                "Set GITHUB_TOKEN and GITHUB_REPO in /etc/disco-ai-bot/disco-ai-bot.env and restart."
+            )
             self.loaded = True
             return
 

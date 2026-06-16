@@ -68,8 +68,12 @@ MemoryDenyWriteExecute=true
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
 
 # Syscall filter — block everything outside the "system service" set.
+# We intentionally do NOT block @resources: setrlimit/sched_setaffinity/etc
+# are touched indirectly by uvloop, grpcio, and some Python startup paths
+# pulled in by AI provider SDKs. Blocking them was crashing wheels with
+# SIGSYS at import time on Ubuntu 24.04.
 SystemCallFilter=@system-service
-SystemCallFilter=~@privileged @resources
+SystemCallFilter=~@privileged
 SystemCallArchitectures=native
 
 # Files the bot creates (none on disk, but if any: not world-readable)

@@ -26,7 +26,7 @@ GITHUB_REPO = os.getenv("GITHUB_REPO", "")  # e.g. username/repo
 GITHUB_FILE_PATH = os.getenv("GITHUB_FILE_PATH", "bot_data.json")
 CREATOR_ID = _int_env("CREATOR_ID", 0)
 
-BOT_VERSION = "3.4.0"
+BOT_VERSION = "3.4.2"
 BOT_BUILD_DATE = "2026-06-16"
 
 # Chat memory: how many last user/assistant turns to keep
@@ -35,7 +35,8 @@ CHAT_HISTORY_LIMIT = 10
 GROUP_HISTORY_LIMIT = 60
 
 # ====== Monetization ======
-# NEVER hardcode keys here — read from env, set via `flyctl secrets set ...`.
+# NEVER hardcode keys here — read from env. On VPS they live in
+# /etc/disco-ai-bot/disco-ai-bot.env (mode 0600 root:root), read by systemd.
 NOWPAYMENTS_API_KEY = os.getenv("NOWPAYMENTS_API_KEY", "")
 NOWPAYMENTS_IPN_SECRET = os.getenv("NOWPAYMENTS_IPN_SECRET", "")
 # Public base URL where this bot serves HTTP (webhook endpoint + mini app).
