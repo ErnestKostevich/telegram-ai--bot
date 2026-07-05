@@ -9,7 +9,8 @@ from .ai_memory import (setprovider_command, setkey_command, setmodel_command, a
 from .notes import note_command, notes_command, delnote_command, todo_command
 from .vip_creator import (vip_command, remind_command, reminders_command, unremind_command, feedback_command,
                            grant_vip_command, broadcast_command, stats_command, users_command)
-from .groups import (grouphelp_command, ban_command, warn_command, warnings_command, unwarn_command,
+from .groups import (grouphelp_command, ban_command, unban_command, banlist_command,
+                      warn_command, warnings_command, unwarn_command,
                       mute_command, unmute_command, kick_command, purge_command,
                       antilink_command, antispam_command, welcome_command, goodbye_command,
                       ask_command, summary_command, translate_command, rules_command, setrules_command,

@@ -408,6 +408,16 @@ translations = {
         "user_muted_for": "🔇 <b>{user}</b> в муте на {mins} мин.",
         "user_unmuted": "🔊 <b>{user}</b> размучен.",
         "user_banned": "🚫 <b>{user}</b> забанен.",
+        "user_unbanned": "✅ <b>{user}</b> разбанен.",
+        "unban_usage": ("ℹ️ <b>Использование /unban:</b>\n"
+                        "• Ответом на сервисное сообщение о бане\n"
+                        "• <code>/unban 123456789</code> — по ID\n"
+                        "• <code>/unban @username</code> — по нику (если он в /banlist)\n\n"
+                        "Совет: посмотри /banlist чтобы увидеть все ID забаненных."),
+        "unban_username_unknown": "❌ Этот @username не найден в /banlist. Разбань по ID.",
+        "banlist_empty": "✅ В этой группе никто не забанен (по нашим записям).",
+        "banlist_title": "🚫 <b>Забаненные в этой группе:</b>",
+        "banlist_hint": "Разбан: <code>/unban ID</code> или <code>/unban @username</code>",
         "user_kicked": "👢 <b>{user}</b> кикнут.",
         "purge_done": "🗑 Удалено: {count} сообщений.",
         "purge_usage": "Использование: /purge [количество] (или ответом)",
@@ -841,6 +851,16 @@ translations = {
         "user_muted_for": "🔇 <b>{user}</b> muted for {mins} min.",
         "user_unmuted": "🔊 <b>{user}</b> unmuted.",
         "user_banned": "🚫 <b>{user}</b> banned.",
+        "user_unbanned": "✅ <b>{user}</b> unbanned.",
+        "unban_usage": ("ℹ️ <b>How to use /unban:</b>\n"
+                        "• Reply to the ban service message\n"
+                        "• <code>/unban 123456789</code> — by numeric ID\n"
+                        "• <code>/unban @username</code> — by handle (if listed in /banlist)\n\n"
+                        "Tip: run /banlist to see all banned IDs."),
+        "unban_username_unknown": "❌ That @username isn't in /banlist. Try unbanning by numeric ID.",
+        "banlist_empty": "✅ Nobody is banned in this group (per our records).",
+        "banlist_title": "🚫 <b>Banned users in this group:</b>",
+        "banlist_hint": "Unban with <code>/unban ID</code> or <code>/unban @username</code>",
         "user_kicked": "👢 <b>{user}</b> kicked.",
         "purge_done": "🗑 Deleted: {count} messages.",
         "purge_usage": "Usage: /purge [count] (or as a reply)",
@@ -1272,6 +1292,16 @@ translations = {
         "user_muted_for": "🔇 <b>{user}</b> silenziato per {mins} min.",
         "user_unmuted": "🔊 <b>{user}</b> non più silenziato.",
         "user_banned": "🚫 <b>{user}</b> bannato.",
+        "user_unbanned": "✅ <b>{user}</b> sbannato.",
+        "unban_usage": ("ℹ️ <b>Uso di /unban:</b>\n"
+                        "• Rispondi al messaggio di servizio del ban\n"
+                        "• <code>/unban 123456789</code> — per ID\n"
+                        "• <code>/unban @username</code> — per handle (se è in /banlist)\n\n"
+                        "Suggerimento: /banlist per vedere tutti gli ID bannati."),
+        "unban_username_unknown": "❌ Quel @username non è in /banlist. Prova a sbannare per ID.",
+        "banlist_empty": "✅ Nessuno è bannato in questo gruppo (secondo i nostri dati).",
+        "banlist_title": "🚫 <b>Utenti bannati in questo gruppo:</b>",
+        "banlist_hint": "Sbanna con <code>/unban ID</code> o <code>/unban @username</code>",
         "user_kicked": "👢 <b>{user}</b> espulso.",
         "purge_done": "🗑 Eliminati: {count} messaggi.",
         "purge_usage": "Uso: /purge [numero] (o in risposta)",

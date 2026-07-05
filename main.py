@@ -75,7 +75,9 @@ def main():
     ]
     groups = [
         ("grouphelp", handlers.grouphelp_command),
-        ("ban", handlers.ban_command), ("kick", handlers.kick_command),
+        ("ban", handlers.ban_command), ("unban", handlers.unban_command),
+        ("banlist", handlers.banlist_command),
+        ("kick", handlers.kick_command),
         ("warn", handlers.warn_command), ("warnings", handlers.warnings_command),
         ("unwarn", handlers.unwarn_command),
         ("mute", handlers.mute_command), ("unmute", handlers.unmute_command),
@@ -207,6 +209,8 @@ async def _set_bot_commands(application):
         BotCommand("warnings", "Show warnings"),
         BotCommand("mute", "Mute user (reply)"),
         BotCommand("ban", "Ban user (reply)"),
+        BotCommand("unban", "Unban by ID or @username"),
+        BotCommand("banlist", "Show banned users"),
         BotCommand("kick", "Kick user (reply)"),
         BotCommand("purge", "Delete N messages"),
         BotCommand("antilink", "Auto-delete links"),

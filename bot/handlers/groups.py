@@ -113,6 +113,28 @@ async def _check_admin(update, context):
     return True
 
 
+def _remember_ban(group: dict, target) -> None:
+    """Persist a compact record of a banned user so /banlist and username-based
+    /unban work. Telegram Bot API doesn't expose the chat's banned list, so we
+    keep our own."""
+    import time as _t
+    banned = group.setdefault("banned", {})
+    banned[str(target.id)] = {
+        "name": getattr(target, "first_name", "") or "",
+        "username": (getattr(target, "username", None) or "").lower(),
+        "ts": int(_t.time()),
+    }
+    # Cap to last 200 to bound growth.
+    if len(banned) > 200:
+        for k in sorted(banned, key=lambda k: banned[k].get("ts", 0))[:len(banned) - 200]:
+            banned.pop(k, None)
+
+
+def _forget_ban(group: dict, uid: int) -> dict | None:
+    banned = group.setdefault("banned", {})
+    return banned.pop(str(uid), None)
+
+
 async def ban_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await _check_admin(update, context): return
     lang = storage.get_user(update.effective_user.id).get("language", "en")
@@ -122,9 +144,78 @@ async def ban_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     target = update.message.reply_to_message.from_user
     try:
         await context.bot.ban_chat_member(update.effective_chat.id, target.id)
+        group = storage.get_group(update.effective_chat.id)
+        _remember_ban(group, target)
+        await storage.save()
         await update.message.reply_text(t(lang, "user_banned", user=target.first_name), parse_mode="HTML")
     except Exception as e:
         await update.message.reply_text(f"❌ {e}")
+
+
+async def unban_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Unban by reply, numeric id, or @username. Username needs the user to be
+    in our local banlist (populated by /ban and warn->ban)."""
+    if not await _check_admin(update, context): return
+    lang = storage.get_user(update.effective_user.id).get("language", "en")
+    group = storage.get_group(update.effective_chat.id)
+    banned = group.setdefault("banned", {})
+
+    target_id: int | None = None
+    target_name: str | None = None
+    # 1) Reply — works if the reply is to a still-visible message (e.g. a
+    #    system "X was banned" service message with from_user set).
+    if update.message.reply_to_message and update.message.reply_to_message.from_user:
+        target_id = update.message.reply_to_message.from_user.id
+        target_name = update.message.reply_to_message.from_user.first_name
+    # 2) Argument — id or @username
+    elif context.args:
+        arg = context.args[0].strip().lstrip("@")
+        if arg.isdigit():
+            target_id = int(arg)
+        else:
+            handle = arg.lower()
+            for uid_str, rec in banned.items():
+                if rec.get("username") == handle:
+                    target_id = int(uid_str)
+                    target_name = rec.get("name")
+                    break
+            if target_id is None:
+                await update.message.reply_text(t(lang, "unban_username_unknown"))
+                return
+    else:
+        await update.message.reply_text(t(lang, "unban_usage"))
+        return
+
+    try:
+        await context.bot.unban_chat_member(update.effective_chat.id, target_id, only_if_banned=True)
+        rec = _forget_ban(group, target_id)
+        await storage.save()
+        name = target_name or (rec or {}).get("name") or str(target_id)
+        await update.message.reply_text(t(lang, "user_unbanned", user=name), parse_mode="HTML")
+    except Exception as e:
+        await update.message.reply_text(f"❌ {e}")
+
+
+async def banlist_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Show every user tracked as banned in this group."""
+    if not await _check_admin(update, context): return
+    lang = storage.get_user(update.effective_user.id).get("language", "en")
+    group = storage.get_group(update.effective_chat.id)
+    banned = group.get("banned", {})
+    if not banned:
+        await update.message.reply_text(t(lang, "banlist_empty"))
+        return
+    import html as _html
+    rows = sorted(banned.items(), key=lambda kv: kv[1].get("ts", 0), reverse=True)
+    lines = [t(lang, "banlist_title")]
+    for uid_str, rec in rows[:50]:
+        name = _html.escape(rec.get("name") or "user")
+        uname = rec.get("username")
+        handle = f" (@{uname})" if uname else ""
+        lines.append(f"• {name}{handle} — <code>{uid_str}</code>")
+    lines.append("")
+    lines.append(t(lang, "banlist_hint"))
+    await update.message.reply_text("\n".join(lines), parse_mode="HTML")
 
 
 async def warn_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -145,6 +236,7 @@ async def warn_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             await context.bot.ban_chat_member(update.effective_chat.id, target.id)
             warns[key] = 0
+            _remember_ban(group, target)
             await storage.save()
             await update.message.reply_text(t(lang, "warn_banned", user=target.first_name), parse_mode="HTML")
             return
